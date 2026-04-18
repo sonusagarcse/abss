@@ -1,29 +1,27 @@
 <?php
-// config/env.php - Centralized Environment Configuration
+/**
+ * config/env.php - Environment Loader
+ * This file parses the .env file and defines constants for the application.
+ */
 
-// Define Environment
-define('ENVIRONMENT', 'development'); // Change to 'production' on live server
+$envPath = __DIR__ . '/../.env';
 
-// Database Configuration
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', 'abss');
+if (!file_exists($envPath)) {
+    die("Error: .env file not found. Please create one based on .env.example.");
+}
 
-// define('DB_HOST', 'localhost');
-// define('DB_USER', 'ouvcxwtd_abss');
-// define('DB_PASS', 'ouvcxwtd_abss');
-// define('DB_NAME', 'ouvcxwtd_abss');
+// Simple absolute path for parsing or custom logic
+$env = parse_ini_file($envPath);
 
-// Application Settings
-define('APP_URL', 'http://localhost/abss');
-// define('APP_URL', 'http://abss.lkvmbihar.in/');
-define('APP_NAME', 'ABSS Portal');
+// Define Constants from .env
+foreach ($env as $key => $value) {
+    if (!defined($key)) {
+        define($key, $value);
+    }
+}
 
-// Security Configurations
-define('SESSION_LIFETIME', 86400); // 1 day
-
-if (ENVIRONMENT === 'development') {
+// Error Reporting based on ENVIRONMENT
+if (defined('ENVIRONMENT') && ENVIRONMENT === 'development') {
     error_reporting(E_ALL);
     ini_set('display_errors', 1);
 } else {

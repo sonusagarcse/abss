@@ -1,1 +1,3 @@
-config/env.php
+# .env
+# (The loader files below are template/logic based and safe to track)
+!.env.example
