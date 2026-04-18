@@ -66,11 +66,19 @@
 # 4. URL REWRITING (Professional clean URLs)
 # ----------------------------------------------------------------------
 <IfModule mod_rewrite.c>
-    RewriteEngine On
-    RewriteBase /abss/
+    # Disable MultiViews to prevent Apache from trying to guess extensions
+    Options -MultiViews
     
-    # Hide .php extension (Allows domain.com/page instead of domain.com/page.php)
+    RewriteEngine On
+    
+    # Optional: Automatically redirect .php URLs to clean URLs
+    # Example: /index.php -> /index
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s([^.]+)\.php [NC]
+    RewriteRule ^ %1 [R=301,L]
+
+    # Internally point clean URLs to .php files
+    # Example: /index -> /index.php
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteCond %{REQUEST_FILENAME}\.php -f
-    RewriteRule ^([^\.]+)/?$ $1.php [L]
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    RewriteRule ^(.*?)/?$ $1.php [NC,L]
 </IfModule>
