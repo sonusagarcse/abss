@@ -5,15 +5,15 @@
 define('ENVIRONMENT', 'development'); // Change to 'production' on live server
 
 // Database Configuration
-define('DB_HOST', 'localhost');
-define('DB_USER', 'root');
-define('DB_PASS', '');
-define('DB_NAME', 'abss');
-
 // define('DB_HOST', 'localhost');
-// define('DB_USER', 'ouvcxwtd_abss');
-// define('DB_PASS', 'ouvcxwtd_abss');
-// define('DB_NAME', 'ouvcxwtd_abss');
+// define('DB_USER', 'root');
+// define('DB_PASS', '');
+// define('DB_NAME', 'abss');
+
+define('DB_HOST', 'localhost');
+define('DB_USER', 'ouvcxwtd_abss');
+define('DB_PASS', 'ouvcxwtd_abss');
+define('DB_NAME', 'ouvcxwtd_abss');
 
 // Application Settings
 define('APP_URL', 'http://localhost/abss');
