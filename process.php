@@ -1,8 +1,17 @@
 <?php
+require_once 'includes/security.php';
+
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $name = isset($_POST['name']) ? htmlspecialchars($_POST['name']) : '';
-    $phone = isset($_POST['phone']) ? htmlspecialchars($_POST['phone']) : '';
-    $exam = isset($_POST['target_exam']) ? htmlspecialchars($_POST['target_exam']) : '';
+    // CSRF Validation
+    if (!isset($_POST['csrf_token']) || !validate_csrf_token($_POST['csrf_token'])) {
+        die("Security Token Verification Failed. Please go back and try again.");
+    }
+
+    // Escaping output is important, but PDO/mysqli prepared statements protect against SQL injection.
+    // We trim the input before DB insertion, we'll run htmlspecialchars on OUTPUT.
+    $name = trim($_POST['name'] ?? '');
+    $phone = trim($_POST['phone'] ?? '');
+    $exam = trim($_POST['target_exam'] ?? '');
     
     // Save to Database
     require_once 'config/db.php';
@@ -29,7 +38,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <body>
         <div class='card'>
             <h1>Inquiry Sent!</h1>
-            <p>Thank you, $name. We have received your interest in $exam preparation. Our team will contact you at $phone shortly.</p>
+            <p>Thank you, " . htmlspecialchars($name) . ". We have received your interest in " . htmlspecialchars($exam) . " preparation. Our team will contact you at " . htmlspecialchars($phone) . " shortly.</p>
             <a href='index.php' class='btn'>Back to Home</a>
         </div>
     </body>

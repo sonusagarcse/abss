@@ -1,10 +1,15 @@
 <?php
-session_start();
+require_once '../includes/security.php';
 require_once '../config/db.php';
 
 $error = '';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    // CSRF Validation
+    if (!isset($_POST['csrf_token']) || !validate_csrf_token($_POST['csrf_token'])) {
+        die("CSRF Token Validation Failed.");
+    }
+
     $username = $_POST['username'];
     $password = $_POST['password'];
 
@@ -16,6 +21,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     if ($user = $result->fetch_assoc()) {
         if (password_verify($password, $user['password'])) {
+            // Prevent Session Fixation attacks
+            session_regenerate_id(true);
+            
             $_SESSION['admin_id'] = $user['id'];
             $_SESSION['username'] = $username;
             header("Location: dashboard.php");
@@ -180,6 +188,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <?php endif; ?>
 
             <form action="" method="POST">
+                <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
                 <input type="hidden" name="role" id="selectedRole" value="admin">
                 
                 <div class="portal-input-group">
