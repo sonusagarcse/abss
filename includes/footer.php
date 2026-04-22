@@ -75,6 +75,35 @@
 .social-links a:hover { background: var(--secondary); color: var(--primary-dark); transform: translateY(-5px); }
 </style>
 
+    <script src="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/mcstudios/glightbox/dist/js/glightbox.min.js"></script>
     <script src="js/main.js"></script>
+    <script>
+        // Initialize Gallery Slider
+        const gallerySwiper = new Swiper('.gallery-swiper', {
+            slidesPerView: 1,
+            spaceBetween: 20,
+            loop: false,
+            centerInsufficientSlides: true,
+            autoplay: {
+                delay: 3000,
+                disableOnInteraction: false,
+            },
+            pagination: {
+                el: '.swiper-pagination',
+                clickable: true,
+            },
+            breakpoints: {
+                640: { slidesPerView: 2, spaceBetween: 20 },
+                768: { slidesPerView: 3, spaceBetween: 30 },
+                1024: { slidesPerView: 4, spaceBetween: 40 },
+            }
+        });
+        
+        // Initialize Lightbox
+        const lightbox = GLightbox({
+            selector: '.glightbox'
+        });
+    </script>
 </body>
 </html>

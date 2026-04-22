@@ -12,7 +12,9 @@ $settings = getAllSettings();
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="assets/logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css" />
+    <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
 </head>
 
 <body>
@@ -30,7 +32,7 @@ $settings = getAllSettings();
                 <li><a href="#contact">Contact</a></li>
                 <li><a href="inauguration.php" style="color: #d4af37;"><i class="fas fa-star"></i> Inauguration</a></li>
             </ul>
-            <a href="#admission" class="btn btn-primary">Admissions</a>
+            <a href="admission.php" class="btn btn-primary">Admissions</a>
             <div class="menu-toggle" id="mobile-menu-open">
                 <i class="fas fa-bars"></i>
             </div>
@@ -52,7 +54,7 @@ $settings = getAllSettings();
             <li><a href="inauguration.php" style="color: #d4af37;"><i class="fas fa-star"></i> Inauguration</a></li>
         </ul>
         <div class="drawer-footer">
-            <a href="#admission" class="btn btn-primary w-100">Apply Now</a>
+            <a href="admission.php" class="btn btn-primary w-100">Apply Now</a>
         </div>
     </div>
 

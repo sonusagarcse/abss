@@ -99,6 +99,34 @@ function installDB() {
             parent_phone VARCHAR(20),
             target_exam VARCHAR(100),
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        "achievers" => "CREATE TABLE IF NOT EXISTS achievers (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(100) NOT NULL,
+            target_school VARCHAR(100) NOT NULL,
+            batch_year VARCHAR(50) NOT NULL,
+            image_path VARCHAR(255) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        "admissions" => "CREATE TABLE IF NOT EXISTS admissions (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_name VARCHAR(150) NOT NULL,
+            dob DATE,
+            gender ENUM('Male', 'Female', 'Other'),
+            parent_name VARCHAR(150),
+            phone VARCHAR(20) NOT NULL,
+            email VARCHAR(150),
+            scholar_mode ENUM('Day Scholar', 'Hostler') NOT NULL,
+            target_program VARCHAR(100),
+            prev_school VARCHAR(255),
+            address TEXT,
+            status ENUM('Pending', 'Reviewed', 'Admitted', 'Rejected') DEFAULT 'Pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )",
+        "schools" => "CREATE TABLE IF NOT EXISTS schools (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            school_name VARCHAR(150) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )"
     ];
 

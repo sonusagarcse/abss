@@ -10,7 +10,7 @@ include 'includes/header.php';
     <div class="hero-glow"></div>
     <div class="container hero-content">
         <div class="hero-badge fade-in">Nurturing Minds, Creating Future Leaders</div>
-        <h1 class="fade-in" style="animation-delay: 0.1s;">आवासीय बाल शिक्षण <span class="text-accent">संस्थान</span>
+        <h1 class="fade-in" style="animation-delay: 0.1s; font-weight: 900;">आवासीय बाल शिक्षण <span class="text-accent">संस्थान</span>
         </h1>
         <p class="hero-subtitle fade-in" style="animation-delay: 0.2s;">
             The Premier Competitive Education & Research Center for elite residential school preparation.
@@ -175,7 +175,7 @@ include 'includes/header.php';
                 <p>High-quality, balanced organic meals and pure RO drinking water for physical wellbeing.</p>
             </div>
             <div class="feature-card-p glass-card fade-in" style="animation-delay: 0.2s;">
-                <div class="f-icon"><i class="fas fa-swatches"></i></div>
+                <div class="f-icon"><i class="fas fa-palette"></i></div>
                 <h3>Holistic Arts</h3>
                 <p>Developing creativity through specialized music, painting, and competitive debate clubs.</p>
             </div>
@@ -183,38 +183,67 @@ include 'includes/header.php';
     </div>
 </section>
 
+<!-- Hall of Excellence: Premium Achievers Section -->
+<section id="achievers" class="achievers-section bg-pattern">
+    <div class="container">
+        <div class="section-header fade-in" style="text-align: center; margin-bottom: 60px;">
+            <span class="section-badge">Our Pride</span>
+            <h2 class="section-title">Hall of Excellence</h2>
+            <p style="max-width: 600px; margin: 0 auto; color: var(--text-muted);">Celebrating the brilliance and hard work of our top-performing students who made it to elite institutions.</p>
+        </div>
+        <div class="achievers-flex-container">
+            <?php
+            $achievers_query = $conn->query("SELECT * FROM achievers ORDER BY created_at DESC");
+            if ($achievers_query->num_rows > 0):
+                while ($achiever = $achievers_query->fetch_assoc()): ?>
+                    <div class="achiever-card-premium glass-card fade-in">
+                        <a href="<?php echo $achiever["image_path"]; ?>" class="glightbox" data-gallery="achievers" data-title="<?php echo htmlspecialchars($achiever["name"]); ?> - <?php echo htmlspecialchars($achiever["target_school"]); ?>">
+                            <div class="achiever-img-box">
+                                <img src="<?php echo $achiever["image_path"]; ?>" alt="<?php echo $achiever["name"]; ?>">
+                            </div>
+                        </a>
+                        <div class="achiever-info">
+                            <h3><?php echo $achiever["name"]; ?></h3>
+                            <div class="achiever-tag"><?php echo $achiever["target_school"]; ?></div>
+                            <div class="achiever-batch">Batch of <?php echo $achiever["batch_year"]; ?></div>
+                        </div>
+                    </div>
+                <?php endwhile;
+            else: ?>
+                <p class="text-center" style="width: 100%; opacity: 0.6;">Our achievers list is being updated. Stay tuned!</p>
+            <?php endif; ?>
+        </div>
+    </div>
+</section>
+
 <!-- Gallery Preview -->
 <section id="gallery" class="gallery-section">
     <div class="container">
-        <div class="section-header fade-in">
+        <div class="section-header fade-in" style="text-align: center; margin-bottom: 50px;">
             <span class="section-badge">Captured Moments</span>
             <h2 class="section-title">Campus Life in Action</h2>
         </div>
-        <div class="gallery-grid">
+        <div class="gallery-flex-container">
             <?php
             $gallery_query = $conn->query("SELECT * FROM gallery ORDER BY created_at DESC LIMIT 6");
             if ($gallery_query->num_rows > 0):
                 $delay = 0;
                 while ($photo = $gallery_query->fetch_assoc()): ?>
-                    <div class="gallery-item glass-card fade-in" style="animation-delay: <?php echo $delay; ?>s;">
-                        <img src="<?php echo $photo['image_path']; ?>" alt="<?php echo $photo['caption']; ?>">
-                        <div class="gallery-caption"><?php echo $photo['caption']; ?></div>
+                    <div class="gallery-item-premium glass-card fade-in" style="animation-delay: <?php echo $delay; ?>s;">
+                        <a href="<?php echo $photo["image_path"]; ?>" class="glightbox" data-gallery="campus-life" data-title="<?php echo htmlspecialchars($photo["caption"]); ?>">
+                            <div class="gallery-img-box">
+                                <img src="<?php echo $photo["image_path"]; ?>" alt="<?php echo $photo["caption"]; ?>">
+                            </div>
+                            <div class="gallery-caption-overlay"><?php echo $photo["caption"]; ?></div>
+                        </a>
                     </div>
                     <?php $delay += 0.1; endwhile;
             else: ?>
-                <!-- Fallback to static if empty -->
-                <div class="gallery-item glass-card fade-in"><img
-                        src="https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=600&q=80"
-                        alt="Student Studying"></div>
-                <div class="gallery-item glass-card fade-in" style="animation-delay: 0.1s;"><img
-                        src="https://images.unsplash.com/photo-1509062522246-3755977927d7?auto=format&fit=crop&w=600&q=80"
-                        alt="Classroom"></div>
-                <div class="gallery-item glass-card fade-in" style="animation-delay: 0.2s;"><img
-                        src="https://media.istockphoto.com/id/1125899420/photo/preschool-in-class.jpg?s=612x612&w=0&k=20&c=jyZUZjEUyxobipUYS9w8235VotEUvBwlSwpIC2EY_F0="
-                        alt="Students Playing"></div>
-                <div class="gallery-item glass-card fade-in" style="animation-delay: 0.3s;"><img
-                        src="https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=600&q=80"
-                        alt="Library"></div>
+                <div class="gallery-item-premium glass-card fade-in">
+                    <div class="gallery-img-box">
+                        <img src="https://images.unsplash.com/photo-1546410531-bb4caa6b424d?auto=format&fit=crop&w=600&q=80" alt="Student Studying">
+                    </div>
+                </div>
             <?php endif; ?>
         </div>
     </div>
@@ -269,428 +298,20 @@ include 'includes/header.php';
                 </div>
             </div>
 
-            <!-- Inquiry Form restored after the section (merged into grid for the requested layout) -->
-            <div class="form-container-p glass-card fade-in" style="animation-delay: 0.2s; margin-top: 50px;">
-                <div class="text-center" style="margin-bottom: 30px;">
-                    <h3 class="card-subtitle">Global Admission Inquiry</h3>
-                    <p style="font-size: 0.9rem; color: var(--text-muted);">Fill the form below and our counselor will
-                        contact you within 24 hours.</p>
-                </div>
-                <form action="process.php" method="POST" class="premium-form">
-                    <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
-                    <div class="input-row">
-                        <div class="input-group">
-                            <label>Candidate Name</label>
-                            <input type="text" name="name" placeholder="Full Name" required>
-                        </div>
-                        <div class="input-group">
-                            <label>Parent Mobile</label>
-                            <input type="tel" name="phone" placeholder="+91 9XXXX XXXXX" required>
-                        </div>
-                    </div>
-                    <div class="input-group">
-                        <label>Target School / Program</label>
-                        <select name="target_exam">
-                            <option>Netarhat Residential</option>
-                            <option>Sainik School</option>
-                            <option>Navodaya Vidyalaya</option>
-                            <option>Day Scholar Program</option>
-                            <option>Other</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-primary w-100">Submit Admission Inquiry</button>
-                </form>
+            <!-- Online Admission CTA -->
+            <div class="form-container-p glass-card fade-in" style="animation-delay: 0.2s; margin-top: 50px; text-align: center; padding: 50px 30px;">
+                <h3 class="card-subtitle" style="font-size: 2rem; margin-bottom: 15px;">Ready to shape your child's future?</h3>
+                <p style="font-size: 1.1rem; color: var(--text-muted); margin-bottom: 30px; max-width: 600px; margin-left: auto; margin-right: auto;">
+                    Our comprehensive Online Admission System is now open for the 2026-27 academic year. 
+                </p>
+                <a href="admission.php" class="btn btn-primary" style="font-size: 1.2rem; padding: 18px 40px; border-radius: 50px; display: inline-flex; align-items: center; gap: 15px;">
+                    Apply for Admission Now <i class="fas fa-arrow-right"></i>
+                </a>
             </div>
         </div>
     </div>
 </section>
 
-<style>
-    /* --- Admission Grid --- */
-    .admission-grid {
-        max-width: 1000px;
-        margin: 0 auto;
-    }
 
-    .price-main {
-        font-size: 3rem;
-        font-weight: 800;
-        color: var(--primary);
-        margin: 20px 0;
-    }
-
-    .price-main span {
-        font-size: 1rem;
-        color: var(--text-muted);
-        font-weight: 400;
-    }
-
-    .pricing-list {
-        list-style: none;
-        margin-bottom: 30px;
-    }
-
-    .pricing-list li {
-        margin-bottom: 12px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-weight: 500;
-    }
-
-    .pricing-list i {
-        color: #4caf50;
-    }
-
-    .total-tag {
-        background: var(--secondary);
-        color: var(--primary-dark);
-        padding: 15px;
-        border-radius: 12px;
-        text-align: center;
-        font-weight: 700;
-        width: 100%;
-    }
-
-    .card-subtitle {
-        font-size: 1.4rem;
-        color: var(--primary-dark);
-        margin-bottom: 10px;
-        font-weight: 700;
-    }
-
-    /* --- Inquiry Section Styling --- */
-    /* --- General Section Spacing --- */
-    section {
-        padding: 100px 0;
-    }
-
-    /* --- Hero Premium CSS --- */
-    .hero-premium {
-        min-height: 90vh;
-        position: relative;
-        overflow: hidden;
-        display: flex;
-        align-items: center;
-        color: var(--white);
-        padding: 120px 0;
-        /* Extra for hero */
-    }
-
-    .hero-glow {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        width: 600px;
-        height: 600px;
-        background: radial-gradient(circle, rgba(255, 214, 0, 0.2) 0%, transparent 70%);
-        transform: translate(-50%, -50%);
-        pointer-events: none;
-    }
-
-    .hero-content {
-        position: relative;
-        z-index: 10;
-        text-align: center;
-    }
-
-    .hero-badge {
-        background: rgba(255, 255, 255, 0.1);
-        backdrop-filter: blur(5px);
-        padding: 8px 24px;
-        border-radius: 50px;
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        display: inline-block;
-        margin-bottom: 30px;
-        font-size: 0.9rem;
-        font-weight: 600;
-    }
-
-    .hero-premium h1 {
-        font-size: clamp(2.5rem, 6vw, 4.5rem);
-        margin-bottom: 25px;
-        line-height: 1.1;
-    }
-
-    .hero-subtitle {
-        font-size: 1.3rem;
-        margin-bottom: 40px;
-        max-width: 800px;
-        margin-left: auto;
-        margin-right: auto;
-        opacity: 0.9;
-    }
-
-    .text-accent {
-        color: var(--secondary);
-    }
-
-    .highlight {
-        border-bottom: 2px solid var(--secondary);
-        display: inline-block;
-        padding-bottom: 4px;
-    }
-
-    .btn-glass {
-        background: rgba(255, 255, 255, 0.1);
-        color: var(--white);
-        border: 1px solid rgba(255, 255, 255, 0.3);
-    }
-
-    .btn-glass:hover {
-        background: var(--white);
-        color: var(--primary);
-    }
-
-    /* --- Floating Elements --- */
-    .floating-shape {
-        position: absolute;
-        border-radius: 50%;
-        background: rgba(255, 255, 255, 0.05);
-    }
-
-    .shape-1 {
-        width: 300px;
-        height: 300px;
-        top: -100px;
-        right: -50px;
-    }
-
-    .shape-2 {
-        width: 400px;
-        height: 400px;
-        bottom: -150px;
-        left: -100px;
-    }
-
-    /* --- Exam Tags --- */
-    .exam-tags-container {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 15px;
-    }
-
-    .exam-tag-premium {
-        background: var(--white);
-        padding: 15px 30px;
-        border-radius: 100px;
-        box-shadow: var(--shadow-sm);
-        color: var(--primary-dark);
-        font-weight: 700;
-        font-size: 0.95rem;
-        transition: var(--ease-in-out);
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        border: 1px solid #eef2ff;
-    }
-
-    .exam-tag-premium i {
-        color: var(--secondary-dark);
-    }
-
-    .exam-tag-premium:hover {
-        transform: scale(1.05);
-        box-shadow: var(--shadow-md);
-        background: var(--primary);
-        color: var(--white);
-        border-color: var(--primary);
-    }
-
-    /* --- Vision Section --- */
-    .vision-flex {
-        display: flex;
-        align-items: center;
-        gap: 80px;
-        padding: 60px 0;
-    }
-
-    .vision-image-wrapper {
-        flex: 0.8;
-        position: relative;
-        max-width: 450px;
-    }
-
-    .image-frame {
-        border-radius: 40px;
-        overflow: hidden;
-        background: var(--white);
-        padding: 15px;
-        box-shadow: var(--shadow-lg);
-        height: 500px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .vision-img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        border-radius: 25px;
-    }
-
-    .info-card {
-        position: absolute;
-        bottom: -20px;
-        right: -20px;
-        padding: 20px;
-        width: 260px;
-        height: auto;
-        min-height: fit-content;
-    }
-
-    .info-card h4 {
-        color: var(--primary-dark);
-        margin-bottom: 5px;
-        font-size: 1.1rem;
-    }
-
-    .info-card p {
-        font-size: 0.85rem;
-        line-height: 1.4;
-        margin-bottom: 15px;
-    }
-
-    .social-mini {
-        margin-top: 10px;
-        display: flex;
-        gap: 15px;
-        font-size: 1.2rem;
-    }
-
-    .vision-content {
-        flex: 1.2;
-    }
-
-    .lead-text {
-        font-size: 1.4rem;
-        color: var(--text-muted);
-        margin-bottom: 25px;
-        border-left: 4px solid var(--secondary);
-        padding-left: 20px;
-    }
-
-    .vision-points {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 25px;
-        /* Increased gap */
-        margin-top: 40px;
-    }
-
-    .v-point.glass-card {
-        padding: 15px 20px;
-        border-radius: 12px;
-        font-weight: 700;
-        font-size: 0.9rem;
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        background: rgba(255, 255, 255, 0.4);
-    }
-
-    .v-point i {
-        color: var(--secondary-dark);
-        font-size: 1.1rem;
-    }
-
-    /* --- Features Premium --- */
-    .features-premium {
-        padding: 100px 0;
-    }
-
-    .features-grid-premium {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 40px;
-    }
-
-    .feature-card-p {
-        text-align: center;
-    }
-
-    .f-icon {
-        width: 80px;
-        height: 80px;
-        background: var(--primary);
-        color: var(--white);
-        border-radius: 24px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 2rem;
-        margin: 0 auto 25px;
-        box-shadow: 0 10px 20px rgba(13, 71, 161, 0.2);
-    }
-
-    /* --- Inquiry Section Styling --- */
-    .premium-form .input-row {
-        display: flex;
-        gap: 20px;
-        margin-bottom: 20px;
-    }
-
-    .input-group {
-        flex: 1;
-        margin-bottom: 20px;
-    }
-
-    .input-group label {
-        display: block;
-        margin-bottom: 8px;
-        font-weight: 700;
-        font-size: 0.9rem;
-        color: var(--primary-dark);
-    }
-
-    .input-group input,
-    .input-group select {
-        width: 100%;
-        padding: 15px;
-        border-radius: 12px;
-        border: 2px solid #eef2ff;
-        outline: none;
-        transition: var(--ease-in-out);
-    }
-
-    .input-group input:focus {
-        border-color: var(--primary);
-        box-shadow: 0 0 0 4px rgba(13, 71, 161, 0.1);
-    }
-
-    /* --- Utilities --- */
-    .italic {
-        font-style: italic;
-    }
-
-    .w-100 {
-        width: 100%;
-    }
-
-    @media (max-width: 992px) {
-
-        .vision-flex,
-        .admission-grid {
-            flex-direction: column;
-        }
-
-        .features-grid-premium {
-            grid-template-columns: 1fr;
-        }
-
-        .vision-image-wrapper {
-            width: 100%;
-            max-width: 400px;
-            margin-bottom: 50px;
-        }
-
-        .premium-form .input-row {
-            flex-direction: column;
-            gap: 0;
-        }
-    }
-</style>
 
 <?php include 'includes/footer.php'; ?>

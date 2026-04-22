@@ -116,6 +116,18 @@ $results_latest = $conn->query("SELECT COUNT(*) as count FROM results")->fetch_a
                 <a href="notices.php" class="quick-action-btn">
                     Publish Notice <i class="fas fa-chevron-right"></i>
                 </a>
+                <a href="admissions.php" class="quick-action-btn">
+                    View Admissions <i class="fas fa-chevron-right"></i>
+                </a>
+                <a href="schools.php" class="quick-action-btn">
+                    Manage Schools <i class="fas fa-chevron-right"></i>
+                </a>
+                <a href="achievers.php" class="quick-action-btn">
+                    Manage Achievers <i class="fas fa-chevron-right"></i>
+                </a>
+                <a href="gallery.php" class="quick-action-btn">
+                    Update Gallery <i class="fas fa-chevron-right"></i>
+                </a>
             </div>
         </div>
     </main>

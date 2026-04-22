@@ -39,8 +39,23 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </a>
         </li>
         <li class="nav-item">
+            <a href="admissions.php" class="nav-link <?php echo $current_page == 'admissions.php' ? 'active' : ''; ?>">
+                <i class="fas fa-user-plus"></i> Online Admissions
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="schools.php" class="nav-link <?php echo $current_page == 'schools.php' ? 'active' : ''; ?>">
+                <i class="fas fa-school"></i> Target Schools
+            </a>
+        </li>
+        <li class="nav-item">
             <a href="notices.php" class="nav-link <?php echo $current_page == 'notices.php' ? 'active' : ''; ?>">
                 <i class="fas fa-bullhorn"></i> Notice Board
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="achievers.php" class="nav-link <?php echo $current_page == 'achievers.php' ? 'active' : ''; ?>">
+                <i class="fas fa-trophy"></i> Hall of Excellence
             </a>
         </li>
         <li class="nav-item">
