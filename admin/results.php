@@ -31,7 +31,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_result'])) {
         
         if ($student_res && !empty($student_res['parent_email'])) {
             require_once __DIR__ . '/../includes/mail_helper.php';
-            $dashboard_url = "http://localhost/abss/admin/login.php?role=parent";
+            // Dynamic host URL builder - works on localhost and live server
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+            $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
+            $dashboard_url = "$base_url/admin/login.php?role=parent";
             $email_html = get_result_published_template(
                 $student_res['student_name'], 
                 $exam, 

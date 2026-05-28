@@ -43,7 +43,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
 
         if ($student_res && !empty($student_res['parent_email'])) {
             require_once __DIR__ . '/../includes/mail_helper.php';
-            $receipt_url = "http://localhost/abss/parent/receipt?id=" . $pay_id;
+            
+            // Dynamic host url builder
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+            $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
+            
+            $receipt_url = "$base_url/parent/receipt.php?id=" . $pay_id;
             $email_html = get_fee_paid_template(
                 $student_res['student_name'], 
                 $amount, 
@@ -77,14 +83,42 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_fee'])) {
     if ($stmt->execute()) {
         $msg = "Fee invoice successfully generated and billed.";
         
-        // Fetch student details for activity log
-        $student_stmt = $conn->prepare("SELECT name FROM students WHERE id = ?");
+        // Fetch student details and parent email for notification
+        $student_stmt = $conn->prepare("
+            SELECT s.name AS student_name, p.parent_name, p.email AS parent_email 
+            FROM students s 
+            LEFT JOIN parents p ON s.parent_id = p.id 
+            WHERE s.id = ?
+        ");
         $student_stmt->bind_param("i", $sid);
         $student_stmt->execute();
         $student_res = $student_stmt->get_result()->fetch_assoc();
-        $st_name = $student_res['name'] ?? 'ID ' . $sid;
+        $st_name = $student_res['student_name'] ?? 'ID ' . $sid;
         
         log_activity('fee_bill_generated', "Generated invoice of ₹" . number_format($amount, 2) . " for student $st_name (month: $month)");
+
+        if ($student_res && !empty($student_res['parent_email'])) {
+            require_once __DIR__ . '/../includes/mail_helper.php';
+            // Dynamic host URL builder - works on localhost and live server
+            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+            $fe_host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+            $fe_base_url = (strpos($fe_host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$fe_host";
+            $portal_url = "$fe_base_url/admin/login.php?role=parent";
+            $email_html = get_fee_generated_template(
+                $student_res['student_name'], 
+                $amount, 
+                $month, 
+                $date, 
+                $remark, 
+                $portal_url
+            );
+            
+            send_smtp_email(
+                $student_res['parent_email'], 
+                "New Tuition Invoice Generated - " . $student_res['student_name'] . " - ABSS", 
+                $email_html
+            );
+        }
     } else {
         $err = "Error generating student fee invoice.";
     }
@@ -140,7 +174,11 @@ if (isset($_GET['collect_offline'])) {
             // 4. Dispatch Email Billing Receipt to Parent
             if ($student_res && !empty($student_res['parent_email'])) {
                 require_once __DIR__ . '/../includes/mail_helper.php';
-                $receipt_url = "http://localhost/abss/parent/receipt?id=" . $pay_id;
+                // Dynamic host URL builder - works on localhost and live server
+                $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                $qc_host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+                $qc_base_url = (strpos($qc_host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$qc_host";
+                $receipt_url = "$qc_base_url/parent/receipt.php?id=" . $pay_id;
                 $email_html = get_fee_paid_template(
                     $student_res['student_name'], 
                     $amount, 

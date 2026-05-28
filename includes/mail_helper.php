@@ -20,16 +20,25 @@ function send_smtp_email($to, $subject, $message) {
     $user = isset($settings['smtp_username']) ? trim($settings['smtp_username']) : '';
     $pass = isset($settings['smtp_password']) ? trim($settings['smtp_password']) : '';
     $encryption = isset($settings['smtp_encryption']) ? trim($settings['smtp_encryption']) : 'tls';
-    $from_email = isset($settings['email']) ? trim($settings['email']) : 'abssimamganj@gmail.com';
     $from_name = isset($settings['school_name']) ? trim($settings['school_name']) : 'ABSS Portal';
+    
+    // Dynamic SPF/DMARC domain alignment: sender address must match host domain
+    $host_domain = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+    $host_domain = preg_replace('/^www\./', '', $host_domain);
+    if ($host_domain === 'localhost' || filter_var($host_domain, FILTER_VALIDATE_IP)) {
+        $host_domain = 'lkvmbihar.in';
+    }
+    
+    $from_email = 'no-reply@' . $host_domain;
+    $reply_to = isset($settings['email']) ? trim($settings['email']) : 'abssimamganj@gmail.com';
 
     // If SMTP credentials are not filled, fall back to native PHP mail() function
     if (empty($host) || empty($user) || empty($pass)) {
-        error_log("ABSS SMTP System: Mail Server credentials not configured. Falling back to native PHP mail() with suppressed warnings.");
+        error_log("ABSS SMTP System: Mail Server credentials not configured. Falling back to native PHP mail() with SPF domain alignment.");
         $headers = "MIME-Version: 1.0\r\n";
         $headers .= "Content-type: text/html; charset=UTF-8\r\n";
         $headers .= "From: =?UTF-8?B?" . base64_encode($from_name) . "?= <$from_email>\r\n";
-        $headers .= "Reply-To: <$from_email>\r\n";
+        $headers .= "Reply-To: <$reply_to>\r\n";
         $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
         
         return @mail($to, $subject, $message, $headers);
@@ -234,6 +243,53 @@ function get_fee_paid_template($student_name, $amount, $month, $payment_date, $r
 }
 
 /**
+ * Generates Fee invoice generated HTML email.
+ */
+function get_fee_generated_template($student_name, $amount, $month, $billing_date, $remark, $portal_url) {
+    $content = '
+    <div class="greeting">Dear Parents / Guardians,</div>
+    <p>A new monthly tuition/fee invoice has been generated for <b>' . htmlspecialchars($student_name) . '</b>. Please find the invoice details below:</p>
+    
+    <div class="info-card">
+        <table role="presentation" width="100%">
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase;">Student Name</td>
+                <td style="padding: 10px 0; font-weight:800; color:#0d47a1; text-align:right;">' . htmlspecialchars($student_name) . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Amount Due</td>
+                <td style="padding: 10px 0; font-weight:800; color:#b71c1c; text-align:right; font-size:18px; border-top:1px solid #eef2ff;">₹ ' . number_format($amount, 2) . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Billing Month</td>
+                <td style="padding: 10px 0; font-weight:800; color:#0d47a1; text-align:right; border-top:1px solid #eef2ff;">' . htmlspecialchars($month) . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Issue Date</td>
+                <td style="padding: 10px 0; font-weight:800; color:#0d47a1; text-align:right; border-top:1px solid #eef2ff;">' . date('d F, Y', strtotime($billing_date)) . '</td>
+            </tr>';
+    
+    if (!empty($remark)) {
+        $content .= '
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Remark</td>
+                <td style="padding: 10px 0; font-weight:800; color:#0d47a1; text-align:right; border-top:1px solid #eef2ff;">' . htmlspecialchars($remark) . '</td>
+            </tr>';
+    }
+    
+    $content .= '
+        </table>
+    </div>
+    
+    <p style="margin-bottom: 25px;">Please log in to your secure Parent Portal to view your complete outstanding ledger, check payment dues, and record collections.</p>
+    <div style="text-align: center;">
+        <a href="' . htmlspecialchars($portal_url) . '" class="btn" target="_blank">Access Parent Portal</a>
+    </div>';
+    
+    return get_base_template("New Fee Invoice Generated - $student_name", $content);
+}
+
+/**
  * Generates Academic Result publication HTML email.
  */
 function get_result_published_template($student_name, $exam_name, $score, $total_marks, $rank, $dashboard_url) {
@@ -281,6 +337,12 @@ function get_essential_update_template($notice_title, $notice_content, $notice_t
     if ($notice_type === 'important') $badge_color = '#b71c1c';
     if ($notice_type === 'event') $badge_color = '#1b5e20';
     
+    // Dynamic host url builder
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+    $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
+    $login_url = "$base_url/admin/login.php?role=parent";
+    
     $content = '
     <div class="greeting">Important School Announcement</div>
     <p>A new announcement has been published on the ABSS Digital Notice Board on <b>' . date('d F, Y', strtotime($notice_date)) . '</b>.</p>
@@ -293,7 +355,7 @@ function get_essential_update_template($notice_title, $notice_content, $notice_t
 
     <p style="margin-bottom: 25px;">You can view the full announcement list and history in your secure Parent Portal account.</p>
     <div style="text-align: center;">
-        <a href="http://localhost/abss/admin/login.php?role=parent" class="btn" target="_blank">Go to Portal Notice Board</a>
+        <a href="' . htmlspecialchars($login_url) . '" class="btn" target="_blank">Go to Portal Notice Board</a>
     </div>';
     
     return get_base_template("Announcement: $notice_title", $content);
@@ -337,6 +399,12 @@ function get_ticket_raised_template($parent_name, $subject, $message, $status, $
  * Generates Support Ticket resolved HTML email.
  */
 function get_ticket_resolved_template($parent_name, $subject, $ticket_id) {
+    // Dynamic host url builder
+    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+    $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
+    $login_url = "$base_url/admin/login.php?role=parent";
+    
     $content = '
     <div class="greeting">Support Ticket Resolved</div>
     <p>Dear ' . htmlspecialchars($parent_name) . ',</p>
@@ -345,7 +413,7 @@ function get_ticket_resolved_template($parent_name, $subject, $ticket_id) {
     <p>If you have any further questions, feel free to reply directly to this email or raise another ticket from your Parent Portal.</p>
     
     <div style="text-align: center; margin-top: 30px;">
-        <a href="http://localhost/abss/admin/login.php?role=parent" class="btn" target="_blank">Access Parent Portal</a>
+        <a href="' . htmlspecialchars($login_url) . '" class="btn" target="_blank">Access Parent Portal</a>
     </div>';
     
     return get_base_template("Support Ticket Resolved", $content);
