@@ -10,14 +10,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
     $class_admitted = $_POST['class_admitted'];
     $admission_date = $_POST['admission_date'];
     $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+    $parent_id = isset($_POST['parent_id']) && $_POST['parent_id'] !== '' ? (int)$_POST['parent_id'] : null;
 
     if ($id > 0) {
-        $stmt = $conn->prepare("UPDATE students SET name=?, parent_name=?, phone=?, target_school=?, class_admitted=?, admission_date=? WHERE id=?");
-        $stmt->bind_param("ssssssi", $name, $parent_name, $phone, $target_school, $class_admitted, $admission_date, $id);
+        $stmt = $conn->prepare("UPDATE students SET name=?, parent_name=?, phone=?, target_school=?, class_admitted=?, admission_date=?, parent_id=? WHERE id=?");
+        $stmt->bind_param("ssssssii", $name, $parent_name, $phone, $target_school, $class_admitted, $admission_date, $parent_id, $id);
         $stmt->execute();
     } else {
-        $stmt = $conn->prepare("INSERT INTO students (name, parent_name, phone, target_school, class_admitted, admission_date) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssssss", $name, $parent_name, $phone, $target_school, $class_admitted, $admission_date);
+        $stmt = $conn->prepare("INSERT INTO students (name, parent_name, phone, target_school, class_admitted, admission_date, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("ssssssi", $name, $parent_name, $phone, $target_school, $class_admitted, $admission_date, $parent_id);
         $stmt->execute();
     }
     header("Location: students.php");
@@ -32,7 +33,17 @@ if (isset($_GET['delete'])) {
     exit();
 }
 
-$students = $conn->query("SELECT * FROM students ORDER BY created_at DESC");
+$students = $conn->query("
+    SELECT s.*, p.parent_name AS account_parent_name, p.email AS parent_email 
+    FROM students s 
+    LEFT JOIN parents p ON s.parent_id = p.id 
+    ORDER BY s.created_at DESC
+");
+$parents_list = $conn->query("SELECT id, parent_name, email FROM parents ORDER BY parent_name ASC");
+$parents_array = [];
+while($p = $parents_list->fetch_assoc()) {
+    $parents_array[] = $p;
+}
 ?>
 
 <!DOCTYPE html>
@@ -65,35 +76,42 @@ $students = $conn->query("SELECT * FROM students ORDER BY created_at DESC");
             </button>
         </div>
 
-        <table>
-            <thead>
-                <tr>
-                    <th>Student Name</th>
-                    <th>Parent Name</th>
-                    <th>Class</th>
-                    <th>Target School</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php while($row = $students->fetch_assoc()): ?>
-                <tr>
-                    <td style="color:var(--portal-blue); font-weight:800;"><?php echo htmlspecialchars($row['name']); ?></td>
-                    <td><?php echo htmlspecialchars($row['parent_name']); ?></td>
-                    <td><?php echo htmlspecialchars($row['class_admitted']); ?></td>
-                    <td><?php echo htmlspecialchars($row['target_school']); ?></td>
-                    <td>
-                        <button class="btn btn-sm btn-outline-primary" style="border:none; color:var(--portal-blue);" onclick='editStudent(<?php echo json_encode($row); ?>)'>
-                            <i class="fas fa-edit"></i>
-                        </button>
-                        <a href="?delete=<?php echo $row['id']; ?>" class="btn btn-sm btn-outline-danger" style="border:none; color:#d32f2f;" onclick="return confirm('Are you sure?')">
-                            <i class="fas fa-trash"></i>
-                        </a>
-                    </td>
-                </tr>
-                <?php endwhile; ?>
-            </tbody>
-        </table>
+        <div class="portal-table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Parent Name</th>
+                        <th>Class</th>
+                        <th>Target School</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php while($row = $students->fetch_assoc()): ?>
+                    <tr>
+                        <td style="color:var(--portal-blue); font-weight:800;"><?php echo htmlspecialchars($row['name']); ?></td>
+                        <td>
+                            <?php echo htmlspecialchars($row['parent_name']); ?>
+                            <?php if (!empty($row['parent_email'])): ?>
+                                <br><small style="color:var(--portal-blue); font-weight:700;"><i class="fas fa-link"></i> <?php echo htmlspecialchars($row['parent_email']); ?></small>
+                            <?php endif; ?>
+                        </td>
+                        <td><?php echo htmlspecialchars($row['class_admitted']); ?></td>
+                        <td><?php echo htmlspecialchars($row['target_school']); ?></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary" style="border:none; color:var(--portal-blue);" onclick='editStudent(<?php echo json_encode($row); ?>)'>
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <a href="?delete=<?php echo $row['id']; ?>" class="btn btn-sm btn-outline-danger" style="border:none; color:#d32f2f;" onclick="return confirm('Are you sure?')">
+                                <i class="fas fa-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    <?php endwhile; ?>
+                </tbody>
+            </table>
+        </div>
 
         <!-- Add/Edit Modal -->
         <div class="modal" id="studentModal">
@@ -105,7 +123,7 @@ $students = $conn->query("SELECT * FROM students ORDER BY created_at DESC");
                         <label>Candidate Full Name</label>
                         <input type="text" name="name" id="name" placeholder="Full legal name" required>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="portal-form-row">
                         <div class="portal-input-group">
                             <label>Parent/Guardian</label>
                             <input type="text" name="parent_name" id="parent_name" required>
@@ -116,10 +134,19 @@ $students = $conn->query("SELECT * FROM students ORDER BY created_at DESC");
                         </div>
                     </div>
                     <div class="portal-input-group">
+                        <label>Link Parent Account (Optional)</label>
+                        <select name="parent_id" id="parent_id">
+                            <option value="">-- No Account Linked --</option>
+                            <?php foreach ($parents_array as $parent): ?>
+                                <option value="<?php echo $parent['id']; ?>"><?php echo htmlspecialchars($parent['parent_name'] . ' (' . $parent['email'] . ')'); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="portal-input-group">
                         <label>Target School / Program</label>
                         <input type="text" name="target_school" id="target_school" placeholder="e.g. Netarhat Residential">
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                    <div class="portal-form-row">
                         <div class="portal-input-group">
                             <label>Class for Admission</label>
                             <select name="class_admitted" id="class_admitted">
@@ -134,7 +161,7 @@ $students = $conn->query("SELECT * FROM students ORDER BY created_at DESC");
                             <input type="date" name="admission_date" id="admission_date" value="<?php echo date('Y-m-d'); ?>">
                         </div>
                     </div>
-                    <div style="display: flex; gap: 15px; margin-top: 20px;">
+                    <div class="portal-btn-row">
                         <button type="submit" name="save_student" class="btn-portal w-100" style="padding:18px;">Confirm Registration</button>
                         <button type="button" class="btn-glass w-100" onclick="hideModal()">Discard</button>
                     </div>
@@ -161,6 +188,7 @@ $students = $conn->query("SELECT * FROM students ORDER BY created_at DESC");
             document.getElementById('target_school').value = data.target_school;
             document.getElementById('class_admitted').value = data.class_admitted;
             document.getElementById('admission_date').value = data.admission_date;
+            document.getElementById('parent_id').value = data.parent_id || '';
         }
     </script>
 </body>

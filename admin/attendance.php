@@ -64,6 +64,13 @@ $students_query = $conn->query("
         
         #studentSearch { background: #fff; padding: 15px 25px; border-radius: 16px; border: 2px solid #f0f4f8; font-family: 'Outfit'; font-weight: 600; width: 300px; outline: none; transition: 0.3s; }
         #studentSearch:focus { border-color: var(--portal-blue); }
+
+        @media (max-width: 768px) {
+            .date-picker-wrap { flex-direction: column; align-items: stretch; gap: 15px; }
+            #studentSearch { width: 100%; }
+            .floating-footer { position: static; display: flex; flex-direction: column; gap: 12px; margin-top: 30px; }
+            .save-btn, .mark-present-btn { width: 100%; padding: 16px; border-radius: 16px; text-align: center; justify-content: center; box-shadow: none; font-size: 0.95rem; }
+        }
     </style>
 </head>
 <body>
@@ -95,34 +102,36 @@ $students_query = $conn->query("
 
         <form action="" method="POST">
             <input type="hidden" name="attendance_date" value="<?php echo $selected_date; ?>">
-            <table class="attendance-table">
-                <?php while($row = $students_query->fetch_assoc()): ?>
-                <tr class="attendance-row">
-                    <td>
-                        <div class="student-meta">
-                            <h4><?php echo htmlspecialchars($row['name']); ?></h4>
-                            <p style="margin:0; font-size:0.8rem; font-weight:600; opacity:0.6;"><?php echo htmlspecialchars($row['target_school']); ?></p>
-                        </div>
-                    </td>
-                    <td align="right">
-                        <div class="status-group">
-                            <label>
-                                <input type="radio" name="status[<?php echo $row['id']; ?>]" value="present" class="status-radio" <?php echo ($row['status'] == 'present' || empty($row['status'])) ? 'checked' : ''; ?>>
-                                <span class="status-btn status-btn-present">PRESENT</span>
-                            </label>
-                            <label>
-                                <input type="radio" name="status[<?php echo $row['id']; ?>]" value="absent" class="status-radio" <?php echo ($row['status'] == 'absent') ? 'checked' : ''; ?>>
-                                <span class="status-btn status-btn-absent">ABSENT</span>
-                            </label>
-                            <label>
-                                <input type="radio" name="status[<?php echo $row['id']; ?>]" value="late" class="status-radio" <?php echo ($row['status'] == 'late') ? 'checked' : ''; ?>>
-                                <span class="status-btn status-btn-late">LATE</span>
-                            </label>
-                        </div>
-                    </td>
-                </tr>
-                <?php endwhile; ?>
-            </table>
+            <div class="portal-table-container">
+                <table class="attendance-table">
+                    <?php while($row = $students_query->fetch_assoc()): ?>
+                    <tr class="attendance-row">
+                        <td>
+                            <div class="student-meta">
+                                <h4><?php echo htmlspecialchars($row['name']); ?></h4>
+                                <p style="margin:0; font-size:0.8rem; font-weight:600; opacity:0.6;"><?php echo htmlspecialchars($row['target_school']); ?></p>
+                            </div>
+                        </td>
+                        <td align="right">
+                            <div class="status-group">
+                                <label>
+                                    <input type="radio" name="status[<?php echo $row['id']; ?>]" value="present" class="status-radio" <?php echo ($row['status'] == 'present' || empty($row['status'])) ? 'checked' : ''; ?>>
+                                    <span class="status-btn status-btn-present">PRESENT</span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="status[<?php echo $row['id']; ?>]" value="absent" class="status-radio" <?php echo ($row['status'] == 'absent') ? 'checked' : ''; ?>>
+                                    <span class="status-btn status-btn-absent">ABSENT</span>
+                                </label>
+                                <label>
+                                    <input type="radio" name="status[<?php echo $row['id']; ?>]" value="late" class="status-radio" <?php echo ($row['status'] == 'late') ? 'checked' : ''; ?>>
+                                    <span class="status-btn status-btn-late">LATE</span>
+                                </label>
+                            </div>
+                        </td>
+                    </tr>
+                    <?php endwhile; ?>
+                </table>
+            </div>
 
             <div class="floating-footer">
                 <button type="button" class="mark-present-btn" onclick="markAllPresent()">

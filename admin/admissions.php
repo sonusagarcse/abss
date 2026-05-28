@@ -61,7 +61,7 @@ $admissions = $conn->query("SELECT * FROM admissions ORDER BY created_at DESC");
     <title>Admission Applications | ABSS Portal</title>
     <?php include 'includes/head_css.php'; ?>
     <style>
-        .table-container { background: #fff; padding: 40px; border-radius: 35px; box-shadow: 0 10px 30px rgba(0,0,0,0.02); }
+        .table-container { background: #fff; padding: 40px; border-radius: 35px; box-shadow: 0 10px 30px rgba(0,0,0,0.02); overflow-x: auto; -webkit-overflow-scrolling: touch; }
         table { width: 100%; border-collapse: collapse; }
         th { text-align: left; padding: 15px; color: var(--portal-blue); font-weight: 800; border-bottom: 2px solid #f0f4f8; }
         td { padding: 15px; border-bottom: 1px solid #f0f4f8; vertical-align: middle; }

@@ -13,20 +13,51 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_notice'])) {
     if ($id > 0) {
         $stmt = $conn->prepare("UPDATE notices SET title=?, content=?, type=? WHERE id=?");
         $stmt->bind_param("sssi", $title, $content, $type, $id);
-        $stmt->execute();
-        $msg = "Notice updated successfully.";
+        if ($stmt->execute()) {
+            $msg = "Notice updated successfully.";
+            log_activity('notice_updated', "Updated school notice: $title");
+        } else {
+            $msg = "Error updating notice.";
+        }
     } else {
         $stmt = $conn->prepare("INSERT INTO notices (title, content, type) VALUES (?, ?, ?)");
         $stmt->bind_param("sss", $title, $content, $type);
-        $stmt->execute();
-        $msg = "Notice published successfully.";
+        if ($stmt->execute()) {
+            $msg = "Notice published successfully.";
+            log_activity('notice_created', "Published school notice: $title");
+            
+            // Broadcast notice to all parents
+            $parents_emails = $conn->query("SELECT email FROM parents WHERE email IS NOT NULL AND email != ''");
+            if ($parents_emails && $parents_emails->num_rows > 0) {
+                require_once __DIR__ . '/../includes/mail_helper.php';
+                $notice_date = date('Y-m-d');
+                $email_html = get_essential_update_template($title, $content, $type, $notice_date);
+                while ($parent = $parents_emails->fetch_assoc()) {
+                    send_smtp_email(
+                        $parent['email'], 
+                        "School Announcement: " . $title . " - ABSS", 
+                        $email_html
+                    );
+                }
+            }
+        } else {
+            $msg = "Error publishing notice.";
+        }
     }
 }
 
 // Handle Delete
 if (isset($_GET['delete'])) {
     $id = (int)$_GET['delete'];
+    
+    // Fetch details before delete for activity logging
+    $n_stmt = $conn->query("SELECT title FROM notices WHERE id = $id");
+    $n_row = $n_stmt ? $n_stmt->fetch_assoc() : null;
+    $del_title = $n_row['title'] ?? 'Notice ID ' . $id;
+    
     $conn->query("DELETE FROM notices WHERE id = $id");
+    log_activity('notice_deleted', "Deleted school notice: $del_title");
+    
     header("Location: notices.php");
     exit();
 }

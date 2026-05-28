@@ -35,4 +35,7 @@ function getAllSettings() {
     }
     return $settings;
 }
+
+// Auto-load Visitor Tracking and Activity Logging System
+require_once __DIR__ . '/../includes/tracker_helper.php';
 ?>

@@ -75,6 +75,34 @@ $settings = getAllSettings();
                 </div>
             </div>
 
+            <div class="section-header" style="margin-top: 40px;">SMTP Email Configuration</div>
+            <div class="settings-grid">
+                <div class="portal-input-group">
+                    <label>SMTP Host</label>
+                    <input type="text" name="settings[smtp_host]" value="<?php echo htmlspecialchars($settings['smtp_host'] ?? ''); ?>" placeholder="e.g. smtp.gmail.com">
+                </div>
+                <div class="portal-input-group">
+                    <label>SMTP Port</label>
+                    <input type="text" name="settings[smtp_port]" value="<?php echo htmlspecialchars($settings['smtp_port'] ?? ''); ?>" placeholder="e.g. 587">
+                </div>
+                <div class="portal-input-group">
+                    <label>SMTP Username / Sender Email</label>
+                    <input type="text" name="settings[smtp_username]" value="<?php echo htmlspecialchars($settings['smtp_username'] ?? ''); ?>" placeholder="e.g. your-email@gmail.com">
+                </div>
+                <div class="portal-input-group">
+                    <label>SMTP Password</label>
+                    <input type="password" name="settings[smtp_password]" value="<?php echo htmlspecialchars($settings['smtp_password'] ?? ''); ?>" placeholder="••••••••">
+                </div>
+                <div class="portal-input-group">
+                    <label>SMTP Encryption</label>
+                    <select name="settings[smtp_encryption]">
+                        <option value="tls" <?php echo ($settings['smtp_encryption'] ?? 'tls') == 'tls' ? 'selected' : ''; ?>>TLS (Recommended - Port 587)</option>
+                        <option value="ssl" <?php echo ($settings['smtp_encryption'] ?? 'tls') == 'ssl' ? 'selected' : ''; ?>>SSL (Port 465)</option>
+                        <option value="none" <?php echo ($settings['smtp_encryption'] ?? 'tls') == 'none' ? 'selected' : ''; ?>>None</option>
+                    </select>
+                </div>
+            </div>
+
             <div style="margin-top: 40px; display: flex; justify-content: flex-end;">
                 <button type="submit" name="save_settings" class="btn-portal" style="padding: 18px 60px;">
                     <i class="fas fa-save"></i> Save All Changes

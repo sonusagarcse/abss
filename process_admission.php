@@ -38,6 +38,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($stmt->execute()) {
                 $success = true;
                 $admission_id = $stmt->insert_id;
+                
+                // Log Guest Admission Application Submission
+                log_activity('admission_application', "Guest submitted admission request for student $student_name (#$admission_id)");
             }
             $stmt->close();
         } else {

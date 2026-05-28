@@ -12,27 +12,63 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $username = $_POST['username'];
     $password = $_POST['password'];
+    $role = isset($_POST['role']) ? trim($_POST['role']) : 'admin';
 
     $conn = getDB();
-    $stmt = $conn->prepare("SELECT id, password FROM users WHERE username = ?");
-    $stmt->bind_param("s", $username);
-    $stmt->execute();
-    $result = $stmt->get_result();
 
-    if ($user = $result->fetch_assoc()) {
-        if (password_verify($password, $user['password'])) {
-            // Prevent Session Fixation attacks
-            session_regenerate_id(true);
-            
-            $_SESSION['admin_id'] = $user['id'];
-            $_SESSION['username'] = $username;
-            header("Location: dashboard.php");
-            exit();
+    if ($role === 'parent') {
+        $stmt = $conn->prepare("SELECT id, parent_name, password FROM parents WHERE email = ?");
+        $stmt->bind_param("s", $username);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($parent = $result->fetch_assoc()) {
+            if (password_verify($password, $parent['password'])) {
+                // Prevent Session Fixation attacks
+                session_regenerate_id(true);
+                
+                $_SESSION['parent_id'] = $parent['id'];
+                $_SESSION['parent_name'] = $parent['parent_name'];
+                $_SESSION['parent_email'] = $username;
+                
+                log_activity('login', "Parent successfully logged in");
+                
+                header("Location: ../parent/dashboard.php");
+                exit();
+            } else {
+                $error = 'Invalid password.';
+                log_activity('login_failed', "Failed parent login: incorrect password for email $username");
+            }
         } else {
-            $error = 'Invalid password.';
+            $error = 'Parent account not found with this email.';
+            log_activity('login_failed', "Failed parent login: email not found $username");
         }
     } else {
-        $error = 'User not found.';
+        $stmt = $conn->prepare("SELECT id, password FROM users WHERE username = ?");
+        $stmt->bind_param("s", $username);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($user = $result->fetch_assoc()) {
+            if (password_verify($password, $user['password'])) {
+                // Prevent Session Fixation attacks
+                session_regenerate_id(true);
+                
+                $_SESSION['admin_id'] = $user['id'];
+                $_SESSION['username'] = $username;
+                
+                log_activity('login', "Admin successfully logged in");
+                
+                header("Location: dashboard.php");
+                exit();
+            } else {
+                $error = 'Invalid password.';
+                log_activity('login_failed', "Failed admin login: incorrect password for user $username");
+            }
+        } else {
+            $error = 'User not found.';
+            log_activity('login_failed', "Failed admin login: username not found $username");
+        }
     }
 }
 ?>

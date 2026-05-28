@@ -20,6 +20,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $stmt->bind_param("sss", $name, $phone, $exam);
     $stmt->execute();
     
+    // Log Guest Lead Inquiry Action
+    log_activity('lead_inquiry', "Guest submitted admission inquiry for $name (exam: $exam)");
+    
     echo "<!DOCTYPE html>
     <html lang='en'>
     <head>

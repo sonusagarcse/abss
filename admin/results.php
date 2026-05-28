@@ -14,8 +14,42 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_result'])) {
 
     $stmt = $conn->prepare("INSERT INTO results (student_id, exam_name, score, total_marks, rank, exam_date) VALUES (?, ?, ?, ?, ?, ?)");
     $stmt->bind_param("isdiis", $sid, $exam, $score, $total, $rank, $date);
-    $stmt->execute();
-    $msg = "Examination result recorded.";
+    
+    if ($stmt->execute()) {
+        $msg = "Examination result recorded.";
+
+        // Fetch parent email if linked
+        $student_stmt = $conn->prepare("
+            SELECT s.name AS student_name, p.parent_name, p.email AS parent_email 
+            FROM students s 
+            LEFT JOIN parents p ON s.parent_id = p.id 
+            WHERE s.id = ?
+        ");
+        $student_stmt->bind_param("i", $sid);
+        $student_stmt->execute();
+        $student_res = $student_stmt->get_result()->fetch_assoc();
+        
+        if ($student_res && !empty($student_res['parent_email'])) {
+            require_once __DIR__ . '/../includes/mail_helper.php';
+            $dashboard_url = "http://localhost/abss/admin/login.php?role=parent";
+            $email_html = get_result_published_template(
+                $student_res['student_name'], 
+                $exam, 
+                $score, 
+                $total, 
+                $rank, 
+                $dashboard_url
+            );
+            
+            send_smtp_email(
+                $student_res['parent_email'], 
+                "Result Published: " . $exam . " - " . $student_res['student_name'] . " - ABSS", 
+                $email_html
+            );
+        }
+    } else {
+        $msg = "Error recording result.";
+    }
 }
 
 $students = $conn->query("SELECT id, name FROM students WHERE status = 'active' ORDER BY name ASC");
@@ -36,6 +70,9 @@ $results = $conn->query("
     <?php include 'includes/head_css.php'; ?>
     <style>
         .form-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 40px; }
+        @media (max-width: 1024px) {
+            .form-grid { grid-template-columns: 1fr; gap: 25px; }
+        }
         .result-table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
         .result-table th { text-align: left; padding: 0 25px 10px; color: var(--portal-blue); font-weight: 800; font-size: 0.8rem; }
         .result-row td { padding: 25px; background: #fff; border-top: 1px solid #f0f4f8; border-bottom: 1px solid #f0f4f8; font-weight: 600; color: #5c6bc0; }
@@ -76,7 +113,7 @@ $results = $conn->query("
                         <label>Exam Name</label>
                         <input type="text" name="exam_name" placeholder="e.g. Sainik Mock-01" required>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="portal-form-row">
                         <div class="portal-input-group">
                             <label>Marks</label>
                             <input type="number" step="0.01" name="score" required>
@@ -86,7 +123,7 @@ $results = $conn->query("
                             <input type="number" name="total_marks" required>
                         </div>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div class="portal-form-row">
                         <div class="portal-input-group">
                             <label>Rank</label>
                             <input type="number" name="rank">
@@ -102,34 +139,36 @@ $results = $conn->query("
 
             <div class="list-section">
                 <h3 style="margin-bottom: 25px; padding-left: 20px;">Recent Performances</h3>
-                <table class="result-table">
-                    <thead>
-                        <tr>
-                            <th>Student</th>
-                            <th>Module</th>
-                            <th>Score / Rank</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php while($r = $results->fetch_assoc()): ?>
-                            <tr class="result-row">
-                                <td style="color:var(--portal-blue); font-weight:800;"><?php echo htmlspecialchars($r['name']); ?></td>
-                                <td>
-                                    <div style="font-weight:700; color:var(--portal-blue);"><?php echo $r['exam_name']; ?></div>
-                                    <div style="font-size:0.75rem; opacity:0.6;"><?php echo date('d M, Y', strtotime($r['exam_date'])); ?></div>
-                                </td>
-                                <td>
-                                    <div style="display:flex; align-items:center; gap:15px;">
-                                        <span style="font-weight:800;"><?php echo $r['score']; ?>/<?php echo $r['total_marks']; ?></span>
-                                        <?php if($r['rank']): ?>
-                                            <span class="rank-badge"><?php echo $r['rank']; ?></span>
-                                        <?php endif; ?>
-                                    </div>
-                                </td>
+                <div class="portal-table-container">
+                    <table class="result-table">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Module</th>
+                                <th>Score / Rank</th>
                             </tr>
-                        <?php endwhile; ?>
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            <?php while($r = $results->fetch_assoc()): ?>
+                                <tr class="result-row">
+                                    <td style="color:var(--portal-blue); font-weight:800;"><?php echo htmlspecialchars($r['name']); ?></td>
+                                    <td>
+                                        <div style="font-weight:700; color:var(--portal-blue);"><?php echo $r['exam_name']; ?></div>
+                                        <div style="font-size:0.75rem; opacity:0.6;"><?php echo date('d M, Y', strtotime($r['exam_date'])); ?></div>
+                                    </td>
+                                    <td>
+                                        <div style="display:flex; align-items:center; gap:15px;">
+                                            <span style="font-weight:800;"><?php echo $r['score']; ?>/<?php echo $r['total_marks']; ?></span>
+                                            <?php if($r['rank']): ?>
+                                                <span class="rank-badge"><?php echo $r['rank']; ?></span>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
+                                </tr>
+                            <?php endwhile; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </main>
