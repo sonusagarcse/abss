@@ -140,7 +140,8 @@ if ($notices_res) {
                         <div class="child-details">
                             <h4><?php echo htmlspecialchars($c['name']); ?></h4>
                             <span>Class: <?php echo htmlspecialchars($c['class_admitted']); ?></span><br>
-                            <span>Target: <?php echo htmlspecialchars($c['target_school'] ? $c['target_school'] : 'Netarhat Preparation'); ?></span>
+                            <span>Target: <?php echo htmlspecialchars($c['target_school'] ? $c['target_school'] : 'Netarhat Preparation'); ?></span><br>
+                            <span class="children-tag" style="background:#eef2ff; color:var(--portal-indigo); padding:3px 8px; border-radius:6px; font-size:0.75rem; font-weight:800; display:inline-block; margin-top:5px;"><i class="fas fa-hotel"></i> <?php echo htmlspecialchars($c['scholar_mode'] ?? 'Day Scholar'); ?></span>
                         </div>
                     </div>
                 <?php endforeach; ?>

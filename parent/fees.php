@@ -60,12 +60,7 @@ $res_fee = isset($settings['res_fee']) ? (float)$settings['res_fee'] : 5000.00;
                 <?php 
                 $sid = (int)$child['id'];
                 
-                // Fetch admission details if available to check scholar mode
-                $adm_query = $conn->prepare("SELECT scholar_mode FROM admissions WHERE student_name = ? LIMIT 1");
-                $adm_query->bind_param("s", $child['name']);
-                $adm_query->execute();
-                $adm_res = $adm_query->get_result()->fetch_assoc();
-                $scholar_mode = $adm_res ? $adm_res['scholar_mode'] : 'Day Scholar';
+                $scholar_mode = isset($child['scholar_mode']) ? $child['scholar_mode'] : 'Day Scholar';
                 $monthly_standard = ($scholar_mode === 'Hostler') ? $res_fee : $day_fee;
 
                 // Fetch payment ledger

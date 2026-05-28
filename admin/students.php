@@ -8,17 +8,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
     $phone = $_POST['phone'];
     $target_school = $_POST['target_school'];
     $class_admitted = $_POST['class_admitted'];
+    $scholar_mode = $_POST['scholar_mode'];
     $admission_date = $_POST['admission_date'];
     $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
     $parent_id = isset($_POST['parent_id']) && $_POST['parent_id'] !== '' ? (int)$_POST['parent_id'] : null;
 
     if ($id > 0) {
-        $stmt = $conn->prepare("UPDATE students SET name=?, parent_name=?, phone=?, target_school=?, class_admitted=?, admission_date=?, parent_id=? WHERE id=?");
-        $stmt->bind_param("ssssssii", $name, $parent_name, $phone, $target_school, $class_admitted, $admission_date, $parent_id, $id);
+        $stmt = $conn->prepare("UPDATE students SET name=?, parent_name=?, phone=?, target_school=?, class_admitted=?, scholar_mode=?, admission_date=?, parent_id=? WHERE id=?");
+        $stmt->bind_param("sssssssii", $name, $parent_name, $phone, $target_school, $class_admitted, $scholar_mode, $admission_date, $parent_id, $id);
         $stmt->execute();
     } else {
-        $stmt = $conn->prepare("INSERT INTO students (name, parent_name, phone, target_school, class_admitted, admission_date, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssssssi", $name, $parent_name, $phone, $target_school, $class_admitted, $admission_date, $parent_id);
+        $stmt = $conn->prepare("INSERT INTO students (name, parent_name, phone, target_school, class_admitted, scholar_mode, admission_date, parent_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssssssi", $name, $parent_name, $phone, $target_school, $class_admitted, $scholar_mode, $admission_date, $parent_id);
         $stmt->execute();
     }
     header("Location: students.php");
@@ -82,7 +83,7 @@ while($p = $parents_list->fetch_assoc()) {
                     <tr>
                         <th>Student Name</th>
                         <th>Parent Name</th>
-                        <th>Class</th>
+                        <th>Class / Mode</th>
                         <th>Target School</th>
                         <th>Actions</th>
                     </tr>
@@ -97,7 +98,10 @@ while($p = $parents_list->fetch_assoc()) {
                                 <br><small style="color:var(--portal-blue); font-weight:700;"><i class="fas fa-link"></i> <?php echo htmlspecialchars($row['parent_email']); ?></small>
                             <?php endif; ?>
                         </td>
-                        <td><?php echo htmlspecialchars($row['class_admitted']); ?></td>
+                        <td>
+                            <?php echo htmlspecialchars($row['class_admitted']); ?>
+                            <br><small style="color:#5c6bc0; font-weight:700;"><i class="fas fa-hotel"></i> <?php echo htmlspecialchars($row['scholar_mode'] ? $row['scholar_mode'] : 'Day Scholar'); ?></small>
+                        </td>
                         <td><?php echo htmlspecialchars($row['target_school']); ?></td>
                         <td>
                             <button class="btn btn-sm btn-outline-primary" style="border:none; color:var(--portal-blue);" onclick='editStudent(<?php echo json_encode($row); ?>)'>
@@ -157,9 +161,16 @@ while($p = $parents_list->fetch_assoc()) {
                             </select>
                         </div>
                         <div class="portal-input-group">
-                            <label>Admission Date</label>
-                            <input type="date" name="admission_date" id="admission_date" value="<?php echo date('Y-m-d'); ?>">
+                            <label>Scholar Mode</label>
+                            <select name="scholar_mode" id="scholar_mode">
+                                <option value="Day Scholar">Day Scholar</option>
+                                <option value="Hostler">Hostler</option>
+                            </select>
                         </div>
+                    </div>
+                    <div class="portal-input-group">
+                        <label>Admission Date</label>
+                        <input type="date" name="admission_date" id="admission_date" value="<?php echo date('Y-m-d'); ?>">
                     </div>
                     <div class="portal-btn-row">
                         <button type="submit" name="save_student" class="btn-portal w-100" style="padding:18px;">Confirm Registration</button>
@@ -187,6 +198,7 @@ while($p = $parents_list->fetch_assoc()) {
             document.getElementById('phone').value = data.phone;
             document.getElementById('target_school').value = data.target_school;
             document.getElementById('class_admitted').value = data.class_admitted;
+            document.getElementById('scholar_mode').value = data.scholar_mode || 'Day Scholar';
             document.getElementById('admission_date').value = data.admission_date;
             document.getElementById('parent_id').value = data.parent_id || '';
         }

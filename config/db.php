@@ -126,6 +126,12 @@ function runAutoMigrator($conn) {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
         }
         
+        // 3. Check and upgrade Scholar Mode column
+        $checkScholar = $conn->query("SHOW COLUMNS FROM students LIKE 'scholar_mode'");
+        if ($checkScholar && $checkScholar->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN scholar_mode ENUM('Day Scholar', 'Hostler') DEFAULT 'Day Scholar' AFTER class_admitted");
+        }
+        
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
         
