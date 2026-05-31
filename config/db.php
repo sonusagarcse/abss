@@ -132,6 +132,145 @@ function runAutoMigrator($conn) {
             $conn->query("ALTER TABLE students ADD COLUMN scholar_mode ENUM('Day Scholar', 'Hostler') DEFAULT 'Day Scholar' AFTER class_admitted");
         }
         
+        // 4. Add student registration number and photo upload
+        $checkRegNo = $conn->query("SHOW COLUMNS FROM students LIKE 'reg_no'");
+        if ($checkRegNo && $checkRegNo->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN reg_no VARCHAR(20) NULL AFTER id");
+        }
+        $checkPhoto = $conn->query("SHOW COLUMNS FROM students LIKE 'photo'");
+        if ($checkPhoto && $checkPhoto->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN photo VARCHAR(255) NULL");
+        }
+        
+        $checkDiscount = $conn->query("SHOW COLUMNS FROM students LIKE 'monthly_discount'");
+        if ($checkDiscount && $checkDiscount->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN monthly_discount DECIMAL(10,2) DEFAULT 0.00 AFTER scholar_mode");
+        }
+        
+        $checkBaseFee = $conn->query("SHOW COLUMNS FROM students LIKE 'base_fee'");
+        if ($checkBaseFee && $checkBaseFee->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN base_fee DECIMAL(10,2) DEFAULT 0.00 AFTER monthly_discount");
+            $conn->query("ALTER TABLE students ADD COLUMN last_billed_date DATE NULL AFTER base_fee");
+        }
+
+        // 4b. Add recurring addons and daily expenses tables
+        $conn->query("CREATE TABLE IF NOT EXISTS student_addons (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id INT NOT NULL,
+            addon_name VARCHAR(100) NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $conn->query("CREATE TABLE IF NOT EXISTS student_expenses (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id INT NOT NULL,
+            item_name VARCHAR(255) NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            expense_date DATE NOT NULL,
+            status ENUM('unbilled', 'billed') DEFAULT 'unbilled',
+            billed_at TIMESTAMP NULL DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+        
+        // 5. Add student personal/demographic fields
+        $checkDob = $conn->query("SHOW COLUMNS FROM students LIKE 'dob'");
+        if ($checkDob && $checkDob->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN dob DATE NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN gender ENUM('Male','Female','Other') NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN home_address TEXT NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN city VARCHAR(100) NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN state VARCHAR(100) NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN zip_code VARCHAR(10) NULL");
+        }
+        
+        // 6. Add guardian/emergency/medical fields
+        $checkGuardianRel = $conn->query("SHOW COLUMNS FROM students LIKE 'guardian_relationship'");
+        if ($checkGuardianRel && $checkGuardianRel->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN guardian_relationship VARCHAR(50) NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN guardian_email VARCHAR(150) NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN guardian_address TEXT NULL");
+            
+            $conn->query("ALTER TABLE students ADD COLUMN emergency_contact_name VARCHAR(150) NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN emergency_relationship VARCHAR(50) NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN emergency_phone VARCHAR(20) NULL");
+            
+            $conn->query("ALTER TABLE students ADD COLUMN has_allergies TINYINT(1) DEFAULT 0");
+            $conn->query("ALTER TABLE students ADD COLUMN allergies_detail TEXT NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN has_medical_condition TINYINT(1) DEFAULT 0");
+            $conn->query("ALTER TABLE students ADD COLUMN medical_condition_detail TEXT NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN physician_name VARCHAR(150) NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN physician_phone VARCHAR(20) NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN insurance_provider VARCHAR(100) NULL");
+            $conn->query("ALTER TABLE students ADD COLUMN insurance_policy VARCHAR(100) NULL");
+        }
+
+        // 7. Site Settings Table
+        $checkSettings = $conn->query("SHOW TABLES LIKE 'site_settings'");
+        if ($checkSettings && $checkSettings->num_rows == 0) {
+            $conn->query("CREATE TABLE IF NOT EXISTS site_settings (
+                setting_key VARCHAR(100) PRIMARY KEY,
+                setting_value TEXT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            
+            // Seed default fee settings
+            $conn->query("INSERT IGNORE INTO site_settings (setting_key, setting_value) VALUES 
+                ('fee_day_scholar', '3000'),
+                ('fee_hostler', '5000')
+            ");
+        }
+        
+        // 7. Expand admissions table with full offline form fields
+        $checkAdmDob = $conn->query("SHOW COLUMNS FROM admissions LIKE 'city'");
+        if ($checkAdmDob && $checkAdmDob->num_rows == 0) {
+            $conn->query("ALTER TABLE admissions ADD COLUMN city VARCHAR(100) NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN state VARCHAR(100) NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN zip_code VARCHAR(10) NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN guardian_relationship VARCHAR(50) NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN guardian_address TEXT NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN emergency_contact_name VARCHAR(150) NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN emergency_relationship VARCHAR(50) NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN emergency_phone VARCHAR(20) NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN has_allergies TINYINT(1) DEFAULT 0");
+            $conn->query("ALTER TABLE admissions ADD COLUMN allergies_detail TEXT NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN has_medical_condition TINYINT(1) DEFAULT 0");
+            $conn->query("ALTER TABLE admissions ADD COLUMN medical_condition_detail TEXT NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN physician_name VARCHAR(150) NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN physician_phone VARCHAR(20) NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN insurance_provider VARCHAR(150) NULL");
+            $conn->query("ALTER TABLE admissions ADD COLUMN insurance_policy VARCHAR(100) NULL");
+        }
+        
+        // 8. Required Documents tracking schemas
+        $checkDocs = $conn->query("SHOW TABLES LIKE 'document_types'");
+        if ($checkDocs && $checkDocs->num_rows == 0) {
+            // Create document_types table
+            $conn->query("CREATE TABLE IF NOT EXISTS document_types (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(150) NOT NULL,
+                is_required TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            
+            // Create student_documents table
+            $conn->query("CREATE TABLE IF NOT EXISTS student_documents (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                student_id INT NOT NULL,
+                document_type_id INT NOT NULL,
+                file_path VARCHAR(255) NOT NULL,
+                status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+                uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX(student_id),
+                INDEX(document_type_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            
+            // Seed some default document types
+            $conn->query("INSERT INTO document_types (name, is_required) VALUES ('Aadhar Card', 1), ('Transfer Certificate (TC)', 1), ('Birth Certificate', 1), ('Previous Year Marksheet', 0)");
+        }
+        
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
         
@@ -145,6 +284,7 @@ function runAutoMigrator($conn) {
  */
 function getAllSettings() {
     $conn = getDB();
+    // Fetch from settings table
     $result = $conn->query("SELECT setting_key, setting_value FROM settings");
     $settings = [];
     if ($result) {
@@ -152,6 +292,15 @@ function getAllSettings() {
             $settings[$row['setting_key']] = $row['setting_value'];
         }
     }
+    
+    // Fetch from site_settings table
+    $result2 = $conn->query("SELECT setting_key, setting_value FROM site_settings");
+    if ($result2) {
+        while ($row = $result2->fetch_assoc()) {
+            $settings[$row['setting_key']] = $row['setting_value'];
+        }
+    }
+    
     return $settings;
 }
 

@@ -1,4 +1,19 @@
     <footer class="main-footer">
+        <!-- App Download Banner -->
+        <div class="container" style="margin-bottom: 60px;">
+            <div style="background: linear-gradient(135deg, var(--primary-dark), var(--primary)); border-radius: 24px; padding: 40px; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 30px; box-shadow: 0 15px 35px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);">
+                <div style="flex: 1; min-width: 300px;">
+                    <h2 style="color: var(--white); margin-bottom: 10px; font-size: clamp(1.8rem, 2vw, 2.5rem);">Take ABSS Everywhere You Go</h2>
+                    <p style="color: rgba(255,255,255,0.8); font-size: 1.1rem; max-width: 500px; margin-bottom: 0;">Download our new Mobile App for instant access to grades, notices, and secure portal features.</p>
+                </div>
+                <div>
+                    <a href="#" onclick="triggerInstall()" class="btn" style="background: var(--secondary); color: var(--primary-dark); font-weight: 800; padding: 16px 32px; font-size: 1.2rem; border-radius: 50px; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 10px 20px rgba(255, 214, 0, 0.3); transition: transform 0.3s;">
+                        <i class="fas fa-mobile-alt"></i> Install App Now
+                    </a>
+                </div>
+            </div>
+        </div>
+
         <div class="container footer-grid">
             <div class="footer-info">
                 <img src="assets/logo.png" alt="Logo" style="height: 50px;">

@@ -131,11 +131,17 @@ if ($notices_res) {
             <div class="children-grid">
                 <?php foreach ($children as $c): ?>
                     <div class="child-card">
-                        <div class="child-avatar">
-                            <?php 
-                            $initials = explode(' ', $c['name']);
-                            echo htmlspecialchars(substr($initials[0], 0, 1) . (isset($initials[1]) ? substr($initials[1], 0, 1) : ''));
-                            ?>
+                        <div class="child-avatar" style="overflow:hidden; flex-shrink:0;">
+                            <?php if (!empty($c['student_photo'])): ?>
+                                <img src="../<?php echo htmlspecialchars($c['student_photo']); ?>" 
+                                     alt="<?php echo htmlspecialchars($c['name']); ?>"
+                                     style="width:50px; height:50px; object-fit:cover; border-radius:50%;">
+                            <?php else: ?>
+                                <?php 
+                                $initials = explode(' ', $c['name']);
+                                echo htmlspecialchars(substr($initials[0], 0, 1) . (isset($initials[1]) ? substr($initials[1], 0, 1) : ''));
+                                ?>
+                            <?php endif; ?>
                         </div>
                         <div class="child-details">
                             <h4><?php echo htmlspecialchars($c['name']); ?></h4>

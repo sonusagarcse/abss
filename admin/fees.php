@@ -69,60 +69,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
     }
 }
 
-// Handle Fee Generation
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_fee'])) {
-    $sid = $_POST['student_id'];
-    $amount = $_POST['amount'];
-    $date = $_POST['billing_date'];
-    $month = $_POST['month_for'];
-    $remark = trim($_POST['remark']);
-
-    $stmt = $conn->prepare("INSERT INTO fees_generated (student_id, amount, month_for, billing_date, remark, status) VALUES (?, ?, ?, ?, ?, 'unpaid')");
-    $stmt->bind_param("idsss", $sid, $amount, $month, $date, $remark);
+// Handle Force Generation
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['force_generate'])) {
+    $sid = (int)$_POST['student_id'];
     
-    if ($stmt->execute()) {
-        $msg = "Fee invoice successfully generated and billed.";
-        
-        // Fetch student details and parent email for notification
-        $student_stmt = $conn->prepare("
-            SELECT s.name AS student_name, p.parent_name, p.email AS parent_email 
-            FROM students s 
-            LEFT JOIN parents p ON s.parent_id = p.id 
-            WHERE s.id = ?
-        ");
-        $student_stmt->bind_param("i", $sid);
-        $student_stmt->execute();
-        $student_res = $student_stmt->get_result()->fetch_assoc();
-        $st_name = $student_res['student_name'] ?? 'ID ' . $sid;
-        
-        log_activity('fee_bill_generated', "Generated invoice of ₹" . number_format($amount, 2) . " for student $st_name (month: $month)");
-
-        if ($student_res && !empty($student_res['parent_email'])) {
-            require_once __DIR__ . '/../includes/mail_helper.php';
-            // Dynamic host URL builder - works on localhost and live server
-            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $fe_host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
-            $fe_base_url = (strpos($fe_host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$fe_host";
-            $portal_url = "$fe_base_url/admin/login.php?role=parent";
-            $email_html = get_fee_generated_template(
-                $student_res['student_name'], 
-                $amount, 
-                $month, 
-                $date, 
-                $remark, 
-                $portal_url
-            );
-            
-            send_smtp_email(
-                $student_res['parent_email'], 
-                "New Tuition Invoice Generated - " . $student_res['student_name'] . " - ABSS", 
-                $email_html
-            );
-        }
-    } else {
-        $err = "Error generating student fee invoice.";
-    }
+    // Set variables for billing engine
+    $force_student_id = $sid;
+    
+    ob_start();
+    require 'includes/billing_engine.php';
+    ob_end_clean();
+    
+    $msg = "Force Automated Billing executed for the selected student.";
 }
+
 
 // Handle Quick Offline Collect Action (Collect Particular Due Amount)
 if (isset($_GET['collect_offline'])) {
@@ -223,6 +183,15 @@ $bills = $conn->query("
     JOIN students s ON fg.student_id = s.id 
     ORDER BY fg.billing_date DESC LIMIT 10
 ");
+
+// Check how many students are due for billing
+$due_query = $conn->query("
+    SELECT COUNT(id) as due_count
+    FROM students
+    WHERE status = 'active'
+    AND DATE_ADD(COALESCE(last_billed_date, admission_date), INTERVAL 1 MONTH) <= CURDATE()
+");
+$due_count = $due_query ? $due_query->fetch_assoc()['due_count'] : 0;
 ?>
 
 <!DOCTYPE html>
@@ -296,41 +265,19 @@ $bills = $conn->query("
         <div class="form-cols">
             <!-- Form 1: Generate/Bill Fee -->
             <div class="portal-card">
-                <h3 style="margin-bottom: 25px; color:var(--portal-blue);"><i class="fas fa-file-invoice-dollar" style="margin-right:8px; opacity:0.7;"></i> Generate Fee Bill</h3>
+                <h3 style="margin-bottom: 25px; color:var(--portal-blue);"><i class="fas fa-robot" style="margin-right:8px; opacity:0.7;"></i> Force Automated Generation</h3>
+                <p style="font-size: 0.85rem; color: #555; margin-bottom:20px;">Use this to forcefully calculate and generate an invoice (Base Fee + Addons + Unbilled Expenses) for a specific student *in between* normal cycles. If they already have an unpaid invoice, it will merge into it.</p>
                 <form action="" method="POST">
                     <div class="portal-input-group">
-                        <label>Student</label>
+                        <label>Select Student to Bill</label>
                         <select name="student_id" required>
-                            <option value="">Select Student...</option>
+                            <option value="">Search & Select Student...</option>
                             <?php foreach($students_list as $student): ?>
                                 <option value="<?php echo $student['id']; ?>"><?php echo htmlspecialchars($student['name']); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
-                        <div class="portal-input-group">
-                            <label>Amount (₹)</label>
-                            <input type="number" name="amount" placeholder="e.g. 3000" required>
-                        </div>
-                        <div class="portal-input-group">
-                            <label>For Month</label>
-                            <select name="month_for" required>
-                                <?php 
-                                $months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-                                foreach($months as $m) echo "<option value='$m'>$m</option>";
-                                ?>
-                            </select>
-                        </div>
-                    </div>
-                    <div class="portal-input-group">
-                        <label>Billing Date</label>
-                        <input type="date" name="billing_date" value="<?php echo date('Y-m-d'); ?>" required>
-                    </div>
-                    <div class="portal-input-group">
-                        <label>Remarks / Description</label>
-                        <input type="text" name="remark" placeholder="e.g. Monthly Tuition Fee + Mess Charge" required>
-                    </div>
-                    <button type="submit" name="generate_fee" class="btn-portal w-100">Bill Fee Outstanding</button>
+                    <button type="submit" name="force_generate" class="btn-portal w-100" style="padding: 15px; font-size: 1.1rem; background: #d32f2f;"><i class="fas fa-bolt"></i> Force Generate Bill Now</button>
                 </form>
             </div>
 

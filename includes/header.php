@@ -15,6 +15,46 @@ $settings = getAllSettings();
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css" />
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
+    <link rel="manifest" href="/abss/app/manifest.json">
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/abss/app/sw.js.php', {scope: '/abss/'});
+        });
+    }
+
+    // Global PWA Installation Logic
+    let globalDeferredPrompt;
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        globalDeferredPrompt = e;
+        
+        // Show floating button only when installable
+        const floatingBtn = document.getElementById('floatingInstallBtn');
+        if(floatingBtn) floatingBtn.style.display = 'flex';
+    });
+
+    const triggerInstall = async () => {
+        if (globalDeferredPrompt) {
+            globalDeferredPrompt.prompt();
+            const { outcome } = await globalDeferredPrompt.userChoice;
+            if (outcome === 'accepted') {
+                const floatingBtn = document.getElementById('floatingInstallBtn');
+                if(floatingBtn) floatingBtn.style.display = 'none';
+            }
+            globalDeferredPrompt = null;
+        } else {
+            alert('App is already installed or your browser does not support this feature.');
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const navBtn = document.getElementById('installAppBtnNav');
+        const mobileBtn = document.getElementById('installAppBtnMobile');
+        if(navBtn) navBtn.addEventListener('click', (e) => { e.preventDefault(); triggerInstall(); });
+        if(mobileBtn) mobileBtn.addEventListener('click', (e) => { e.preventDefault(); triggerInstall(); });
+    });
+    </script>
 </head>
 
 <body>
@@ -31,6 +71,7 @@ $settings = getAllSettings();
                 <li><a href="#gallery">Gallery</a></li>
                 <li><a href="#contact">Contact</a></li>
                 <li><a href="inauguration.php" style="color: #d4af37;"><i class="fas fa-star"></i> Inauguration</a></li>
+                <li><a href="#" id="installAppBtnNav" style="color: #0d47a1;"><i class="fas fa-download"></i> App</a></li>
             </ul>
             <a href="admission.php" class="btn btn-primary">Admissions</a>
             <div class="menu-toggle" id="mobile-menu-open">
@@ -52,10 +93,21 @@ $settings = getAllSettings();
             <li><a href="#admission">Admission</a></li>
             <li><a href="#contact">Contact</a></li>
             <li><a href="inauguration.php" style="color: #d4af37;"><i class="fas fa-star"></i> Inauguration</a></li>
+            <li><a href="#" id="installAppBtnMobile" style="color: #0d47a1;"><i class="fas fa-download"></i> Download App</a></li>
         </ul>
         <div class="drawer-footer">
             <a href="admission.php" class="btn btn-primary w-100">Apply Now</a>
         </div>
+    </div>
+
+    <!-- Floating App Install Button -->
+    <div id="floatingInstallBtn" class="floating-install" style="display:none;" onclick="triggerInstall()">
+        <img src="assets/logo.png" alt="App Icon">
+        <div class="floating-text">
+            <span>Download Our App</span>
+            <small>Faster & secure</small>
+        </div>
+        <i class="fas fa-download download-icon"></i>
     </div>
 
     <style>
@@ -132,6 +184,69 @@ $settings = getAllSettings();
             .menu-toggle {
                 display: block;
             }
+        }
+
+        /* Floating Install Button Styles */
+        .floating-install {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #fff;
+            border-radius: 50px;
+            box-shadow: 0 10px 30px rgba(0,21,113,0.2);
+            align-items: center;
+            padding: 8px 20px 8px 8px;
+            cursor: pointer;
+            z-index: 9999;
+            transition: all 0.3s ease;
+            border: 2px solid var(--portal-blue);
+        }
+        .floating-install:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,21,113,0.3);
+        }
+        .floating-install img {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            margin-right: 12px;
+            object-fit: cover;
+            border: 1px solid #eef2ff;
+        }
+        .floating-text {
+            display: flex;
+            flex-direction: column;
+            margin-right: 15px;
+        }
+        .floating-text span {
+            color: var(--portal-blue);
+            font-weight: 800;
+            font-size: 0.95rem;
+            line-height: 1.2;
+        }
+        .floating-text small {
+            color: #666;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .download-icon {
+            color: var(--portal-blue);
+            font-size: 1.2rem;
+            background: #eef2ff;
+            width: 38px;
+            height: 38px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+
+        @media (max-width: 768px) {
+            .floating-install {
+                bottom: 20px;
+                right: 20px;
+            }
+            .floating-text small { display: none; }
         }
 
         /* Mobile Drawer Styles */

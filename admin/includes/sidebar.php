@@ -43,6 +43,16 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </a>
         </li>
         <li class="nav-item">
+            <a href="documents.php" class="nav-link <?php echo $current_page == 'documents.php' ? 'active' : ''; ?>">
+                <i class="fas fa-file-alt"></i> Required Documents
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="document_approvals.php" class="nav-link <?php echo $current_page == 'document_approvals.php' ? 'active' : ''; ?>">
+                <i class="fas fa-check-double"></i> Review Documents
+            </a>
+        </li>
+        <li class="nav-item">
             <a href="parents.php" class="nav-link <?php echo $current_page == 'parents.php' ? 'active' : ''; ?>">
                 <i class="fas fa-user-friends"></i> Parent Registry
             </a>
@@ -50,6 +60,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
         <li class="nav-item">
             <a href="fees.php" class="nav-link <?php echo $current_page == 'fees.php' ? 'active' : ''; ?>">
                 <i class="fas fa-history"></i> Fee Ledger
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="expenses.php" class="nav-link <?php echo $current_page == 'expenses.php' ? 'active' : ''; ?>">
+                <i class="fas fa-cart-plus"></i> Daily Expenses
             </a>
         </li>
         <li class="nav-item">

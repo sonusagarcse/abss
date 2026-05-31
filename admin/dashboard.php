@@ -1,12 +1,18 @@
 <?php
 require_once 'includes/auth.php';
 
+// Trigger automated billing engine for any due monthly invoices
+require_once 'includes/billing_engine.php';
+
 // Fetch stats
 $today = date('Y-m-d');
 $student_count = $conn->query("SELECT COUNT(*) as count FROM students")->fetch_assoc()['count'];
 $inquiry_count = $conn->query("SELECT COUNT(*) as count FROM inquiries WHERE status = 'new'")->fetch_assoc()['count'];
 $attendance_today = $conn->query("SELECT COUNT(*) as count FROM attendance WHERE date = '$today' AND status = 'present'")->fetch_assoc()['count'];
-$fees_total = $conn->query("SELECT SUM(amount) as total FROM fee_payments WHERE month_for = '" . date('F') . "'")->fetch_assoc()['total'];
+// Accurate monthly collection: use MONTH/YEAR on payment_date
+$fees_total = $conn->query("SELECT SUM(amount) as total FROM fee_payments WHERE MONTH(payment_date) = MONTH(NOW()) AND YEAR(payment_date) = YEAR(NOW())")->fetch_assoc()['total'];
+// Total lifetime fee collection across all time
+$fees_lifetime = $conn->query("SELECT SUM(amount) as total FROM fee_payments")->fetch_assoc()['total'];
 $results_latest = $conn->query("SELECT COUNT(*) as count FROM results")->fetch_assoc()['count'];
 ?>
 
@@ -20,13 +26,14 @@ $results_latest = $conn->query("SELECT COUNT(*) as count FROM results")->fetch_a
     <style>
         .dash-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 50px; }
         .academic-badge { background: #fff; padding: 12px 25px; border-radius: 100px; border: 1px solid rgba(13, 71, 161, 0.1); color: var(--portal-blue); font-weight: 700; display: flex; align-items: center; gap: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.02); }
-        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 30px; margin-bottom: 50px; }
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 50px; }
         .stat-card { background: #fff; padding: 35px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.02); display: flex; align-items: center; gap: 25px; transition: 0.3s; }
         .stat-card:hover { transform: translateY(-10px); box-shadow: 0 20px 40px rgba(0,0,0,0.04); }
         .stat-icon { width: 70px; height: 70px; border-radius: 22px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; }
         .icon-blue { background: #eef2ff; color: var(--portal-blue); }
         .icon-orange { background: #fff7ed; color: #f97316; }
         .icon-green { background: #f0fdf4; color: #22c55e; }
+        .icon-purple { background: #f3e8ff; color: #7c3aed; }
         .stat-info h3 { font-size: 2.2rem; margin: 0; color: var(--portal-blue); font-weight: 800; }
         .stat-info p { margin: 0; color: #5c6bc0; font-size: 0.95rem; font-weight: 600; }
         .dashboard-row { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
@@ -70,6 +77,13 @@ $results_latest = $conn->query("SELECT COUNT(*) as count FROM results")->fetch_a
                 <div class="stat-info">
                     <h3><?php echo number_format($inquiry_count); ?></h3>
                     <p>New Inquiries</p>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon icon-purple"><i class="fas fa-coins"></i></div>
+                <div class="stat-info">
+                    <h3>₹ <?php echo number_format($fees_lifetime ?: 0); ?></h3>
+                    <p>Total Lifetime Collection</p>
                 </div>
             </div>
         </div>

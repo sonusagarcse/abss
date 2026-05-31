@@ -17,8 +17,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $conn = getDB();
 
     if ($role === 'parent') {
-        $stmt = $conn->prepare("SELECT id, parent_name, password FROM parents WHERE email = ?");
-        $stmt->bind_param("s", $username);
+        // Allow login with email OR mobile number
+        $stmt = $conn->prepare("SELECT id, parent_name, password, email FROM parents WHERE email = ? OR phone = ? LIMIT 1");
+        $stmt->bind_param("ss", $username, $username);
         $stmt->execute();
         $result = $stmt->get_result();
 
@@ -29,19 +30,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 
                 $_SESSION['parent_id'] = $parent['id'];
                 $_SESSION['parent_name'] = $parent['parent_name'];
-                $_SESSION['parent_email'] = $username;
+                $_SESSION['parent_email'] = $parent['email'];
                 
                 log_activity('login', "Parent successfully logged in");
                 
                 header("Location: ../parent/dashboard.php");
                 exit();
             } else {
-                $error = 'Invalid password.';
-                log_activity('login_failed', "Failed parent login: incorrect password for email $username");
+                $error = 'Invalid password. Please try again.';
+                log_activity('login_failed', "Failed parent login: incorrect password for $username");
             }
         } else {
-            $error = 'Parent account not found with this email.';
-            log_activity('login_failed', "Failed parent login: email not found $username");
+            $error = 'No parent account found with this email or mobile number.';
+            log_activity('login_failed', "Failed parent login: not found $username");
         }
     } else {
         $stmt = $conn->prepare("SELECT id, password FROM users WHERE username = ?");
@@ -83,6 +84,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <link rel="icon" type="image/png" href="../assets/logo.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="../css/style.css">
+    <link rel="manifest" href="/abss/app/manifest.json">
+    <script>
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/abss/app/sw.js.php', {scope: '/abss/'});
+        });
+    }
+    </script>
     <style>
         :root {
             --portal-blue: #0d47a1;
@@ -229,8 +238,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <input type="hidden" name="role" id="selectedRole" value="admin">
                 
                 <div class="portal-input-group">
-                    <label>Identification / Username</label>
-                    <input type="text" name="username" placeholder="Username or Registration ID" required>
+                    <label id="usernameLabel">Identification / Username</label>
+                    <input type="text" name="username" id="usernameInput" placeholder="Username or Registration ID" required>
                 </div>
 
                 <div class="portal-input-group">
@@ -241,6 +250,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 <button type="submit" class="portal-access-btn">
                     Access Portal Account
                 </button>
+                
+                <button type="button" id="installAppBtn" class="portal-access-btn" style="display:none; background: #fff; color: #0d47a1; border-color: #0d47a1; margin-top: 15px;">
+                    <i class="fas fa-download"></i> Download Mobile App
+                </button>
+                <div id="iosInstallHint" style="display:none; margin-top:15px; font-size:0.9rem; color:#5c6bc0; background:#eef2ff; padding:10px; border-radius:10px;">
+                    <i class="fas fa-info-circle"></i> To install on iOS: tap the <b>Share</b> button and select <b>Add to Home Screen</b>.
+                </div>
             </form>
 
             <div class="portal-footer">
@@ -251,12 +267,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     <script>
         const tabs = document.querySelectorAll('.role-tab');
         const roleInput = document.getElementById('selectedRole');
+        const usernameLabel = document.getElementById('usernameLabel');
+        const usernameInput = document.getElementById('usernameInput');
+        
+        const labelMap = {
+            admin: { label: 'Identification / Username', placeholder: 'Admin username' },
+            teacher: { label: 'Identification / Username', placeholder: 'Teacher username' },
+            parent: { label: 'Email or Mobile Number', placeholder: 'Enter email or 10-digit mobile number' }
+        };
         
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
                 tabs.forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
-                roleInput.value = tab.dataset.role.toLowerCase();
+                const role = tab.dataset.role.toLowerCase();
+                roleInput.value = role;
+                usernameLabel.textContent = labelMap[role]?.label || 'Identification / Username';
+                usernameInput.placeholder = labelMap[role]?.placeholder || 'Username';
             });
         });
 
@@ -266,6 +293,40 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if (urlRole) {
             const targetTab = Array.from(tabs).find(t => t.dataset.role.toLowerCase() === urlRole.toLowerCase());
             if (targetTab) targetTab.click();
+        }
+
+        // PWA Installation Logic
+        let deferredPrompt;
+        const installBtn = document.getElementById('installAppBtn');
+        const iosHint = document.getElementById('iosInstallHint');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            // Prevent the mini-infobar from appearing on mobile
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.style.display = 'block';
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    installBtn.style.display = 'none';
+                }
+                deferredPrompt = null;
+            }
+        });
+
+        // Detect iOS to show hint if not installed
+        const isIos = () => {
+            const userAgent = window.navigator.userAgent.toLowerCase();
+            return /iphone|ipad|ipod/.test(userAgent);
+        };
+        const isInStandaloneMode = () => ('standalone' in window.navigator) && (window.navigator.standalone);
+
+        if (isIos() && !isInStandaloneMode()) {
+            iosHint.style.display = 'block';
         }
     </script>
 </body>

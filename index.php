@@ -122,7 +122,8 @@ include 'includes/header.php';
         <div class="vision-flex">
             <div class="vision-image-wrapper fade-in">
                 <div class="image-frame">
-                    <img src="assets/Secratery.png" alt="Suman Kumar" class="vision-img">
+                    <?php $director_img = !empty($settings['director_image_path']) ? $settings['director_image_path'] : 'assets/Secratery.png'; ?>
+                    <img src="<?php echo htmlspecialchars($director_img); ?>" alt="Suman Kumar" class="vision-img">
                 </div>
                 <div class="info-card glass-card">
                     <h4>Suman Kumar</h4>
@@ -258,6 +259,31 @@ include 'includes/header.php';
         </div>
 
         <div class="admission-grid">
+            <?php
+            $extra_fees = [];
+            if (isset($settings['extra_fees'])) {
+                $extra_fees = json_decode($settings['extra_fees'], true) ?: [];
+            } else {
+                $extra_fees = [
+                    'Registration Fee' => $settings['registration_fee'] ?? '100',
+                    'Admission Fee' => $settings['admission_fee'] ?? '2000',
+                    'Annual Development' => $settings['development_fee'] ?? '1000'
+                ];
+            }
+            $extra_total = array_sum($extra_fees);
+
+            // Fetch plan features
+            $plan_features = [];
+            if (isset($settings['plan_features'])) {
+                $plan_features = json_decode($settings['plan_features'], true) ?: [];
+            } else {
+                // Defaults based on previous hardcoded features
+                $plan_features = [
+                    ['feature' => 'Hostel & Quality Meals included', 'res' => true, 'day' => false],
+                    ['feature' => 'Intensive Classroom Training', 'res' => true, 'day' => true]
+                ];
+            }
+            ?>
             <div class="fee-cards-container" style="display: flex; gap: 30px; flex-wrap: wrap;">
                 <!-- Residential Plan -->
                 <div class="pricing-card glass-card fade-in" style="flex: 1; min-width: 300px;">
@@ -265,16 +291,20 @@ include 'includes/header.php';
                     <div class="price-main">₹ <?php echo number_format($settings['res_fee']); ?><span>/month</span>
                     </div>
                     <ul class="pricing-list">
-                        <li><i class="fas fa-check"></i> Registration Fee: ₹
-                            <?php echo $settings['registration_fee']; ?>/-</li>
-                        <li><i class="fas fa-check"></i> Admission Fee: ₹ <?php echo $settings['admission_fee']; ?>/-
-                        </li>
-                        <li><i class="fas fa-check"></i> Annual Development: ₹
-                            <?php echo $settings['development_fee']; ?>/-</li>
-                        <li><i class="fas fa-check"></i> Hostel & Quality Meals included</li>
+                        <?php foreach($extra_fees as $f_name => $f_amount): ?>
+                        <li><i class="fas fa-check" style="color: #4caf50;"></i> <?php echo htmlspecialchars($f_name); ?>: ₹ <?php echo htmlspecialchars($f_amount); ?>/-</li>
+                        <?php endforeach; ?>
+                        
+                        <?php foreach($plan_features as $feat): ?>
+                            <?php if (!empty($feat['res'])): ?>
+                                <li><i class="fas fa-check" style="color: #4caf50;"></i> <?php echo htmlspecialchars($feat['feature']); ?></li>
+                            <?php else: ?>
+                                <li><i class="fas fa-times" style="color: #f44336; opacity: 0.5;"></i> <span style="text-decoration: line-through; opacity: 0.5;"><?php echo htmlspecialchars($feat['feature']); ?></span></li>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
                     </ul>
                     <div class="total-tag">Initial Payment: ₹
-                        <?php echo number_format($settings['res_fee'] + $settings['registration_fee'] + $settings['admission_fee'] + $settings['development_fee']); ?>/-
+                        <?php echo number_format(($settings['res_fee'] ?? 5000) + $extra_total); ?>/-
                     </div>
                 </div>
 
@@ -284,16 +314,20 @@ include 'includes/header.php';
                     <div class="price-main">₹ <?php echo number_format($settings['day_fee']); ?><span>/month</span>
                     </div>
                     <ul class="pricing-list">
-                        <li><i class="fas fa-check"></i> Registration Fee: ₹
-                            <?php echo $settings['registration_fee']; ?>/-</li>
-                        <li><i class="fas fa-check"></i> Admission Fee: ₹ <?php echo $settings['admission_fee']; ?>/-
-                        </li>
-                        <li><i class="fas fa-check"></i> Annual Development: ₹
-                            <?php echo $settings['development_fee']; ?>/-</li>
-                        <li><i class="fas fa-check"></i> Intensive Classroom Training</li>
+                        <?php foreach($extra_fees as $f_name => $f_amount): ?>
+                        <li><i class="fas fa-check" style="color: #4caf50;"></i> <?php echo htmlspecialchars($f_name); ?>: ₹ <?php echo htmlspecialchars($f_amount); ?>/-</li>
+                        <?php endforeach; ?>
+
+                        <?php foreach($plan_features as $feat): ?>
+                            <?php if (!empty($feat['day'])): ?>
+                                <li><i class="fas fa-check" style="color: #4caf50;"></i> <?php echo htmlspecialchars($feat['feature']); ?></li>
+                            <?php else: ?>
+                                <li><i class="fas fa-times" style="color: #f44336; opacity: 0.5;"></i> <span style="text-decoration: line-through; opacity: 0.5;"><?php echo htmlspecialchars($feat['feature']); ?></span></li>
+                            <?php endif; ?>
+                        <?php endforeach; ?>
                     </ul>
                     <div class="total-tag">Initial Payment: ₹
-                        <?php echo number_format($settings['day_fee'] + $settings['registration_fee'] + $settings['admission_fee'] + $settings['development_fee']); ?>/-
+                        <?php echo number_format(($settings['day_fee'] ?? 3000) + $extra_total); ?>/-
                     </div>
                 </div>
             </div>

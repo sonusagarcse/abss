@@ -15,9 +15,26 @@ while ($c = $children_res->fetch_assoc()) {
     $children[] = $c;
 }
 
+$selected_child_id = isset($_GET['child_id']) ? (int)$_GET['child_id'] : (!empty($children) ? $children[0]['id'] : 0);
+$selected_child = null;
+foreach ($children as $c) {
+    if ($c['id'] == $selected_child_id) {
+        $selected_child = $c;
+        break;
+    }
+}
+if (!$selected_child && !empty($children)) {
+    $selected_child = $children[0];
+}
+
 $settings = getAllSettings();
-$day_fee = isset($settings['day_fee']) ? (float)$settings['day_fee'] : 3000.00;
-$res_fee = isset($settings['res_fee']) ? (float)$settings['res_fee'] : 5000.00;
+$razorpay_key_id = $settings['razorpay_key_id'] ?? '';
+$tuition_modes = [];
+if (!empty($settings['tuition_modes'])) {
+    $tuition_modes = json_decode($settings['tuition_modes'], true);
+} else {
+    $tuition_modes = ['Day Scholar' => 3000, 'Hostler' => 5000];
+}
 ?>
 
 <!DOCTYPE html>
@@ -49,6 +66,12 @@ $res_fee = isset($settings['res_fee']) ? (float)$settings['res_fee'] : 5000.00;
             <p>Review standard monthly tuition matrices, pending outstanding invoices, paid fee transactions, and download official receipts.</p>
         </header>
 
+        <?php if(isset($_GET['success'])): ?>
+            <div style="background:#f0fdf4; color:#166534; padding:15px 25px; border-radius:16px; margin-bottom:30px; font-weight:700;">
+                <i class="fas fa-check-circle"></i> Online payment successfully processed! Your receipt has been generated.
+            </div>
+        <?php endif; ?>
+
         <?php if (empty($children)): ?>
             <div class="portal-card" style="text-align: center; padding: 80px 40px;">
                 <i class="fas fa-users-slash" style="font-size: 4rem; color: #9aa5ce; margin-bottom: 30px;"></i>
@@ -56,12 +79,28 @@ $res_fee = isset($settings['res_fee']) ? (float)$settings['res_fee'] : 5000.00;
                 <p>Please contact the school office to link your student accounts.</p>
             </div>
         <?php else: ?>
-            <?php foreach ($children as $child): ?>
-                <?php 
+            
+            <?php if (count($children) > 1): ?>
+                <div class="portal-card" style="margin-bottom: 30px; background: #eef2ff; border: 1px solid #c7d2fe;">
+                    <form action="" method="GET" style="display: flex; align-items: center; gap: 15px;">
+                        <label style="font-weight: 700; color: var(--portal-indigo);"><i class="fas fa-user-graduate"></i> Select Student:</label>
+                        <select name="child_id" class="portal-input" style="max-width: 300px; margin: 0;" onchange="this.form.submit()">
+                            <?php foreach ($children as $c): ?>
+                                <option value="<?php echo $c['id']; ?>" <?php echo $c['id'] == $selected_child['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($c['name']) . ' (' . htmlspecialchars($c['class_admitted']) . ')'; ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </form>
+                </div>
+            <?php endif; ?>
+
+            <?php 
+                $child = $selected_child;
                 $sid = (int)$child['id'];
                 
-                $scholar_mode = isset($child['scholar_mode']) ? $child['scholar_mode'] : 'Day Scholar';
-                $monthly_standard = ($scholar_mode === 'Hostler') ? $res_fee : $day_fee;
+                $scholar_mode = isset($child['scholar_mode']) && $child['scholar_mode'] ? $child['scholar_mode'] : 'Day Scholar';
+                $monthly_standard = $tuition_modes[$scholar_mode] ?? 0;
 
                 // Fetch payment ledger
                 $payments = [];
@@ -141,7 +180,7 @@ $res_fee = isset($settings['res_fee']) ? (float)$settings['res_fee'] : 5000.00;
                                     <th>Amount Due</th>
                                     <th>Billing Date</th>
                                     <th>Remarks / Description</th>
-                                    <th>Status</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -155,8 +194,12 @@ $res_fee = isset($settings['res_fee']) ? (float)$settings['res_fee'] : 5000.00;
                                             <td style="color:var(--portal-indigo); font-weight:800;"><?php echo htmlspecialchars($bill['month_for']); ?></td>
                                             <td><span class="amount-tag" style="background:#feeef2; color:#d32f2f;">₹ <?php echo number_format($bill['amount'], 2); ?></span></td>
                                             <td><?php echo date('d F, Y', strtotime($bill['billing_date'])); ?></td>
-                                            <td style="font-weight: 600; color: #5c6bc0;"><?php echo htmlspecialchars($bill['remark'] ? $bill['remark'] : 'Tuition Fee Billed'); ?></td>
-                                            <td><span class="badge badge-danger">Unpaid</span></td>
+                                            <td style="font-weight: 600; color: #5c6bc0;"><?php echo htmlspecialchars($bill['month_for']). "- Auto-generated Bill"; ?></td>
+                                            <td>
+                                                <a href="view_bill.php?id=<?php echo $bill['id']; ?>" class="btn-receipt" style="background:#feeef2; color:#d32f2f;">
+                                                    <i class="fas fa-file-invoice"></i> View Bill
+                                                </a>
+                                            </td>
                                         </tr>
                                     <?php endforeach; ?>
                                 <?php endif; ?>
@@ -200,9 +243,59 @@ $res_fee = isset($settings['res_fee']) ? (float)$settings['res_fee'] : 5000.00;
                             </tbody>
                         </table>
                     </div>
-                </div>
-            <?php endforeach; ?>
+                </div> <!-- End of child-fee-card -->
+            
         <?php endif; ?>
+
     </main>
+
+    <?php if(!empty($razorpay_key_id)): ?>
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script>
+        function payWithRazorpay(billId, amount, month, studentName) {
+            var options = {
+                "key": "<?php echo $razorpay_key_id; ?>",
+                "amount": amount * 100, // Amount is in currency subunits. Default currency is INR.
+                "currency": "INR",
+                "name": "ABSS School",
+                "description": "Tuition Fee for " + month + " - " + studentName,
+                "image": "../assets/logo.png",
+                "handler": function (response){
+                    // Send to our server for verification
+                    var form = document.createElement("form");
+                    form.method = "POST";
+                    form.action = "verify_payment.php";
+
+                    var input1 = document.createElement("input");
+                    input1.type = "hidden";
+                    input1.name = "razorpay_payment_id";
+                    input1.value = response.razorpay_payment_id;
+                    form.appendChild(input1);
+
+                    var input2 = document.createElement("input");
+                    input2.type = "hidden";
+                    input2.name = "bill_id";
+                    input2.value = billId;
+                    form.appendChild(input2);
+
+                    document.body.appendChild(form);
+                    form.submit();
+                },
+                "prefill": {
+                    "name": "<?php echo isset($_SESSION['parent_name']) ? htmlspecialchars($_SESSION['parent_name']) : ''; ?>",
+                    "email": "<?php echo isset($_SESSION['parent_email']) ? htmlspecialchars($_SESSION['parent_email']) : ''; ?>"
+                },
+                "theme": {
+                    "color": "#3949ab"
+                }
+            };
+            var rzp = new Razorpay(options);
+            rzp.on('payment.failed', function (response){
+                alert("Payment failed! Reason: " + response.error.description);
+            });
+            rzp.open();
+        }
+    </script>
+    <?php endif; ?>
 </body>
 </html>

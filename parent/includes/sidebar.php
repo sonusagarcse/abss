@@ -42,12 +42,17 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     <ul class="nav-menu">
         <li class="nav-item">
-            <a href="dashboard" class="nav-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
+            <a href="dashboard.php" class="nav-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
                 <i class="fas fa-th-large"></i> Overview Dashboard
             </a>
         </li>
         <li class="nav-item">
-            <a href="results" class="nav-link <?php echo $current_page == 'results.php' ? 'active' : ''; ?>">
+            <a href="documents.php" class="nav-link <?php echo $current_page == 'documents.php' ? 'active' : ''; ?>">
+                <i class="fas fa-file-alt"></i> Required Documents
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="results.php" class="nav-link <?php echo $current_page == 'results.php' ? 'active' : ''; ?>">
                 <i class="fas fa-award"></i> Academic Performance
             </a>
         </li>
