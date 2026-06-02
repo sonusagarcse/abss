@@ -10,7 +10,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
     $conn->begin_transaction();
     try {
         // Save simple key-value settings
-        foreach (['razorpay_key_id', 'razorpay_key_secret', 'res_fee', 'day_fee'] as $k) {
+        $simple_keys = ['razorpay_key_id', 'razorpay_key_secret', 'res_fee', 'day_fee', 'smtp_host', 'smtp_port', 'smtp_username', 'smtp_password', 'smtp_encryption'];
+        foreach ($simple_keys as $k) {
             if (isset($_POST['settings'][$k])) {
                 $v = $conn->real_escape_string(trim($_POST['settings'][$k]));
                 $conn->query("INSERT INTO site_settings (setting_key, setting_value) VALUES ('$k', '$v') ON DUPLICATE KEY UPDATE setting_value = '$v'");
@@ -86,6 +87,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
     } catch (Exception $e) {
         $conn->rollback();
         $err = "Error updating settings.";
+    }
+}
+
+// Handle Send Verification Code
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_verification_code'])) {
+    $code = sprintf("%06d", mt_rand(1, 999999));
+    $_SESSION['admin_verification_code'] = $code;
+    $_SESSION['admin_verification_expiry'] = time() + 900; // 15 minutes
+    
+    require_once '../includes/mail_helper.php';
+    $content = '
+    <div class="greeting">Security Alert</div>
+    <p>A request was made to change the admin password for the ABSS portal.</p>
+    <div style="background:#f8faff; padding: 20px; text-align:center; border-radius:12px; margin: 20px 0;">
+        <span style="font-size:32px; font-weight:800; letter-spacing:5px; color:#0d47a1;">' . $code . '</span>
+    </div>
+    <p>This code will expire in 15 minutes. If you did not request this change, please ignore this email.</p>
+    ';
+    $html = get_base_template("Admin Password Verification", $content);
+    
+    if (send_smtp_email('sonusagarpoly@gmail.com', 'Admin Password Verification Code', $html)) {
+        $msg = "Verification code sent to sonusagarpoly@gmail.com.";
+    } else {
+        $err = "Failed to send verification code. Check SMTP settings.";
+    }
+}
+
+// Handle Update Password
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_admin_password'])) {
+    $code = trim($_POST['verification_code']);
+    $new_pass = $_POST['new_password'];
+    
+    if (isset($_SESSION['admin_verification_code']) && isset($_SESSION['admin_verification_expiry'])) {
+        if (time() > $_SESSION['admin_verification_expiry']) {
+            $err = "Verification code has expired. Please request a new one.";
+        } elseif ($code !== $_SESSION['admin_verification_code']) {
+            $err = "Invalid verification code.";
+        } elseif (strlen($new_pass) < 6) {
+            $err = "Password must be at least 6 characters long.";
+        } else {
+            $hashed = password_hash($new_pass, PASSWORD_DEFAULT);
+            $update_stmt = $conn->prepare("UPDATE users SET password = ? WHERE id = ?");
+            $update_stmt->bind_param("si", $hashed, $_SESSION['admin_id']);
+            if ($update_stmt->execute()) {
+                $msg = "Admin password updated successfully.";
+                unset($_SESSION['admin_verification_code']);
+                unset($_SESSION['admin_verification_expiry']);
+            } else {
+                $err = "Failed to update password.";
+            }
+        }
+    } else {
+        $err = "No verification code was requested.";
     }
 }
 
@@ -183,6 +237,41 @@ if (isset($settings['plan_features'])) {
                         <label>Razorpay Key Secret</label>
                         <input type="password" name="settings[razorpay_key_secret]" value="<?php echo htmlspecialchars($razorpay_key_secret); ?>" placeholder="Secret Key">
                     </div>
+                </div>
+            </div>
+
+            <!-- SMTP Email Settings -->
+            <div class="settings-card">
+                <h3 class="section-title">
+                    <span><i class="fas fa-envelope"></i> SMTP Email Configuration</span>
+                </h3>
+                <div class="portal-form-row">
+                    <div class="portal-input-group">
+                        <label>SMTP Host</label>
+                        <input type="text" name="settings[smtp_host]" value="<?php echo htmlspecialchars($settings['smtp_host'] ?? ''); ?>" placeholder="smtp.gmail.com">
+                    </div>
+                    <div class="portal-input-group">
+                        <label>SMTP Port</label>
+                        <input type="number" name="settings[smtp_port]" value="<?php echo htmlspecialchars($settings['smtp_port'] ?? '587'); ?>" placeholder="587">
+                    </div>
+                </div>
+                <div class="portal-form-row">
+                    <div class="portal-input-group">
+                        <label>SMTP Username / Email</label>
+                        <input type="text" name="settings[smtp_username]" value="<?php echo htmlspecialchars($settings['smtp_username'] ?? ''); ?>" placeholder="youremail@gmail.com">
+                    </div>
+                    <div class="portal-input-group">
+                        <label>SMTP Password (App Password)</label>
+                        <input type="password" name="settings[smtp_password]" value="<?php echo htmlspecialchars($settings['smtp_password'] ?? ''); ?>" placeholder="••••••••">
+                    </div>
+                </div>
+                <div class="portal-input-group">
+                    <label>Encryption Type</label>
+                    <select name="settings[smtp_encryption]">
+                        <option value="tls" <?php echo (($settings['smtp_encryption'] ?? 'tls') == 'tls') ? 'selected' : ''; ?>>TLS (Recommended, Port 587)</option>
+                        <option value="ssl" <?php echo (($settings['smtp_encryption'] ?? '') == 'ssl') ? 'selected' : ''; ?>>SSL (Port 465)</option>
+                        <option value="none" <?php echo (($settings['smtp_encryption'] ?? '') == 'none') ? 'selected' : ''; ?>>None</option>
+                    </select>
                 </div>
             </div>
 
@@ -292,6 +381,37 @@ if (isset($settings['plan_features'])) {
                 <button type="submit" name="save_settings" class="btn-portal w-100" style="padding: 15px; font-size: 1.1rem;"><i class="fas fa-save"></i> Save All Settings</button>
             </div>
         </form>
+
+        <!-- Admin Account Security -->
+        <div class="settings-card" style="margin-top: 30px;">
+            <h3 class="section-title">
+                <span><i class="fas fa-shield-alt"></i> Admin Security</span>
+            </h3>
+            <p style="font-size: 0.9rem; color: #666; margin-bottom: 20px;">Change your admin dashboard password. A verification code will be sent to <strong>sonusagarpoly@gmail.com</strong>.</p>
+            
+            <?php if (!isset($_SESSION['admin_verification_code'])): ?>
+                <form action="settings.php" method="POST">
+                    <button type="submit" name="send_verification_code" class="btn-portal" style="width: auto;"><i class="fas fa-envelope"></i> Send Verification Code</button>
+                </form>
+            <?php else: ?>
+                <form action="settings.php" method="POST">
+                    <div class="portal-form-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                        <div class="portal-input-group" style="margin-bottom:0;">
+                            <label>Verification Code</label>
+                            <input type="text" name="verification_code" placeholder="Enter 6-digit code" required>
+                        </div>
+                        <div class="portal-input-group" style="margin-bottom:0;">
+                            <label>New Password</label>
+                            <input type="password" name="new_password" placeholder="Enter new password" required minlength="6">
+                        </div>
+                    </div>
+                    <div style="display:flex; gap: 10px;">
+                        <button type="submit" name="update_admin_password" class="btn-portal" style="width: auto;"><i class="fas fa-save"></i> Update Password</button>
+                        <button type="submit" name="send_verification_code" class="btn-portal" style="width: auto; background:#f0f4f8; color:#1a237e;"><i class="fas fa-redo"></i> Resend Code</button>
+                    </div>
+                </form>
+            <?php endif; ?>
+        </div>
     </main>
 
     <script>

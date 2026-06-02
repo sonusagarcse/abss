@@ -21,10 +21,27 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
         $pay_id = $conn->insert_id;
         $msg = "Payment recorded successfully.";
 
-        // Sync with generated bills: mark corresponding unpaid bill as paid
-        $update_bill = $conn->prepare("UPDATE fees_generated SET status = 'paid' WHERE student_id = ? AND month_for = ? AND status = 'unpaid' LIMIT 1");
-        $update_bill->bind_param("is", $sid, $month);
-        $update_bill->execute();
+        // Sync with generated bills: handle partial or full payment
+        $bill_q = $conn->prepare("SELECT id, amount, remark FROM fees_generated WHERE student_id = ? AND status = 'unpaid' LIMIT 1");
+        $bill_q->bind_param("i", $sid);
+        $bill_q->execute();
+        $bill_res = $bill_q->get_result();
+        
+        if ($bill_res && $bill_res->num_rows > 0) {
+            $bill = $bill_res->fetch_assoc();
+            $new_amount = round($bill['amount'] - $amount, 2);
+            
+            if ($new_amount <= 0) {
+                // Fully paid
+                $conn->query("UPDATE fees_generated SET status = 'paid' WHERE id = " . $bill['id']);
+            } else {
+                // Partially paid
+                $new_remark = $bill['remark'] . " | Payment received on $date (-₹" . number_format($amount, 2) . ")";
+                $update_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, remark = ? WHERE id = ?");
+                $update_stmt->bind_param("dsi", $new_amount, $new_remark, $bill['id']);
+                $update_stmt->execute();
+            }
+        }
 
         // Fetch parent email if linked for billing receipt
         $student_stmt = $conn->prepare("
@@ -69,19 +86,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
     }
 }
 
-// Handle Force Generation
-if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['force_generate'])) {
-    $sid = (int)$_POST['student_id'];
-    
-    // Set variables for billing engine
-    $force_student_id = $sid;
-    
-    ob_start();
-    require 'includes/billing_engine.php';
-    ob_end_clean();
-    
-    $msg = "Force Automated Billing executed for the selected student.";
-}
+
 
 
 // Handle Quick Offline Collect Action (Collect Particular Due Amount)
@@ -162,7 +167,14 @@ if (isset($_GET['collect_offline'])) {
 }
 
 // Fetch active students into reusable array
-$students_res = $conn->query("SELECT id, name FROM students WHERE status = 'active' ORDER BY name ASC");
+$students_res = $conn->query("
+    SELECT s.id, s.name, COALESCE(SUM(fg.amount), 0) AS total_due
+    FROM students s
+    LEFT JOIN fees_generated fg ON s.id = fg.student_id AND fg.status = 'unpaid'
+    WHERE s.status = 'active'
+    GROUP BY s.id, s.name
+    ORDER BY s.name ASC
+");
 $students_list = [];
 while($s = $students_res->fetch_assoc()) {
     $students_list[] = $s;
@@ -177,11 +189,17 @@ $payments = $conn->query("
 ");
 
 // Fetch bills log
+$filter = isset($_GET['filter']) ? $_GET['filter'] : 'all';
+$status_cond = "";
+if ($filter === 'unpaid') $status_cond = " WHERE fg.status = 'unpaid'";
+if ($filter === 'paid') $status_cond = " WHERE fg.status = 'paid'";
+
 $bills = $conn->query("
     SELECT fg.*, s.name 
     FROM fees_generated fg 
     JOIN students s ON fg.student_id = s.id 
-    ORDER BY fg.billing_date DESC LIMIT 10
+    $status_cond
+    ORDER BY fg.billing_date DESC LIMIT 50
 ");
 
 // Check how many students are due for billing
@@ -263,34 +281,20 @@ $due_count = $due_query ? $due_query->fetch_assoc()['due_count'] : 0;
 
         <!-- Form Section -->
         <div class="form-cols">
-            <!-- Form 1: Generate/Bill Fee -->
-            <div class="portal-card">
-                <h3 style="margin-bottom: 25px; color:var(--portal-blue);"><i class="fas fa-robot" style="margin-right:8px; opacity:0.7;"></i> Force Automated Generation</h3>
-                <p style="font-size: 0.85rem; color: #555; margin-bottom:20px;">Use this to forcefully calculate and generate an invoice (Base Fee + Addons + Unbilled Expenses) for a specific student *in between* normal cycles. If they already have an unpaid invoice, it will merge into it.</p>
-                <form action="" method="POST">
-                    <div class="portal-input-group">
-                        <label>Select Student to Bill</label>
-                        <select name="student_id" required>
-                            <option value="">Search & Select Student...</option>
-                            <?php foreach($students_list as $student): ?>
-                                <option value="<?php echo $student['id']; ?>"><?php echo htmlspecialchars($student['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <button type="submit" name="force_generate" class="btn-portal w-100" style="padding: 15px; font-size: 1.1rem; background: #d32f2f;"><i class="fas fa-bolt"></i> Force Generate Bill Now</button>
-                </form>
-            </div>
 
             <!-- Form 2: Collect Fee -->
             <div class="portal-card">
                 <h3 style="margin-bottom: 25px; color:var(--portal-blue);"><i class="fas fa-hand-holding-usd" style="margin-right:8px; opacity:0.7;"></i> Collect Fee Payment</h3>
                 <form action="" method="POST">
                     <div class="portal-input-group">
-                        <label>Student Name</label>
-                        <select name="student_id" required>
-                            <option value="">Select Student...</option>
+                        <label style="display:flex; justify-content:space-between;">
+                            <span>Student Name</span>
+                            <span id="display_total_due" style="font-weight:800; display:none;"></span>
+                        </label>
+                        <select name="student_id" id="collect_student_id" required>
+                            <option value="" data-due="0">Select Student...</option>
                             <?php foreach($students_list as $student): ?>
-                                <option value="<?php echo $student['id']; ?>"><?php echo htmlspecialchars($student['name']); ?></option>
+                                <option value="<?php echo $student['id']; ?>" data-due="<?php echo $student['total_due']; ?>"><?php echo htmlspecialchars($student['name']); ?></option>
                             <?php endforeach; ?>
                         </select>
                     </div>
@@ -303,7 +307,11 @@ $due_count = $due_query ? $due_query->fetch_assoc()['due_count'] : 0;
                             <label>For Month</label>
                             <select name="month_for" required>
                                 <?php 
-                                foreach($months as $m) echo "<option value='$m'>$m</option>";
+                                $months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                                foreach($months as $m) {
+                                    $sel = (date('F') == $m) ? 'selected' : '';
+                                    echo "<option value='$m' $sel>$m</option>";
+                                }
                                 ?>
                             </select>
                         </div>
@@ -329,11 +337,26 @@ $due_count = $due_query ? $due_query->fetch_assoc()['due_count'] : 0;
         <div class="list-cols">
             <!-- List 1: Billed Invoices -->
             <div class="list-section">
-                <h3 style="margin-bottom: 20px; padding-left: 10px;"><i class="fas fa-file-invoice" style="margin-right:8px; color:var(--portal-blue);"></i> Generated Bills</h3>
+                <h3 style="margin-bottom: 20px; padding-left: 10px; display: flex; justify-content: space-between; align-items: center;">
+                    <span><i class="fas fa-file-invoice" style="margin-right:8px; color:var(--portal-blue);"></i> Generated Bills</span>
+                    <div style="display:flex; gap:10px; align-items:center;">
+                        <form method="GET" action="fees.php" style="display:flex; align-items:center; gap:5px;">
+                            <select name="filter" onchange="this.form.submit()" style="padding: 5px; border-radius: 4px; border: 1px solid #ccc;">
+                                <option value="all" <?php echo ($filter=='all')?'selected':''; ?>>All Invoices</option>
+                                <option value="unpaid" <?php echo ($filter=='unpaid')?'selected':''; ?>>Unpaid Only</option>
+                                <option value="paid" <?php echo ($filter=='paid')?'selected':''; ?>>Paid Only</option>
+                            </select>
+                        </form>
+                        <button type="button" class="btn-portal" style="padding: 5px 15px; font-size: 0.8rem; width: auto;" onclick="printSelectedInvoices()">
+                            <i class="fas fa-file-archive"></i> Bulk Download (ZIP)
+                        </button>
+                    </div>
+                </h3>
                 <div class="portal-table-container">
                     <table>
                         <thead>
                             <tr>
+                                <th style="width: 40px;"><input type="checkbox" id="selectAllInvoices" onclick="toggleAllInvoices(this)" style="cursor:pointer; width:16px; height:16px;"></th>
                                 <th>Student</th>
                                 <th>Amount / Month</th>
                                 <th>Remarks / Status</th>
@@ -347,6 +370,9 @@ $due_count = $due_query ? $due_query->fetch_assoc()['due_count'] : 0;
                             <?php else: ?>
                                 <?php while($b = $bills->fetch_assoc()): ?>
                                     <tr>
+                                        <td>
+                                            <input type="checkbox" class="invoice-checkbox" value="<?php echo $b['id']; ?>" style="cursor:pointer; width:16px; height:16px;">
+                                        </td>
                                         <td style="color:var(--portal-blue); font-weight:800;">
                                             <?php echo htmlspecialchars($b['name']); ?><br>
                                             <small style="color:#9aa5ce; font-weight:600;"><?php echo date('d M, Y', strtotime($b['billing_date'])); ?></small>
@@ -359,6 +385,9 @@ $due_count = $due_query ? $due_query->fetch_assoc()['due_count'] : 0;
                                             <div style="font-size:0.8rem; margin-bottom:8px; line-height:1.3; color:#5c6bc0;"><?php echo htmlspecialchars($b['remark']); ?></div>
                                             <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                                 <span class="status-badge status-<?php echo $b['status']; ?>"><?php echo $b['status']; ?></span>
+                                                <a href="view_bill.php?id=<?php echo $b['id']; ?>" class="btn-quick-collect" style="background:#eef2ff; color:#3949ab; border-color:rgba(57,73,171,0.1);" title="View Invoice">
+                                                    <i class="fas fa-eye"></i> View Invoice
+                                                </a>
                                                 <?php if ($b['status'] === 'unpaid'): ?>
                                                     <a href="?collect_offline=<?php echo $b['id']; ?>" class="btn-quick-collect" onclick="return confirm('Record offline cash collection of ₹<?php echo number_format($b['amount']); ?> for <?php echo htmlspecialchars($b['name']); ?>?')" title="Mark as Paid (Offline Cash)">
                                                         <i class="fas fa-hand-holding-usd"></i> Collect Offline
@@ -411,5 +440,49 @@ $due_count = $due_query ? $due_query->fetch_assoc()['due_count'] : 0;
             </div>
         </div>
     </main>
+
+    <script>
+        const collectStudentSelect = document.getElementById('collect_student_id');
+        if (collectStudentSelect) {
+            collectStudentSelect.addEventListener('change', function() {
+                var selected = this.options[this.selectedIndex];
+                var due = parseFloat(selected.getAttribute('data-due') || 0);
+                var display = document.getElementById('display_total_due');
+                
+                if(!this.value) {
+                    display.style.display = 'none';
+                } else {
+                    display.style.display = 'inline-block';
+                    if (due > 0) {
+                        display.textContent = 'Total Dues: ₹' + due.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                        display.style.color = '#d32f2f'; // Red for dues
+                    } else {
+                        display.textContent = 'No Pending Dues';
+                        display.style.color = '#2e7d32'; // Green for cleared
+                    }
+                }
+            });
+        }
+
+        function toggleAllInvoices(source) {
+            var checkboxes = document.querySelectorAll('.invoice-checkbox');
+            for(var i=0, n=checkboxes.length;i<n;i++) {
+                checkboxes[i].checked = source.checked;
+            }
+        }
+        
+        function printSelectedInvoices() {
+            var checkboxes = document.querySelectorAll('.invoice-checkbox:checked');
+            var ids = [];
+            for(var i=0; i<checkboxes.length; i++) {
+                ids.push(checkboxes[i].value);
+            }
+            if(ids.length === 0) {
+                alert("Please select at least one invoice to print.");
+                return;
+            }
+            window.open('bulk_print.php?ids=' + ids.join(','), '_blank');
+        }
+    </script>
 </body>
 </html>

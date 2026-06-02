@@ -1,21 +1,25 @@
 <?php
-// parent/view_bill.php - Premium Printable Invoice for Unpaid Dues
-
+// admin/view_bill.php - Detailed Fee Invoice View
 require_once 'includes/auth.php';
 
-$pid = (int)$_SESSION['parent_id'];
-$bill_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+if (!isset($_GET['id'])) {
+    header("Location: fees.php");
+    exit();
+}
 
-// Fetch invoice details and verify security ownership
-$bill_query = $conn->prepare("
-    SELECT fg.*, s.name AS student_name, s.class_admitted, s.parent_name, s.phone, s.scholar_mode 
+$bill_id = (int)$_GET['id'];
+
+// Fetch bill details
+$stmt = $conn->prepare("
+    SELECT fg.*, s.name as student_name, p.parent_name, p.phone
     FROM fees_generated fg
     JOIN students s ON fg.student_id = s.id
-    WHERE fg.id = ? AND s.parent_id = ? AND fg.status = 'unpaid'
+    LEFT JOIN parents p ON s.parent_id = p.id
+    WHERE fg.id = ?
 ");
-$bill_query->bind_param("ii", $bill_id, $pid);
-$bill_query->execute();
-$bill = $bill_query->get_result()->fetch_assoc();
+$stmt->bind_param("i", $bill_id);
+$stmt->execute();
+$bill = $stmt->get_result()->fetch_assoc();
 
 if (!$bill) {
     die("<div style='font-family:sans-serif; text-align:center; padding:50px;'><h2>Access Denied</h2><p>Invoice not found, already paid, or unauthorized access.</p><a href='fees.php'>Back to Fees Ledger</a></div>");
@@ -26,7 +30,6 @@ $school_name = $settings['school_name'] ?? 'Awasiya Bal Shikshan Sansthan';
 $school_address = $settings['address'] ?? 'Lok Kala Bhavan, Gewalganj, Imamganj, Gaya, Bihar 824206';
 $school_phone = $settings['phone'] ?? '+91 9523012888';
 $school_email = $settings['email'] ?? 'abssimamganj@gmail.com';
-$razorpay_key_id = $settings['razorpay_key_id'] ?? '';
 
 // Function to convert amount to words
 function amountToWords($number) {
@@ -83,8 +86,6 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
         .btn-control { text-decoration: none; font-weight: 700; font-size: 0.9rem; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: inherit; transition: 0.3s; }
         .btn-back { background: #f0f4f8; color: #1a237e; }
         .btn-back:hover { background: #e2ebf0; }
-        .btn-pay { background: #d32f2f; color: #fff; }
-        .btn-pay:hover { background: #b71c1c; box-shadow: 0 4px 10px rgba(211,47,47,0.3); }
 
         /* Receipt Canvas */
         .receipt-container { max-width: 800px; margin: 0 auto; background: #fff; padding: 50px; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); box-sizing: border-box; position: relative; overflow: hidden; border: 1px solid #dcdcdc; }
@@ -142,11 +143,6 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
             <a href="fees.php" class="btn-control btn-back"><i class="fas fa-chevron-left"></i> Back to Ledger</a>
             <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print / Download PDF</button>
         </div>
-        <?php if(!empty($razorpay_key_id)): ?>
-            <button onclick="payWithRazorpay()" class="btn-control btn-pay"><i class="fas fa-credit-card"></i> Pay Now (₹<?php echo number_format($bill['amount'], 2); ?>)</button>
-        <?php else: ?>
-            <span style="color:#d32f2f; font-weight:700;"><i class="fas fa-exclamation-triangle"></i> Online Payment Disabled</span>
-        <?php endif; ?>
     </div>
 
     <!-- Printable Invoice Container -->
@@ -154,7 +150,7 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
         
         <!-- Watermark -->
         <div class="watermark">
-            UNPAID<br>INVOICE
+            <?php echo strtoupper($bill['status']); ?><br>INVOICE
         </div>
         
         <!-- Header -->
@@ -187,10 +183,6 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                         <td class="kv-label">Phone:</td>
                         <td class="kv-value"><?php echo htmlspecialchars($bill['phone'] ? $bill['phone'] : 'N/A'); ?></td>
                     </tr>
-                    <tr>
-                        <td class="kv-label">Email:</td>
-                        <td class="kv-value"><?php echo htmlspecialchars($_SESSION['parent_email']); ?></td>
-                    </tr>
                 </table>
             </div>
             <div class="details-col">
@@ -199,18 +191,6 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                     <tr>
                         <td class="kv-label">Student Name:</td>
                         <td class="kv-value"><?php echo htmlspecialchars($bill['student_name']); ?></td>
-                    </tr>
-                    <tr>
-                        <td class="kv-label">Class:</td>
-                        <td class="kv-value"><?php echo htmlspecialchars($bill['class_admitted']); ?></td>
-                    </tr>
-                    <tr>
-                        <td class="kv-label">Mode:</td>
-                        <td class="kv-value"><?php echo htmlspecialchars($bill['scholar_mode'] ?? 'Day Scholar'); ?></td>
-                    </tr>
-                    <tr>
-                        <td class="kv-label">Status:</td>
-                        <td class="kv-value" style="color:#2e7d32;"><i class="fas fa-check-circle"></i> Active Scholar</td>
                     </tr>
                 </table>
             </div>
@@ -358,52 +338,5 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
 
     </div>
 
-    <?php if(!empty($razorpay_key_id)): ?>
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-    <script>
-        function payWithRazorpay() {
-            var options = {
-                "key": "<?php echo htmlspecialchars($razorpay_key_id); ?>",
-                "amount": <?php echo $bill['amount'] * 100; ?>,
-                "currency": "INR",
-                "name": "<?php echo htmlspecialchars($school_name); ?>",
-                "description": "Tuition Fee for <?php echo htmlspecialchars($bill['month_for']); ?> - <?php echo htmlspecialchars($bill['student_name']); ?>",
-                "image": "../assets/logo.png",
-                "handler": function (response){
-                    var form = document.createElement("form");
-                    form.method = "POST";
-                    form.action = "verify_payment.php";
-
-                    var input1 = document.createElement("input");
-                    input1.type = "hidden";
-                    input1.name = "razorpay_payment_id";
-                    input1.value = response.razorpay_payment_id;
-                    form.appendChild(input1);
-
-                    var input2 = document.createElement("input");
-                    input2.type = "hidden";
-                    input2.name = "bill_id";
-                    input2.value = "<?php echo $bill['id']; ?>";
-                    form.appendChild(input2);
-
-                    document.body.appendChild(form);
-                    form.submit();
-                },
-                "prefill": {
-                    "name": "<?php echo htmlspecialchars($_SESSION['parent_name']); ?>",
-                    "email": "<?php echo htmlspecialchars($_SESSION['parent_email']); ?>"
-                },
-                "theme": {
-                    "color": "#d32f2f"
-                }
-            };
-            var rzp = new Razorpay(options);
-            rzp.on('payment.failed', function (response){
-                alert("Payment failed! Reason: " + response.error.description);
-            });
-            rzp.open();
-        }
-    </script>
-    <?php endif; ?>
 </body>
 </html>

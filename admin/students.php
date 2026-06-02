@@ -132,6 +132,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             $conn->query("UPDATE students SET student_photo = '" . $conn->real_escape_string($new_sp) . "' WHERE id = $new_id");
         }
     }
+    
+    // Auto-update parent invoice to reflect new changes
+    $force_student_id = $id > 0 ? $id : (isset($new_id) ? $new_id : 0);
+    if ($force_student_id > 0) {
+        ob_start();
+        require __DIR__ . '/includes/billing_engine.php';
+        ob_end_clean();
+    }
+    
     header("Location: students.php");
     exit();
 }
@@ -717,11 +726,7 @@ if (!empty($site_settings['tuition_modes'])) {
                 document.getElementById('current_student_photo_display').style.display = 'none';
             }
         }
-
-        // Close modal when clicking backdrop
-        document.getElementById('studentModal').addEventListener('click', function(e) {
-            if (e.target === this) hideModal();
-        });
+        // Modal will now only close via the cross button or cancel button.
     </script>
 </body>
 </html>

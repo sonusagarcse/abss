@@ -17,6 +17,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_expense'])) {
         $stmt->bind_param("isds", $student_id, $item_name, $amount, $date);
         if ($stmt->execute()) {
             $msg = "Expense logged successfully.";
+            
+            $force_student_id = $student_id;
+            ob_start();
+            require __DIR__ . '/includes/billing_engine.php';
+            ob_end_clean();
         } else {
             $err = "Error logging expense.";
         }
@@ -28,10 +33,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_expense'])) {
 // Handle Delete Unbilled Expense
 if (isset($_GET['delete'])) {
     $exp_id = (int)$_GET['delete'];
-    $del = $conn->prepare("DELETE FROM student_expenses WHERE id = ? AND status = 'unbilled'");
-    $del->bind_param("i", $exp_id);
-    if ($del->execute() && $conn->affected_rows > 0) {
-        $msg = "Expense removed.";
+    // Fetch student_id first to trigger rebuild
+    $chk = $conn->query("SELECT student_id FROM student_expenses WHERE id = $exp_id AND status = 'unbilled'");
+    if ($chk && $chk->num_rows > 0) {
+        $st_row = $chk->fetch_assoc();
+        $student_id = $st_row['student_id'];
+        
+        $del = $conn->prepare("DELETE FROM student_expenses WHERE id = ? AND status = 'unbilled'");
+        $del->bind_param("i", $exp_id);
+        if ($del->execute() && $conn->affected_rows > 0) {
+            $msg = "Expense removed.";
+            
+            $force_student_id = $student_id;
+            ob_start();
+            require __DIR__ . '/includes/billing_engine.php';
+            ob_end_clean();
+        } else {
+            $err = "Cannot delete this expense (it may have already been billed).";
+        }
     } else {
         $err = "Cannot delete this expense (it may have already been billed).";
     }

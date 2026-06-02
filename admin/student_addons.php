@@ -32,6 +32,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_addon'])) {
         $add_stmt->bind_param("isd", $student_id, $addon_name, $amount);
         if ($add_stmt->execute()) {
             $msg = "Add-on successfully added.";
+            
+            $force_student_id = $student_id;
+            ob_start();
+            require __DIR__ . '/includes/billing_engine.php';
+            ob_end_clean();
         } else {
             $err = "Error adding add-on.";
         }
@@ -47,6 +52,11 @@ if (isset($_GET['delete'])) {
     $del_stmt->bind_param("ii", $addon_id, $student_id);
     if ($del_stmt->execute()) {
         $msg = "Add-on removed.";
+        
+        $force_student_id = $student_id;
+        ob_start();
+        require __DIR__ . '/includes/billing_engine.php';
+        ob_end_clean();
     }
 }
 

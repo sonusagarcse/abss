@@ -1,24 +1,38 @@
 <?php
-// parent/view_bill.php - Premium Printable Invoice for Unpaid Dues
-
+// admin/bulk_print.php - Bulk Print Student Invoices
 require_once 'includes/auth.php';
 
-$pid = (int)$_SESSION['parent_id'];
-$bill_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+if (!isset($_GET['ids']) || empty($_GET['ids'])) {
+    die("No invoices selected.");
+}
 
-// Fetch invoice details and verify security ownership
-$bill_query = $conn->prepare("
-    SELECT fg.*, s.name AS student_name, s.class_admitted, s.parent_name, s.phone, s.scholar_mode 
+// Sanitize IDs
+$raw_ids = explode(',', $_GET['ids']);
+$clean_ids = [];
+foreach ($raw_ids as $id) {
+    if ((int)$id > 0) {
+        $clean_ids[] = (int)$id;
+    }
+}
+
+if (empty($clean_ids)) {
+    die("Invalid invoice IDs.");
+}
+
+$id_list = implode(',', $clean_ids);
+
+// Fetch bills
+$query = "
+    SELECT fg.*, s.name as student_name, p.parent_name, p.phone
     FROM fees_generated fg
     JOIN students s ON fg.student_id = s.id
-    WHERE fg.id = ? AND s.parent_id = ? AND fg.status = 'unpaid'
-");
-$bill_query->bind_param("ii", $bill_id, $pid);
-$bill_query->execute();
-$bill = $bill_query->get_result()->fetch_assoc();
+    LEFT JOIN parents p ON s.parent_id = p.id
+    WHERE fg.id IN ($id_list)
+";
+$result = $conn->query($query);
 
-if (!$bill) {
-    die("<div style='font-family:sans-serif; text-align:center; padding:50px;'><h2>Access Denied</h2><p>Invoice not found, already paid, or unauthorized access.</p><a href='fees.php'>Back to Fees Ledger</a></div>");
+if ($result->num_rows === 0) {
+    die("No valid invoices found.");
 }
 
 $settings = getAllSettings();
@@ -26,71 +40,70 @@ $school_name = $settings['school_name'] ?? 'Awasiya Bal Shikshan Sansthan';
 $school_address = $settings['address'] ?? 'Lok Kala Bhavan, Gewalganj, Imamganj, Gaya, Bihar 824206';
 $school_phone = $settings['phone'] ?? '+91 9523012888';
 $school_email = $settings['email'] ?? 'abssimamganj@gmail.com';
-$razorpay_key_id = $settings['razorpay_key_id'] ?? '';
 
 // Function to convert amount to words
 function amountToWords($number) {
-    $decimal = round($number - ($no = floor($number)), 2) * 100;
-    $hundred = null;
-    $digits_length = strlen($no);
-    $i = 0;
-    $str = array();
-    $words = array(
-        0 => '', 1 => 'One', 2 => 'Two',
-        3 => 'Three', 4 => 'Four', 5 => 'Five', 6 => 'Six',
-        7 => 'Seven', 8 => 'Eight', 9 => 'Nine',
-        10 => 'Ten', 11 => 'Eleven', 12 => 'Twelve',
-        13 => 'Thirteen', 14 => 'Fourteen', 15 => 'Fifteen',
-        16 => 'Sixteen', 17 => 'Seventeen', 18 => 'Eighteen',
-        19 => 'Nineteen', 20 => 'Twenty', 30 => 'Thirty',
-        40 => 'Forty', 50 => 'Fifty', 60 => 'Sixty',
-        70 => 'Seventy', 80 => 'Eighty', 90 => 'Ninety'
-    );
-    $digits = array('', 'Hundred','Thousand','Lakh', 'Crore');
-    while( $i < $digits_length ) {
-        $divider = ($i == 2) ? 10 : 100;
-        $number = floor($no % $divider);
-        $no = floor($no / $divider);
-        $i += $divider == 10 ? 1 : 2;
-        if ($number) {
-            $plural = (($counter = count($str)) && $number > 9) ? 's' : null;
-            $hundred = ($counter == 1 && $str[0]) ? ' and ' : null;
-            $str [] = ($number < 21) ? $words[$number].' '. $digits[$counter].$plural.' '.$hundred:$words[floor($number / 10) * 10].' '.$words[$number % 10].' '.$digits[$counter].$plural.' '.$hundred;
-        } else $str[] = null;
+    $no = round($number);
+    if ($no == 0) return 'Zero Rupees Only';
+    
+    $words = array('0' => '', '1' => 'One', '2' => 'Two', '3' => 'Three', '4' => 'Four', '5' => 'Five', '6' => 'Six', '7' => 'Seven', '8' => 'Eight', '9' => 'Nine', '10' => 'Ten', '11' => 'Eleven', '12' => 'Twelve', '13' => 'Thirteen', '14' => 'Fourteen', '15' => 'Fifteen', '16' => 'Sixteen', '17' => 'Seventeen', '18' => 'Eighteen', '19' => 'Nineteen', '20' => 'Twenty', '30' => 'Thirty', '40' => 'Forty', '50' => 'Fifty', '60' => 'Sixty', '70' => 'Seventy', '80' => 'Eighty', '90' => 'Ninety');
+    $digits = array('', 'Hundred', 'Thousand', 'Lakh', 'Crore');
+    
+    $no = strrev($no);
+    $res = array();
+    $j = 0;
+    
+    for ($i = 0; $i < strlen($no); $i++) {
+        if ($i == 0) {
+            $num = substr($no, 0, 2);
+            $num = strrev($num);
+            if ($num < 20) {
+                $res[] = $words[(int)$num];
+            } else {
+                $res[] = $words[$num[0] * 10] . ' ' . $words[$num[1]];
+            }
+            $i++; 
+        } else {
+            $num = substr($no, $i, 1);
+            if ($num > 0) {
+                $res[] = $words[$num] . ' ' . $digits[$j];
+            }
+        }
+        $j++;
+        if ($j == 1) $j++;
     }
-    $Rupees = implode('', array_reverse($str));
-    $paise = ($decimal > 0) ? "." . ($words[$decimal / 10] . " " . $words[$decimal % 10]) . ' Paise' : '';
-    return ($Rupees ? $Rupees . 'Rupees ' : '') . ($paise ? 'and ' . $paise : '') . 'Only';
+    
+    return implode(' ', array_reverse($res)) . ' Rupees Only';
 }
-
-$amount_in_words = amountToWords($bill['amount']);
-$invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . str_pad($bill['id'], 5, '0', STR_PAD_LEFT);
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fee Invoice - <?php echo $invoice_no; ?></title>
+    <title>Bulk Download Invoices</title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        body { font-family: 'Outfit', sans-serif; background: #525659; margin: 0; padding: 30px 0; -webkit-print-color-adjust: exact; }
-        
-        /* Control Bar styling */
-        .control-bar { max-width: 800px; margin: 0 auto 20px; background: #fff; padding: 15px 30px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .btn-control { text-decoration: none; font-weight: 700; font-size: 0.9rem; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: inherit; transition: 0.3s; }
-        .btn-back { background: #f0f4f8; color: #1a237e; }
-        .btn-back:hover { background: #e2ebf0; }
-        .btn-pay { background: #d32f2f; color: #fff; }
-        .btn-pay:hover { background: #b71c1c; box-shadow: 0 4px 10px rgba(211,47,47,0.3); }
+    
+    <!-- Load required libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 
-        /* Receipt Canvas */
-        .receipt-container { max-width: 800px; margin: 0 auto; background: #fff; padding: 50px; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); box-sizing: border-box; position: relative; overflow: hidden; border: 1px solid #dcdcdc; }
+    <style>
+        body { font-family: 'Outfit', sans-serif; background: #525659; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }
+        
+        #loading-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#525659; color:#fff; text-align:center; z-index: 9999; }
+        #loading-overlay h2 { margin: 10px 0; font-size: 1.5rem; }
+        #progress-text { margin: 0; color: #a0aab2; font-size: 1rem; }
+        
+        #templates-container { position: absolute; left: 0; top: 0; z-index: 1; width: 800px; }
+        
+        .receipt-container { width: 800px; background: #fff; padding: 50px; box-sizing: border-box; position: relative; overflow: hidden; margin: 0; }
+        
         
         /* Subtle Watermark logo background */
-        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 8rem; color: rgba(211, 47, 47, 0.05); font-weight: 800; pointer-events: none; text-align: center; width: 120%; z-index: 1; user-select: none; border: 15px double rgba(211, 47, 47, 0.05); padding: 20px; }
+        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 8rem; color: rgba(211, 47, 47, 0.05); font-weight: 800; pointer-events: none; text-align: center; width: 120%; z-index: 1; user-select: none; border: 15px double rgba(211, 47, 47, 0.05); padding: 20px; text-transform: uppercase; }
 
         .receipt-header { display: flex; justify-content: space-between; border-bottom: 3px double #e0e0e0; padding-bottom: 30px; margin-bottom: 35px; position: relative; z-index: 2; }
         .school-branding { display: flex; align-items: center; gap: 20px; }
@@ -125,36 +138,41 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
         .words-block { font-size: 0.85rem; color: #555; margin-bottom: 50px; font-style: italic; border-left: 3px solid #d32f2f; padding-left: 15px; position: relative; z-index: 2; }
         .words-block strong { color: #d32f2f; font-style: normal; font-weight: 700; }
 
-        /* Print Media queries */
+        /* Print Media queries (no longer strictly needed for this workflow but kept for safety) */
         @media print {
             body { background: #fff; padding: 0; }
-            .control-bar { display: none; }
-            .receipt-container { box-shadow: none; border: none; padding: 10px; max-width: 100%; }
+            .receipt-container { box-shadow: none; border: none; padding: 10px; max-width: 100%; margin: 0; page-break-after: always; }
+            .receipt-container:last-child { page-break-after: auto; }
             .watermark { color: rgba(211, 47, 47, 0.05); }
         }
     </style>
 </head>
 <body>
 
-    <!-- Control Panel -->
-    <div class="control-bar">
-        <div style="display:flex; gap: 10px;">
-            <a href="fees.php" class="btn-control btn-back"><i class="fas fa-chevron-left"></i> Back to Ledger</a>
-            <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print / Download PDF</button>
-        </div>
-        <?php if(!empty($razorpay_key_id)): ?>
-            <button onclick="payWithRazorpay()" class="btn-control btn-pay"><i class="fas fa-credit-card"></i> Pay Now (₹<?php echo number_format($bill['amount'], 2); ?>)</button>
-        <?php else: ?>
-            <span style="color:#d32f2f; font-weight:700;"><i class="fas fa-exclamation-triangle"></i> Online Payment Disabled</span>
-        <?php endif; ?>
+    <div id="loading-overlay">
+        <i class="fas fa-spinner fa-spin fa-3x" style="margin-bottom: 20px; color: #64b5f6;"></i>
+        <h2>Generating PDFs & Zipping...</h2>
+        <p id="progress-text">Initializing (0 / <?php echo $result->num_rows; ?>)</p>
     </div>
 
+    <div id="templates-container">
+    <?php 
+    $index = 0;
+    while ($bill = $result->fetch_assoc()): 
+        $invoice_no = "ABSS-" . date('Ym', strtotime($bill['billing_date'])) . "-" . str_pad($bill['id'], 5, '0', STR_PAD_LEFT);
+        $amount_in_words = amountToWords($bill['amount']);
+        $index++;
+        
+        // Sanitize student name for filename
+        $safe_name = preg_replace('/[^a-zA-Z0-9]+/', '_', $bill['student_name']);
+        $filename = "Invoice_{$invoice_no}_{$safe_name}.pdf";
+    ?>
     <!-- Printable Invoice Container -->
-    <div class="receipt-container">
+    <div class="receipt-container" data-filename="<?php echo $filename; ?>">
         
         <!-- Watermark -->
         <div class="watermark">
-            UNPAID<br>INVOICE
+            <?php echo strtoupper($bill['status']); ?><br>INVOICE
         </div>
         
         <!-- Header -->
@@ -181,15 +199,11 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                 <table class="kv-table">
                     <tr>
                         <td class="kv-label">Parent Name:</td>
-                        <td class="kv-value"><?php echo htmlspecialchars($bill['parent_name'] ? $bill['parent_name'] : 'N/A'); ?></td>
+                        <td class="kv-value"><?php echo htmlspecialchars($bill['parent_name'] ?? 'N/A'); ?></td>
                     </tr>
                     <tr>
                         <td class="kv-label">Phone:</td>
-                        <td class="kv-value"><?php echo htmlspecialchars($bill['phone'] ? $bill['phone'] : 'N/A'); ?></td>
-                    </tr>
-                    <tr>
-                        <td class="kv-label">Email:</td>
-                        <td class="kv-value"><?php echo htmlspecialchars($_SESSION['parent_email']); ?></td>
+                        <td class="kv-value"><?php echo htmlspecialchars($bill['phone'] ?? 'N/A'); ?></td>
                     </tr>
                 </table>
             </div>
@@ -199,18 +213,6 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                     <tr>
                         <td class="kv-label">Student Name:</td>
                         <td class="kv-value"><?php echo htmlspecialchars($bill['student_name']); ?></td>
-                    </tr>
-                    <tr>
-                        <td class="kv-label">Class:</td>
-                        <td class="kv-value"><?php echo htmlspecialchars($bill['class_admitted']); ?></td>
-                    </tr>
-                    <tr>
-                        <td class="kv-label">Mode:</td>
-                        <td class="kv-value"><?php echo htmlspecialchars($bill['scholar_mode'] ?? 'Day Scholar'); ?></td>
-                    </tr>
-                    <tr>
-                        <td class="kv-label">Status:</td>
-                        <td class="kv-value" style="color:#2e7d32;"><i class="fas fa-check-circle"></i> Active Scholar</td>
                     </tr>
                 </table>
             </div>
@@ -357,53 +359,53 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
         </div>
 
     </div>
-
-    <?php if(!empty($razorpay_key_id)): ?>
-    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <?php endwhile; ?>
+    </div>
+    
     <script>
-        function payWithRazorpay() {
-            var options = {
-                "key": "<?php echo htmlspecialchars($razorpay_key_id); ?>",
-                "amount": <?php echo $bill['amount'] * 100; ?>,
-                "currency": "INR",
-                "name": "<?php echo htmlspecialchars($school_name); ?>",
-                "description": "Tuition Fee for <?php echo htmlspecialchars($bill['month_for']); ?> - <?php echo htmlspecialchars($bill['student_name']); ?>",
-                "image": "../assets/logo.png",
-                "handler": function (response){
-                    var form = document.createElement("form");
-                    form.method = "POST";
-                    form.action = "verify_payment.php";
-
-                    var input1 = document.createElement("input");
-                    input1.type = "hidden";
-                    input1.name = "razorpay_payment_id";
-                    input1.value = response.razorpay_payment_id;
-                    form.appendChild(input1);
-
-                    var input2 = document.createElement("input");
-                    input2.type = "hidden";
-                    input2.name = "bill_id";
-                    input2.value = "<?php echo $bill['id']; ?>";
-                    form.appendChild(input2);
-
-                    document.body.appendChild(form);
-                    form.submit();
-                },
-                "prefill": {
-                    "name": "<?php echo htmlspecialchars($_SESSION['parent_name']); ?>",
-                    "email": "<?php echo htmlspecialchars($_SESSION['parent_email']); ?>"
-                },
-                "theme": {
-                    "color": "#d32f2f"
+        window.onload = async function() {
+            var zip = new JSZip();
+            var folder = zip.folder("ABSS_Invoices");
+            var containers = document.querySelectorAll('.receipt-container');
+            var total = containers.length;
+            var progressText = document.getElementById('progress-text');
+            
+            for (var i = 0; i < total; i++) {
+                var el = containers[i];
+                var filename = el.getAttribute('data-filename');
+                progressText.innerText = "Rendering " + filename + " (" + (i+1) + " / " + total + ")";
+                
+                var opt = {
+                    margin:       0,
+                    filename:     filename,
+                    image:        { type: 'jpeg', quality: 0.98 },
+                    html2canvas:  { scale: 2, useCORS: true, windowWidth: 800 },
+                    jsPDF:        { unit: 'px', format: [800, 1131], orientation: 'portrait' }
+                };
+                
+                try {
+                    // Generate PDF as blob
+                    var pdfBlob = await html2pdf().set(opt).from(el).output('blob');
+                    // Add to zip folder
+                    folder.file(filename, pdfBlob);
+                } catch (e) {
+                    console.error("Error generating PDF", e);
                 }
-            };
-            var rzp = new Razorpay(options);
-            rzp.on('payment.failed', function (response){
-                alert("Payment failed! Reason: " + response.error.description);
+            }
+            
+            progressText.innerText = "Zipping files... please wait.";
+            
+            zip.generateAsync({type:"blob"}).then(function(content) {
+                saveAs(content, "ABSS_Bulk_Invoices.zip");
+                
+                document.getElementById('loading-overlay').innerHTML = `
+                    <i class="fas fa-check-circle fa-4x" style="color: #4caf50; margin-bottom: 20px;"></i>
+                    <h2>Download Complete</h2>
+                    <p style="color: #a0aab2; margin-bottom: 30px;">The ZIP file has been saved to your computer.</p>
+                    <a href="fees.php" style="background: #1565c0; color: #fff; text-decoration: none; padding: 10px 25px; border-radius: 8px; font-weight: 700;">Back to Ledger</a>
+                `;
             });
-            rzp.open();
-        }
+        };
     </script>
-    <?php endif; ?>
 </body>
 </html>

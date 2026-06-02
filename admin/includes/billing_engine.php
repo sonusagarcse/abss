@@ -63,21 +63,70 @@ if ($due_students && $due_students->num_rows > 0) {
         $total_amount = 0;
         $remark_parts = [];
 
-        // Add base fee and addons only if they haven't been billed for this month in the existing unpaid invoice
-        if (!$already_billed_this_month) {
-            $remark_parts[] = "Base Fee: ₹" . number_format($base_fee, 2);
+        if (isset($force_student_id) && $existing) {
+            // Rebuild the entire unpaid invoice using current base fee and discount
+            
+            // 1. Calculate monthly recurring for ONE month
+            $monthly_recurring = 0;
+            $recurring_parts = [];
+            $recurring_parts[] = "Base Fee: ₹" . number_format($base_fee, 2);
             if ($discount > 0) {
-                $remark_parts[] = "Discount applied (-₹" . number_format($discount, 2) . ")";
-                $base_fee = max(0, $base_fee - $discount);
+                $recurring_parts[] = "Discount applied (-₹" . number_format($discount, 2) . ")";
+                $monthly_recurring += max(0, $base_fee - $discount);
+            } else {
+                $monthly_recurring += $base_fee;
             }
-            $total_amount += $base_fee;
 
-            // Fetch recurring addons
             $addons_query = $conn->query("SELECT addon_name, amount FROM student_addons WHERE student_id = $sid");
             if ($addons_query && $addons_query->num_rows > 0) {
                 while($addon = $addons_query->fetch_assoc()) {
-                    $total_amount += (float)$addon['amount'];
-                    $remark_parts[] = $addon['addon_name'] . ": ₹" . number_format($addon['amount'], 2);
+                    $monthly_recurring += (float)$addon['amount'];
+                    $recurring_parts[] = $addon['addon_name'] . ": ₹" . number_format($addon['amount'], 2);
+                }
+            }
+
+            // 2. Count months
+            $months_list = explode(", ", $existing['month_for']);
+            $months_count = count($months_list);
+            if (!$already_billed_this_month) {
+                $months_count++;
+            }
+
+            // 3. Repeat recurring parts for each month
+            for ($i = 0; $i < $months_count; $i++) {
+                $remark_parts = array_merge($remark_parts, $recurring_parts);
+            }
+            $total_amount += ($monthly_recurring * $months_count);
+
+            // 4. Keep existing expenses
+            $old_parts = explode("|", str_replace("Auto-generated Bill. ", "", $existing['remark']));
+            foreach ($old_parts as $part) {
+                $part = trim($part);
+                if (strpos($part, '(Expense):') !== false) {
+                    $remark_parts[] = $part;
+                    $exp_parts = explode(': ₹', $part);
+                    if (count($exp_parts) == 2) {
+                        $total_amount += (float)str_replace(',', '', trim($exp_parts[1]));
+                    }
+                }
+            }
+        } else {
+            // Add base fee and addons only if they haven't been billed for this month in the existing unpaid invoice
+            if (!$already_billed_this_month) {
+                $remark_parts[] = "Base Fee: ₹" . number_format($base_fee, 2);
+                if ($discount > 0) {
+                    $remark_parts[] = "Discount applied (-₹" . number_format($discount, 2) . ")";
+                    $base_fee = max(0, $base_fee - $discount);
+                }
+                $total_amount += $base_fee;
+
+                // Fetch recurring addons
+                $addons_query = $conn->query("SELECT addon_name, amount FROM student_addons WHERE student_id = $sid");
+                if ($addons_query && $addons_query->num_rows > 0) {
+                    while($addon = $addons_query->fetch_assoc()) {
+                        $total_amount += (float)$addon['amount'];
+                        $remark_parts[] = $addon['addon_name'] . ": ₹" . number_format($addon['amount'], 2);
+                    }
                 }
             }
         }
@@ -110,13 +159,23 @@ if ($due_students && $due_students->num_rows > 0) {
 
         try {
             if ($existing) {
-                // Update existing
-                $new_amount = $existing['amount'] + $total_amount;
-                $new_remark = $existing['remark'] . " | " . implode(" | ", $remark_parts);
-                // Try to append month if it's not already there
-                $new_month = $existing['month_for'];
-                if (strpos($new_month, $month_for) === false) {
-                    $new_month .= ", " . $month_for;
+                if (isset($force_student_id)) {
+                    // Update existing with full rebuild
+                    $new_amount = $total_amount;
+                    $new_remark = "Auto-generated Bill. " . implode(" | ", $remark_parts);
+                    $new_month = $existing['month_for'];
+                    if (!$already_billed_this_month) {
+                        $new_month .= ", " . $month_for;
+                    }
+                } else {
+                    // Update existing (append)
+                    $new_amount = $existing['amount'] + $total_amount;
+                    $new_remark = $existing['remark'] . (empty($remark_parts) ? "" : " | " . implode(" | ", $remark_parts));
+                    // Try to append month if it's not already there
+                    $new_month = $existing['month_for'];
+                    if (strpos($new_month, $month_for) === false) {
+                        $new_month .= ", " . $month_for;
+                    }
                 }
                 
                 $update_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, remark = ?, month_for = ? WHERE id = ?");
