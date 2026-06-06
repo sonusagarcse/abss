@@ -288,29 +288,50 @@ function runAutoMigrator($conn) {
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
             
-            $conn->query("CREATE TABLE IF NOT EXISTS teacher_expenses (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                teacher_id INT NOT NULL,
-                expense_type VARCHAR(150) NOT NULL,
-                amount DECIMAL(10,2) NOT NULL,
-                expense_date DATE NOT NULL,
-                description TEXT,
-                status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            $checkTeacherExpenses = $conn->query("SHOW TABLES LIKE 'teacher_expenses'");
+            if ($checkTeacherExpenses && $checkTeacherExpenses->num_rows == 0) {
+                $conn->query("
+                    CREATE TABLE teacher_expenses (
+                        id INT AUTO_INCREMENT PRIMARY KEY,
+                        teacher_id INT NOT NULL,
+                        invoice_id INT NULL,
+                        expense_type VARCHAR(150) NOT NULL,
+                        amount DECIMAL(10,2) NOT NULL,
+                        expense_date DATE NOT NULL,
+                        description TEXT,
+                        status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
+                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+                ");
+            } else {
+                // Check if invoice_id column exists
+                $checkCol = $conn->query("SHOW COLUMNS FROM teacher_expenses LIKE 'invoice_id'");
+                if ($checkCol && $checkCol->num_rows == 0) {
+                    $conn->query("ALTER TABLE teacher_expenses ADD COLUMN invoice_id INT NULL AFTER teacher_id");
+                }
+            }
             
-            $conn->query("CREATE TABLE IF NOT EXISTS teacher_invoices (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                teacher_id INT NOT NULL,
-                invoice_number VARCHAR(50) UNIQUE NOT NULL,
-                amount DECIMAL(10,2) NOT NULL,
-                issue_date DATE NOT NULL,
-                due_date DATE NULL,
-                status ENUM('unpaid', 'paid') DEFAULT 'unpaid',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            $checkTeacherInvoices = $conn->query("SHOW TABLES LIKE 'teacher_invoices'");
+            if ($checkTeacherInvoices && $checkTeacherInvoices->num_rows == 0) {
+                $conn->query("CREATE TABLE teacher_invoices (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    teacher_id INT NOT NULL,
+                    invoice_number VARCHAR(50) UNIQUE NOT NULL,
+                    amount DECIMAL(10,2) NOT NULL,
+                    month_for VARCHAR(20) NULL,
+                    issue_date DATE NOT NULL,
+                    due_date DATE NULL,
+                    status ENUM('unpaid', 'paid') DEFAULT 'unpaid',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            } else {
+                $checkMonth = $conn->query("SHOW COLUMNS FROM teacher_invoices LIKE 'month_for'");
+                if ($checkMonth && $checkMonth->num_rows == 0) {
+                    $conn->query("ALTER TABLE teacher_invoices ADD COLUMN month_for VARCHAR(20) NULL AFTER amount");
+                }
+            }
         }
         
         // Restore MySQLi reporting mode

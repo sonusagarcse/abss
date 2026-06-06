@@ -18,7 +18,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_expense'])) {
     } else {
         $stmt = $conn->prepare("INSERT INTO teacher_expenses (teacher_id, expense_type, amount, expense_date, description, status) VALUES (?, ?, ?, ?, ?, ?)");
         $stmt->bind_param("isdsss", $teacher_id, $expense_type, $amount, $expense_date, $description, $status);
-        $stmt->execute();
+        if ($stmt->execute()) {
+            // Deduct from the existing unpaid invoice
+            $inv_res = $conn->query("SELECT id, amount FROM teacher_invoices WHERE teacher_id = $teacher_id AND status = 'unpaid' ORDER BY issue_date DESC LIMIT 1");
+            if ($inv_res && $inv_res->num_rows > 0) {
+                $inv = $inv_res->fetch_assoc();
+                $new_amount = $inv['amount'] - $amount;
+                $conn->query("UPDATE teacher_invoices SET amount = $new_amount WHERE id = " . $inv['id']);
+            }
+        }
     }
     
     header("Location: teacher_expenses.php");

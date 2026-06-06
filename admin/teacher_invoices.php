@@ -4,21 +4,43 @@ require_once 'includes/auth.php';
 // Handle Add/Edit Invoice
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_invoice'])) {
     $teacher_id = (int)$_POST['teacher_id'];
-    $invoice_number = trim($_POST['invoice_number']);
     $amount = (float)$_POST['amount'];
     $issue_date = trim($_POST['issue_date']);
     $due_date = !empty($_POST['due_date']) ? trim($_POST['due_date']) : null;
     $status = trim($_POST['status']);
+    $month_for = isset($_POST['month_for']) ? trim($_POST['month_for']) : date('Y-m');
     $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+    $invoice_number = isset($_POST['invoice_number']) ? trim($_POST['invoice_number']) : '';
 
     if ($id > 0) {
-        $stmt = $conn->prepare("UPDATE teacher_invoices SET teacher_id=?, invoice_number=?, amount=?, issue_date=?, due_date=?, status=? WHERE id=?");
-        $stmt->bind_param("isdsssi", $teacher_id, $invoice_number, $amount, $issue_date, $due_date, $status, $id);
+        $stmt = $conn->prepare("UPDATE teacher_invoices SET teacher_id=?, invoice_number=?, amount=?, month_for=?, issue_date=?, due_date=?, status=? WHERE id=?");
+        $stmt->bind_param("isdssssi", $teacher_id, $invoice_number, $amount, $month_for, $issue_date, $due_date, $status, $id);
         $stmt->execute();
     } else {
-        $stmt = $conn->prepare("INSERT INTO teacher_invoices (teacher_id, invoice_number, amount, issue_date, due_date, status) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("isdsss", $teacher_id, $invoice_number, $amount, $issue_date, $due_date, $status);
-        $stmt->execute();
+        $invoice_number = 'TINV-' . date('Ymd') . '-' . rand(1000, 9999);
+        $check = $conn->query("SELECT id FROM teacher_invoices WHERE invoice_number = '$invoice_number'");
+        while ($check && $check->num_rows > 0) {
+            $invoice_number = 'TINV-' . date('Ymd') . '-' . rand(1000, 9999);
+            $check = $conn->query("SELECT id FROM teacher_invoices WHERE invoice_number = '$invoice_number'");
+        }
+        
+        // Auto-calculate the amount based on salary and pending expenses
+        $t_res = $conn->query("SELECT salary FROM teachers WHERE id = $teacher_id");
+        if($t_res && $t_res->num_rows > 0) {
+            $t_sal = $t_res->fetch_assoc()['salary'];
+            $exp_res = $conn->query("SELECT SUM(amount) as total_exp FROM teacher_expenses WHERE teacher_id = $teacher_id AND status = 'approved' AND invoice_id IS NULL");
+            $exp_total = $exp_res->fetch_assoc()['total_exp'] ?? 0;
+            $amount = $t_sal - $exp_total;
+            if ($amount < 0) $amount = 0;
+        }
+
+        $stmt = $conn->prepare("INSERT INTO teacher_invoices (teacher_id, invoice_number, amount, month_for, issue_date, due_date, status) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("isdssss", $teacher_id, $invoice_number, $amount, $month_for, $issue_date, $due_date, $status);
+        if ($stmt->execute()) {
+            $new_invoice_id = $stmt->insert_id;
+            // Link expenses
+            $conn->query("UPDATE teacher_expenses SET invoice_id = $new_invoice_id WHERE teacher_id = $teacher_id AND status = 'approved' AND invoice_id IS NULL");
+        }
     }
     
     header("Location: teacher_invoices.php");
@@ -86,9 +108,9 @@ if($teachers){
                     <tr>
                         <th>Invoice #</th>
                         <th>Teacher</th>
+                        <th>Month</th>
                         <th>Amount</th>
                         <th>Issue Date</th>
-                        <th>Due Date</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
@@ -98,6 +120,7 @@ if($teachers){
                     <tr>
                         <td><strong style="color:var(--portal-blue);"><?php echo htmlspecialchars($row['invoice_number']); ?></strong></td>
                         <td><?php echo htmlspecialchars($row['teacher_name']); ?></td>
+                        <td><?php echo !empty($row['month_for']) ? date('M Y', strtotime($row['month_for'].'-01')) : '-'; ?></td>
                         <td style="color:#2e7d32; font-weight:800;">₹<?php echo number_format($row['amount'], 2); ?></td>
                         <td><?php echo date('d M Y', strtotime($row['issue_date'])); ?></td>
                         <td><?php echo !empty($row['due_date']) ? date('d M Y', strtotime($row['due_date'])) : '-'; ?></td>
@@ -105,6 +128,9 @@ if($teachers){
                             <span class="status-badge status-<?php echo $row['status']; ?>"><?php echo $row['status']; ?></span>
                         </td>
                         <td>
+                            <a href="print_teacher_invoice.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-outline-success" target="_blank" style="border:none; color:#2e7d32;" title="Print">
+                                <i class="fas fa-print"></i>
+                            </a>
                             <button class="btn btn-sm btn-outline-primary" style="border:none; color:var(--portal-blue);" onclick='editInvoice(<?php echo json_encode($row); ?>)' title="Edit">
                                 <i class="fas fa-edit"></i>
                             </button>
@@ -142,16 +168,24 @@ if($teachers){
                             </select>
                         </div>
                         <div class="portal-input-group">
-                            <label>Invoice Number <span style="color:red">*</span></label>
-                            <input type="text" name="invoice_number" id="invoice_number" placeholder="e.g. INV-2026-001" required>
+                            <label>Invoice Number</label>
+                            <input type="text" name="invoice_number" id="invoice_number" placeholder="Auto-generated on save" readonly style="background-color: #f8f9fa; border-color: #eef2ff; color: #9aa5ce;">
                         </div>
                     </div>
 
                     <div class="portal-form-row">
                         <div class="portal-input-group">
-                            <label>Amount (₹) <span style="color:red">*</span></label>
-                            <input type="number" name="amount" id="amount" step="0.01" required>
+                            <label>Amount (₹)</label>
+                            <input type="number" name="amount" id="amount" step="0.01" placeholder="Auto-calculated" readonly style="background-color: #f8f9fa; border-color: #eef2ff; color: #9aa5ce;">
+                            <small style="color: #666; font-size: 0.8rem;">Calculated automatically as (Salary - Expenses) on Save</small>
                         </div>
+                        <div class="portal-input-group">
+                            <label>Month <span style="color:red">*</span></label>
+                            <input type="month" name="month_for" id="month_for" required>
+                        </div>
+                    </div>
+
+                    <div class="portal-form-row">
                         <div class="portal-input-group">
                             <label>Status</label>
                             <select name="status" id="status">
@@ -159,9 +193,6 @@ if($teachers){
                                 <option value="paid">Paid</option>
                             </select>
                         </div>
-                    </div>
-
-                    <div class="portal-form-row">
                         <div class="portal-input-group">
                             <label>Issue Date <span style="color:red">*</span></label>
                             <input type="date" name="issue_date" id="issue_date" value="<?php echo date('Y-m-d'); ?>" required>
@@ -182,19 +213,13 @@ if($teachers){
     </main>
 
     <script>
-        function generateInvoiceNumber() {
-            const date = new Date();
-            const year = date.getFullYear();
-            const randomId = Math.floor(1000 + Math.random() * 9000);
-            return 'INV-' + year + '-' + randomId;
-        }
-
         function showModal() {
             document.getElementById('invoiceModal').style.display = 'flex';
             document.getElementById('invoice_id').value = '';
             document.querySelector('#invoiceModal form').reset();
             document.getElementById('issue_date').value = '<?php echo date('Y-m-d'); ?>';
-            document.getElementById('invoice_number').value = generateInvoiceNumber();
+            document.getElementById('invoice_number').value = '';
+            document.getElementById('month_for').value = '<?php echo date('Y-m'); ?>';
             document.getElementById('status').value = 'unpaid';
         }
 
@@ -208,6 +233,7 @@ if($teachers){
             document.getElementById('teacher_id').value = data.teacher_id;
             document.getElementById('invoice_number').value = data.invoice_number;
             document.getElementById('amount').value = data.amount;
+            document.getElementById('month_for').value = data.month_for || '<?php echo date('Y-m'); ?>';
             document.getElementById('issue_date').value = data.issue_date;
             document.getElementById('due_date').value = data.due_date || '';
             document.getElementById('status').value = data.status;
