@@ -271,6 +271,48 @@ function runAutoMigrator($conn) {
             $conn->query("INSERT INTO document_types (name, is_required) VALUES ('Aadhar Card', 1), ('Transfer Certificate (TC)', 1), ('Birth Certificate', 1), ('Previous Year Marksheet', 0)");
         }
         
+        // 9. Teacher Management System
+        $checkTeachers = $conn->query("SHOW TABLES LIKE 'teachers'");
+        if ($checkTeachers && $checkTeachers->num_rows == 0) {
+            $conn->query("CREATE TABLE IF NOT EXISTS teachers (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                name VARCHAR(150) NOT NULL,
+                email VARCHAR(150) UNIQUE NOT NULL,
+                phone VARCHAR(20) DEFAULT NULL,
+                department VARCHAR(100) DEFAULT NULL,
+                designation VARCHAR(100) DEFAULT NULL,
+                join_date DATE NULL,
+                salary DECIMAL(10,2) DEFAULT 0.00,
+                photo VARCHAR(255) NULL,
+                status ENUM('active', 'inactive') DEFAULT 'active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            
+            $conn->query("CREATE TABLE IF NOT EXISTS teacher_expenses (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                teacher_id INT NOT NULL,
+                expense_type VARCHAR(150) NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                expense_date DATE NOT NULL,
+                description TEXT,
+                status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            
+            $conn->query("CREATE TABLE IF NOT EXISTS teacher_invoices (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                teacher_id INT NOT NULL,
+                invoice_number VARCHAR(50) UNIQUE NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                issue_date DATE NOT NULL,
+                due_date DATE NULL,
+                status ENUM('unpaid', 'paid') DEFAULT 'unpaid',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+        }
+        
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
         

@@ -42,6 +42,29 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <i class="fas fa-user-graduate"></i> Students
             </a>
         </li>
+        <li class="nav-item dropdown">
+            <a href="#" class="nav-link <?php echo in_array($current_page, ['teachers.php', 'teacher_expenses.php', 'teacher_invoices.php']) ? 'active' : ''; ?>" onclick="toggleTeacherMenu(event)">
+                <i class="fas fa-chalkboard-teacher"></i> Teacher Management 
+                <i class="fas fa-chevron-down" style="float:right; margin-top:5px; font-size: 12px; transition: transform 0.3s;" id="teacherMenuIcon"></i>
+            </a>
+            <ul class="submenu" id="teacherMenu" style="display: <?php echo in_array($current_page, ['teachers.php', 'teacher_expenses.php', 'teacher_invoices.php']) ? 'block' : 'none'; ?>; padding-left: 20px; list-style: none; margin-top: 5px;">
+                <li style="margin-bottom: 5px;">
+                    <a href="teachers.php" class="nav-link <?php echo $current_page == 'teachers.php' ? 'active' : ''; ?>" style="padding: 8px 15px; font-size: 0.9em;">
+                        <i class="fas fa-user-tie"></i> Teachers
+                    </a>
+                </li>
+                <li style="margin-bottom: 5px;">
+                    <a href="teacher_expenses.php" class="nav-link <?php echo $current_page == 'teacher_expenses.php' ? 'active' : ''; ?>" style="padding: 8px 15px; font-size: 0.9em;">
+                        <i class="fas fa-receipt"></i> Expense Management
+                    </a>
+                </li>
+                <li>
+                    <a href="teacher_invoices.php" class="nav-link <?php echo $current_page == 'teacher_invoices.php' ? 'active' : ''; ?>" style="padding: 8px 15px; font-size: 0.9em;">
+                        <i class="fas fa-file-invoice-dollar"></i> Invoice Generation
+                    </a>
+                </li>
+            </ul>
+        </li>
         <li class="nav-item">
             <a href="documents.php" class="nav-link <?php echo $current_page == 'documents.php' ? 'active' : ''; ?>">
                 <i class="fas fa-file-alt"></i> Required Documents
@@ -133,4 +156,26 @@ $current_page = basename($_SERVER['PHP_SELF']);
             overlay.classList.toggle('active');
         }
     }
+
+    function toggleTeacherMenu(e) {
+        e.preventDefault();
+        const menu = document.getElementById('teacherMenu');
+        const icon = document.getElementById('teacherMenuIcon');
+        if (menu.style.display === 'none' || menu.style.display === '') {
+            menu.style.display = 'block';
+            icon.style.transform = 'rotate(180deg)';
+        } else {
+            menu.style.display = 'none';
+            icon.style.transform = 'rotate(0deg)';
+        }
+    }
+    
+    // Set initial icon rotation based on current page
+    document.addEventListener('DOMContentLoaded', function() {
+        const menu = document.getElementById('teacherMenu');
+        const icon = document.getElementById('teacherMenuIcon');
+        if (menu && icon && menu.style.display === 'block') {
+            icon.style.transform = 'rotate(180deg)';
+        }
+    });
 </script>
