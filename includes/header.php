@@ -7,6 +7,7 @@ $settings = getAllSettings();
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <?php
 // Calculate base path from APP_URL for dynamic server environments
 $basePath = '/';
