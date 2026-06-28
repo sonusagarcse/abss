@@ -82,3 +82,8 @@
     RewriteCond %{REQUEST_FILENAME}.php -f
     RewriteRule ^(.*?)/?$ $1.php [NC,L]
 </IfModule>
+
+# 5. CUSTOM ERROR PAGES
+# ----------------------------------------------------------------------
+ErrorDocument 404 /abss/404.php
+

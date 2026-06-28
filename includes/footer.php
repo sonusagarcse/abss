@@ -7,7 +7,7 @@
                     <p style="color: rgba(255,255,255,0.8); font-size: 1.1rem; max-width: 500px; margin-bottom: 0;">Download our new Mobile App for instant access to grades, notices, and secure portal features.</p>
                 </div>
                 <div>
-                    <a href="#" onclick="triggerInstall()" class="btn" style="background: var(--secondary); color: var(--primary-dark); font-weight: 800; padding: 16px 32px; font-size: 1.2rem; border-radius: 50px; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 10px 20px rgba(255, 214, 0, 0.3); transition: transform 0.3s;">
+                    <a href="app/index.php" class="btn" style="background: var(--secondary); color: var(--primary-dark); font-weight: 800; padding: 16px 32px; font-size: 1.2rem; border-radius: 50px; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 10px 20px rgba(255, 214, 0, 0.3); transition: transform 0.3s;">
                         <i class="fas fa-mobile-alt"></i> Install App Now
                     </a>
                 </div>

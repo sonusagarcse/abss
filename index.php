@@ -18,6 +18,9 @@ include 'includes/header.php';
         </p>
         <div class="hero-btns fade-in" style="animation-delay: 0.3s;">
             <a href="#admission" class="btn btn-secondary">Admission 2026-27 <i class="fas fa-arrow-right"></i></a>
+            <a href="app/ABSS_v1.0.0.APK" class="btn btn-glass" download style="background: rgba(13, 71, 161, 0.8); color: white; border: none; font-weight: bold;">
+                <i class="fab fa-android"></i> Download App
+            </a>
             <a href="assets/Prospectus ABSS.pdf" class="btn btn-glass" download><i class="fas fa-file-download"></i> Get
                 Prospectus</a>
         </div>

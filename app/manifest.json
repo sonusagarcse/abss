@@ -1,24 +1,28 @@
 {
-  "name": "ABSS Portal",
+  "id": "/app/",
+  "name": "ABSS",
   "short_name": "ABSS",
-  "description": "The Premier Competitive Education & Research Center for elite residential school preparation.",
-  "start_url": "/abss/app_home.php",
+  "description": "Monitor Your child Progress",
+  "lang": "en-US",
+  "dir": "ltr",
   "display": "standalone",
-  "background_color": "#0d47a1",
-  "theme_color": "#0d47a1",
-  "orientation": "portrait-primary",
+  "scope": "/abss/app/",
+  "start_url": "/abss/app/index.php",
+  "orientation": "any",
+  "background_color": "#ffffff",
+  "theme_color": "#6366f1",
   "icons": [
     {
-      "src": "/abss/app/icons/icon-192x192.png",
-      "type": "image/png",
+      "src": "assets/icon-192.png",
       "sizes": "192x192",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/abss/app/icons/icon-512x512.png",
-      "type": "image/png",
+      "src": "assets/icon-512.png",
       "sizes": "512x512",
-      "purpose": "any maskable"
+      "type": "image/png",
+      "purpose": "any"
     }
   ]
 }

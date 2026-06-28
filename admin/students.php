@@ -46,6 +46,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
     $id                 = isset($_POST['id']) ? (int)$_POST['id'] : 0;
     $parent_id          = isset($_POST['parent_id']) && $_POST['parent_id'] !== '' ? (int)$_POST['parent_id'] : null;
 
+    // Auto-create parent registry if no parent_id is linked
+    if (!$parent_id && !empty($parent_name)) {
+        $p_email = !empty($guardian_email) ? $guardian_email : "parent_" . preg_replace('/[^0-9]/', '', $phone) . "@abss.local";
+        
+        // Check if a parent with this email already exists
+        $p_check = $conn->prepare("SELECT id FROM parents WHERE email = ?");
+        $p_check->bind_param("s", $p_email);
+        $p_check->execute();
+        $p_res = $p_check->get_result();
+        
+        if ($p_res->num_rows > 0) {
+            $parent_id = $p_res->fetch_assoc()['id'];
+        } else {
+            // Create a new parent account (default password is the phone number)
+            $default_password = !empty($phone) ? $phone : '123456';
+            $p_pass = password_hash($default_password, PASSWORD_DEFAULT);
+            $p_insert = $conn->prepare("INSERT INTO parents (parent_name, email, password, phone) VALUES (?, ?, ?, ?)");
+            $p_insert->bind_param("ssss", $parent_name, $p_email, $p_pass, $phone);
+            if ($p_insert->execute()) {
+                $parent_id = $conn->insert_id;
+            }
+        }
+    }
+
     // Handle admission form scan upload (field: photo)
     $photo_path = $_POST['existing_photo'] ?? '';
     if (!empty($_FILES['photo']['name'])) {

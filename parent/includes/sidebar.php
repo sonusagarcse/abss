@@ -122,3 +122,19 @@ $current_page = basename($_SERVER['PHP_SELF']);
         });
     });
 </script>
+
+<?php if (isset($_SESSION['show_missing_docs_popup']) && $_SESSION['show_missing_docs_popup'] === true): ?>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        Swal.fire({
+            title: 'Action Required',
+            text: 'Upload required Document.',
+            icon: 'warning',
+            confirmButtonColor: '#3f51b5',
+            confirmButtonText: 'OK'
+        });
+    });
+</script>
+<?php unset($_SESSION['show_missing_docs_popup']); ?>
+<?php endif; ?>

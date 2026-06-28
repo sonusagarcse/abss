@@ -8,6 +8,7 @@ $settings = getAllSettings();
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/abss/">
     <title>Awasiya Bal Shikshan Sansthan | Competitive Education Center</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="assets/logo.png">
@@ -19,40 +20,13 @@ $settings = getAllSettings();
     <script>
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/abss/app/sw.js.php', {scope: '/abss/'});
+            navigator.serviceWorker.register('/abss/app/sw.js', {scope: '/abss/'});
         });
     }
 
-    // Global PWA Installation Logic
-    let globalDeferredPrompt;
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        globalDeferredPrompt = e;
-        
-        // Show floating button only when installable
-        const floatingBtn = document.getElementById('floatingInstallBtn');
-        if(floatingBtn) floatingBtn.style.display = 'flex';
-    });
-
-    const triggerInstall = async () => {
-        if (globalDeferredPrompt) {
-            globalDeferredPrompt.prompt();
-            const { outcome } = await globalDeferredPrompt.userChoice;
-            if (outcome === 'accepted') {
-                const floatingBtn = document.getElementById('floatingInstallBtn');
-                if(floatingBtn) floatingBtn.style.display = 'none';
-            }
-            globalDeferredPrompt = null;
-        } else {
-            alert('App is already installed or your browser does not support this feature.');
-        }
-    };
-
+    // Global PWA Installation Logic removed as we redirect to app/index.php
     document.addEventListener('DOMContentLoaded', () => {
-        const navBtn = document.getElementById('installAppBtnNav');
-        const mobileBtn = document.getElementById('installAppBtnMobile');
-        if(navBtn) navBtn.addEventListener('click', (e) => { e.preventDefault(); triggerInstall(); });
-        if(mobileBtn) mobileBtn.addEventListener('click', (e) => { e.preventDefault(); triggerInstall(); });
+        // Any remaining mobile drawer logic if needed
     });
     </script>
 </head>
@@ -70,45 +44,45 @@ $settings = getAllSettings();
                 <li><a href="#about">About</a></li>
                 <li><a href="#gallery">Gallery</a></li>
                 <li><a href="#contact">Contact</a></li>
-                <li><a href="inauguration.php" style="color: #d4af37;"><i class="fas fa-star"></i> Inauguration</a></li>
-                <li><a href="#" id="installAppBtnNav" style="color: #0d47a1;"><i class="fas fa-download"></i> App</a></li>
-            </ul>
-            <a href="admission.php" class="btn btn-primary">Admissions</a>
-            <div class="menu-toggle" id="mobile-menu-open">
-                <i class="fas fa-bars"></i>
-            </div>
-        </nav>
-    </header>
-
-    <!-- Mobile Drawer -->
-    <div class="mobile-drawer" id="mobile-drawer">
-        <div class="drawer-header">
-            <img src="assets/logo.png" alt="Logo" style="height: 40px;">
-            <div class="close-drawer" id="mobile-menu-close"><i class="fas fa-times"></i></div>
-        </div>
-        <ul class="drawer-links">
-            <li><a href="#home">Home</a></li>
-            <li><a href="#about">About</a></li>
-            <li><a href="#classes">Programs</a></li>
-            <li><a href="#admission">Admission</a></li>
-            <li><a href="#contact">Contact</a></li>
             <li><a href="inauguration.php" style="color: #d4af37;"><i class="fas fa-star"></i> Inauguration</a></li>
-            <li><a href="#" id="installAppBtnMobile" style="color: #0d47a1;"><i class="fas fa-download"></i> Download App</a></li>
+            <li><a href="app/index.php" style="color: #0d47a1;"><i class="fas fa-download"></i> App</a></li>
         </ul>
-        <div class="drawer-footer">
-            <a href="admission.php" class="btn btn-primary w-100">Apply Now</a>
+        <a href="admission.php" class="btn btn-primary">Admissions</a>
+        <div class="menu-toggle" id="mobile-menu-open">
+            <i class="fas fa-bars"></i>
         </div>
+    </nav>
+</header>
+
+<!-- Mobile Drawer -->
+<div class="mobile-drawer" id="mobile-drawer">
+    <div class="drawer-header">
+        <img src="assets/logo.png" alt="Logo" style="height: 40px;">
+        <div class="close-drawer" id="mobile-menu-close"><i class="fas fa-times"></i></div>
+    </div>
+    <ul class="drawer-links">
+        <li><a href="#home">Home</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#classes">Programs</a></li>
+        <li><a href="#admission">Admission</a></li>
+        <li><a href="#contact">Contact</a></li>
+        <li><a href="inauguration.php" style="color: #d4af37;"><i class="fas fa-star"></i> Inauguration</a></li>
+        <li><a href="app/index.php" style="color: #0d47a1;"><i class="fas fa-download"></i> Download App</a></li>
+    </ul>
+    <div class="drawer-footer">
+        <a href="admission.php" class="btn btn-primary w-100">Apply Now</a>
+    </div>
     </div>
 
-    <!-- Floating App Install Button -->
-    <div id="floatingInstallBtn" class="floating-install" style="display:none;" onclick="triggerInstall()">
-        <img src="assets/logo.png" alt="App Icon">
-        <div class="floating-text">
-            <span>Download Our App</span>
-            <small>Faster & secure</small>
-        </div>
-        <i class="fas fa-download download-icon"></i>
+<!-- Floating App Install Button -->
+<a href="app/index.php" id="floatingInstallBtn" class="floating-install" style="display:flex; text-decoration: none;">
+    <img src="assets/logo.png" alt="App Icon">
+    <div class="floating-text">
+        <span>Download Our App</span>
+        <small>Faster & secure</small>
     </div>
+    <i class="fas fa-download download-icon"></i>
+</a>
 
     <style>
         .main-header {

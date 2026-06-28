@@ -115,6 +115,12 @@ unset($child);
         .status-pending { background: #fff3e0; color: #e65100; }
         .status-approved { background: #e8f5e9; color: #2e7d32; }
         .inline-btn { width: auto !important; display: inline-block; text-decoration: none; }
+        @media (max-width: 768px) {
+            .doc-row { flex-direction: column; align-items: flex-start; gap: 15px; }
+            .doc-row form { flex-direction: column; align-items: stretch; width: 100%; }
+            .doc-row form input[type="file"] { width: 100%; box-sizing: border-box; }
+            .doc-row form button { width: 100% !important; margin-top: 5px; }
+        }
     </style>
 </head>
 <body>

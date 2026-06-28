@@ -43,8 +43,10 @@ if ($current_page !== 'documents.php' && $current_page !== 'logout.php') {
                 }
             }
             if ($missing) {
-                header("Location: documents.php");
-                exit();
+                if (!isset($_SESSION['missing_docs_notified'])) {
+                    $_SESSION['show_missing_docs_popup'] = true;
+                    $_SESSION['missing_docs_notified'] = true;
+                }
             }
         }
     }
