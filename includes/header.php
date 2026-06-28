@@ -7,8 +7,18 @@ $settings = getAllSettings();
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <base href="/abss/">
+<?php
+// Calculate base path from APP_URL for dynamic server environments
+$basePath = '/';
+if (defined('APP_URL')) {
+    $parsedUrl = parse_url(APP_URL, PHP_URL_PATH);
+    $basePath = rtrim((string)$parsedUrl, '/') . '/';
+    if ($basePath === '' || $basePath === '/') {
+        $basePath = '/';
+    }
+}
+?>
+    <base href="<?php echo $basePath; ?>">
     <title>Awasiya Bal Shikshan Sansthan | Competitive Education Center</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="icon" type="image/png" href="assets/logo.png">
