@@ -122,7 +122,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
             if ($existing) {
                 // Update existing unpaid invoice
                 $new_amount = $existing['amount'] + $amount;
-                $new_remark = $existing['remark'] . (empty($remark) ? "" : " | " . $remark);
+                $new_remark = $existing['remark'] . (empty($remark) ? "" : " | " . $remark . " [" . $month_for_full . "]: ₹" . number_format($amount, 2));
                 $new_month = $existing['month_for'];
                 if (strpos($new_month, $month_for_full) === false) {
                     $new_month .= ", " . $month_for_full;
@@ -135,7 +135,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
                 $msg = "Successfully added ₹" . number_format($amount, 2) . " to $st_name's existing unpaid invoice.";
             } else {
                 // Create a new unpaid invoice
-                $final_remark = "Manual Bill. " . $remark;
+                $final_remark = "Manual Bill. " . $remark . " [" . $month_for_full . "]: ₹" . number_format($amount, 2);
                 $insert_stmt = $conn->prepare("INSERT INTO fees_generated (student_id, amount, month_for, billing_date, remark, status) VALUES (?, ?, ?, ?, ?, 'unpaid')");
                 $insert_stmt->bind_param("idsss", $sid, $amount, $month_for_full, $billing_date, $final_remark);
                 $insert_stmt->execute();

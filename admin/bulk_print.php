@@ -279,10 +279,22 @@ function amountToWords($number) {
                 foreach ($monthly_items as $rem):
                     $item_desc = $rem;
                     $item_amt = '-';
+                    $item_month = date('F Y', strtotime($bill['billing_date']));
+
+                    if (preg_match('/\[(.*?)\]/', $rem, $match)) {
+                        $item_month = trim($match[1]);
+                        $rem = str_replace($match[0], '', $rem);
+                    }
+
                     if (strpos($rem, ': ₹') !== false) {
                         $parts = explode(': ₹', $rem);
                         $item_desc = trim($parts[0]);
                         $item_amt = '₹ ' . trim($parts[1]);
+                    } elseif (preg_match('/\(-₹([0-9\.,]+)\)/', $rem, $matches)) {
+                        $item_desc = trim(str_replace($matches[0], '', $rem));
+                        $item_amt = '-₹ ' . $matches[1];
+                    } else {
+                        $item_desc = trim($rem);
                     }
                 ?>
                 <tr>
@@ -290,7 +302,7 @@ function amountToWords($number) {
                     <td style="font-weight: 700; color: #1a237e;">
                         <?php echo htmlspecialchars($item_desc); ?>
                     </td>
-                    <td><?php echo date('F Y', strtotime($bill['billing_date'])); ?></td>
+                    <td><?php echo htmlspecialchars($item_month); ?></td>
                     <td class="text-right" style="font-weight: 700; color:#d32f2f;"><?php echo htmlspecialchars($item_amt); ?></td>
                 </tr>
                 <?php endforeach; ?>
