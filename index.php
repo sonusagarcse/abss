@@ -40,12 +40,22 @@ include 'includes/header.php';
         </div>
         <div class="exam-tags-container">
             <?php
-            $exams = ["Netarhat Residential", "Sainik School", "Navodaya Vidyalaya", "BHU Entrance", "Military School", "Simultala Residential", "Indira Gandhi Balika", "Vanasthali Vidyapith"];
-            foreach ($exams as $index => $exam): ?>
-                <div class="exam-tag-premium fade-in" style="animation-delay: <?php echo ($index * 0.05); ?>s">
-                    <i class="fas fa-graduation-cap"></i> <?php echo $exam; ?>
-                </div>
-            <?php endforeach; ?>
+            $schools_query = $conn->query("SELECT school_name FROM schools ORDER BY id ASC");
+            $index = 0;
+            if ($schools_query && $schools_query->num_rows > 0):
+                while ($school = $schools_query->fetch_assoc()): ?>
+                    <div class="exam-tag-premium fade-in" style="animation-delay: <?php echo ($index * 0.05); ?>s">
+                        <i class="fas fa-graduation-cap"></i> <?php echo htmlspecialchars($school['school_name']); ?>
+                    </div>
+                <?php $index++; endwhile;
+            else:
+                $exams = ["Netarhat Residential", "Sainik School", "Navodaya Vidyalaya", "BHU Entrance", "Military School", "Simultala Residential", "Indira Gandhi Balika", "Vanasthali Vidyapith"];
+                foreach ($exams as $index => $exam): ?>
+                    <div class="exam-tag-premium fade-in" style="animation-delay: <?php echo ($index * 0.05); ?>s">
+                        <i class="fas fa-graduation-cap"></i> <?php echo $exam; ?>
+                    </div>
+                <?php endforeach;
+            endif; ?>
         </div>
     </div>
 </section>
@@ -287,19 +297,55 @@ include 'includes/header.php';
                 ];
             }
             ?>
+            <?php
+            $tuition_modes = [];
+            if (!empty($settings['tuition_modes'])) {
+                $tuition_modes = json_decode($settings['tuition_modes'], true);
+            } else {
+                $tuition_modes = [
+                    'Residential Scholar' => $settings['res_fee'] ?? 5000,
+                    'Day Scholar' => $settings['day_fee'] ?? 3000
+                ];
+            }
+            $anim_delay = 0;
+            ?>
             <div class="fee-cards-container" style="display: flex; gap: 30px; flex-wrap: wrap;">
-                <!-- Residential Plan -->
-                <div class="pricing-card glass-card fade-in" style="flex: 1; min-width: 300px;">
-                    <h3 class="card-subtitle">Residential Scholar</h3>
-                    <div class="price-main">₹ <?php echo number_format($settings['res_fee']); ?><span>/month</span>
+                <?php 
+                $card_index = 0;
+                foreach($tuition_modes as $mode_name => $mode_fee): 
+                    $is_hostler = (strpos(strtolower($mode_name), 'hostler') !== false) || ($card_index === 1);
+                    $is_tution_only = (strpos(strtolower($mode_name), 'tution only') !== false || strpos(strtolower($mode_name), 'tuition only') !== false);
+                    $highlight_style = $is_hostler ? 'transform: scale(1.05); border: 2px solid #0d47a1; box-shadow: 0 20px 40px rgba(13,71,161,0.2); z-index: 2;' : '';
+                    $highlight_badge = $is_hostler ? '<div style="position:absolute; top:-12px; left:50%; transform:translateX(-50%); background:#0d47a1; color:#fff; padding:6px 20px; border-radius:30px; font-size:0.8rem; font-weight:800; letter-spacing:1px; text-transform:uppercase; box-shadow:0 4px 10px rgba(13,71,161,0.3);">Recommended</div>' : '';
+                ?>
+                <div class="pricing-card glass-card fade-in" style="flex: 1; min-width: 300px; position:relative; animation-delay: <?php echo $anim_delay; ?>s; <?php echo $highlight_style; ?>">
+                    <?php echo $highlight_badge; ?>
+                    <h3 class="card-subtitle"><?php echo htmlspecialchars($mode_name); ?></h3>
+                    <div class="price-main">₹ <?php echo number_format($mode_fee); ?><span>/month</span>
                     </div>
                     <ul class="pricing-list">
-                        <?php foreach($extra_fees as $f_name => $f_amount): ?>
-                        <li><i class="fas fa-check" style="color: #4caf50;"></i> <?php echo htmlspecialchars($f_name); ?>: ₹ <?php echo htmlspecialchars($f_amount); ?>/-</li>
-                        <?php endforeach; ?>
+                        <?php if (!$is_tution_only): ?>
+                            <?php foreach($extra_fees as $f_name => $f_amount): ?>
+                            <li><i class="fas fa-check" style="color: #4caf50;"></i> <?php echo htmlspecialchars($f_name); ?>: ₹ <?php echo htmlspecialchars($f_amount); ?>/-</li>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
                         
-                        <?php foreach($plan_features as $feat): ?>
-                            <?php if (!empty($feat['res'])): ?>
+                        <?php 
+                        foreach($plan_features as $feat): 
+                            $has_feature = false;
+                            
+                            if (isset($feat['modes']) && is_array($feat['modes'])) {
+                                $has_feature = in_array($mode_name, $feat['modes']);
+                            } else {
+                                $mn = strtolower($mode_name);
+                                if (strpos($mn, 'res') !== false || strpos($mn, 'hostler') !== false) {
+                                    $has_feature = !empty($feat['res']);
+                                } elseif (strpos($mn, 'day') !== false) {
+                                    $has_feature = !empty($feat['day']);
+                                }
+                            }
+                        ?>
+                            <?php if ($has_feature): ?>
                                 <li><i class="fas fa-check" style="color: #4caf50;"></i> <?php echo htmlspecialchars($feat['feature']); ?></li>
                             <?php else: ?>
                                 <li><i class="fas fa-times" style="color: #f44336; opacity: 0.5;"></i> <span style="text-decoration: line-through; opacity: 0.5;"><?php echo htmlspecialchars($feat['feature']); ?></span></li>
@@ -307,32 +353,10 @@ include 'includes/header.php';
                         <?php endforeach; ?>
                     </ul>
                     <div class="total-tag">Initial Payment: ₹
-                        <?php echo number_format(($settings['res_fee'] ?? 5000) + $extra_total); ?>/-
+                        <?php echo number_format($mode_fee + ($is_tution_only ? 0 : $extra_total)); ?>/-
                     </div>
                 </div>
-
-                <!-- Day Scholar Plan -->
-                <div class="pricing-card glass-card fade-in" style="flex: 1; min-width: 300px; animation-delay: 0.1s;">
-                    <h3 class="card-subtitle">Day Scholar</h3>
-                    <div class="price-main">₹ <?php echo number_format($settings['day_fee']); ?><span>/month</span>
-                    </div>
-                    <ul class="pricing-list">
-                        <?php foreach($extra_fees as $f_name => $f_amount): ?>
-                        <li><i class="fas fa-check" style="color: #4caf50;"></i> <?php echo htmlspecialchars($f_name); ?>: ₹ <?php echo htmlspecialchars($f_amount); ?>/-</li>
-                        <?php endforeach; ?>
-
-                        <?php foreach($plan_features as $feat): ?>
-                            <?php if (!empty($feat['day'])): ?>
-                                <li><i class="fas fa-check" style="color: #4caf50;"></i> <?php echo htmlspecialchars($feat['feature']); ?></li>
-                            <?php else: ?>
-                                <li><i class="fas fa-times" style="color: #f44336; opacity: 0.5;"></i> <span style="text-decoration: line-through; opacity: 0.5;"><?php echo htmlspecialchars($feat['feature']); ?></span></li>
-                            <?php endif; ?>
-                        <?php endforeach; ?>
-                    </ul>
-                    <div class="total-tag">Initial Payment: ₹
-                        <?php echo number_format(($settings['day_fee'] ?? 3000) + $extra_total); ?>/-
-                    </div>
-                </div>
+                <?php $anim_delay += 0.1; $card_index++; endforeach; ?>
             </div>
 
             <!-- Online Admission CTA -->

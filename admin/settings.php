@@ -56,8 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_settings'])) {
                 if (!empty($n)) {
                     $plan_features[] = [
                         'feature' => $n,
-                        'res' => !empty($_POST['feature_res'][$i]),
-                        'day' => !empty($_POST['feature_day'][$i])
+                        'modes' => isset($_POST['feature_modes'][$i]) ? $_POST['feature_modes'][$i] : []
                     ];
                 }
             }
@@ -178,12 +177,27 @@ if (isset($settings['extra_fees'])) {
 // Ensure default plan features exist
 $plan_features = [];
 if (isset($settings['plan_features'])) {
-    $plan_features = json_decode($settings['plan_features'], true) ?: [];
+    $loaded_features = json_decode($settings['plan_features'], true) ?: [];
+    foreach ($loaded_features as $feat) {
+        if (isset($feat['modes'])) {
+            $plan_features[] = $feat;
+        } else {
+            // Migrate from old format
+            $modes = [];
+            if (!empty($feat['res'])) $modes[] = 'Residential Scholar'; // map old res to Residential Scholar
+            if (!empty($feat['res'])) $modes[] = 'Hostler';
+            if (!empty($feat['day'])) $modes[] = 'Day Scholar';
+            $plan_features[] = [
+                'feature' => $feat['feature'],
+                'modes' => $modes
+            ];
+        }
+    }
 } else {
     // Defaults based on previous hardcoded features
     $plan_features = [
-        ['feature' => 'Hostel & Quality Meals included', 'res' => true, 'day' => false],
-        ['feature' => 'Intensive Classroom Training', 'res' => true, 'day' => true]
+        ['feature' => 'Hostel & Quality Meals included', 'modes' => ['Residential Scholar', 'Hostler']],
+        ['feature' => 'Intensive Classroom Training', 'modes' => ['Residential Scholar', 'Hostler', 'Day Scholar']]
     ];
 }
 ?>
@@ -357,19 +371,19 @@ if (isset($settings['plan_features'])) {
                 
                 <div id="features-container">
                     <?php foreach ($plan_features as $index => $feat): ?>
-                        <div class="feature-row">
+                        <div class="feature-row" style="grid-template-columns: 2fr auto auto; align-items: start;">
                             <div class="portal-input-group" style="margin-bottom:0;">
                                 <input type="text" name="feature_names[<?php echo $index; ?>]" value="<?php echo htmlspecialchars($feat['feature']); ?>" placeholder="Feature (e.g. 24/7 Library Access)" required>
                             </div>
-                            <div class="feature-checkbox">
-                                <span>Residential</span>
-                                <input type="hidden" name="feature_res[<?php echo $index; ?>]" value="0">
-                                <input type="checkbox" name="feature_res[<?php echo $index; ?>]" value="1" <?php echo !empty($feat['res']) ? 'checked' : ''; ?>>
-                            </div>
-                            <div class="feature-checkbox">
-                                <span>Day Scholar</span>
-                                <input type="hidden" name="feature_day[<?php echo $index; ?>]" value="0">
-                                <input type="checkbox" name="feature_day[<?php echo $index; ?>]" value="1" <?php echo !empty($feat['day']) ? 'checked' : ''; ?>>
+                            <div class="feature-modes-grid" style="display: flex; gap: 15px; flex-wrap: wrap;">
+                                <?php foreach ($tuition_modes as $mode_name => $mode_amount): 
+                                    $is_checked = in_array($mode_name, $feat['modes'] ?? []);
+                                ?>
+                                <div class="feature-checkbox">
+                                    <span><?php echo htmlspecialchars($mode_name); ?></span>
+                                    <input type="checkbox" name="feature_modes[<?php echo $index; ?>][]" value="<?php echo htmlspecialchars($mode_name); ?>" <?php echo $is_checked ? 'checked' : ''; ?>>
+                                </div>
+                                <?php endforeach; ?>
                             </div>
                             <button type="button" class="btn-remove-mode" onclick="this.parentElement.remove()"><i class="fas fa-trash"></i></button>
                         </div>
@@ -437,20 +451,28 @@ if (isset($settings['plan_features'])) {
             const container = document.getElementById('features-container');
             const row = document.createElement('div');
             row.className = 'feature-row';
+            row.style.gridTemplateColumns = '2fr auto auto';
+            row.style.alignItems = 'start';
+            
+            // Get current modes to create checkboxes
+            const modeNames = Array.from(document.querySelectorAll('input[name="mode_names[]"]')).map(input => input.value).filter(val => val.trim() !== '');
+            
+            let checkboxesHTML = '<div class="feature-modes-grid" style="display: flex; gap: 15px; flex-wrap: wrap;">';
+            modeNames.forEach(mode => {
+                checkboxesHTML += `
+                    <div class="feature-checkbox">
+                        <span>${mode}</span>
+                        <input type="checkbox" name="feature_modes[${featureIndex}][]" value="${mode}">
+                    </div>
+                `;
+            });
+            checkboxesHTML += '</div>';
+
             row.innerHTML = `
                 <div class="portal-input-group" style="margin-bottom:0;">
                     <input type="text" name="feature_names[${featureIndex}]" placeholder="Feature (e.g. 24/7 Library Access)" required>
                 </div>
-                <div class="feature-checkbox">
-                    <span>Residential</span>
-                    <input type="hidden" name="feature_res[${featureIndex}]" value="0">
-                    <input type="checkbox" name="feature_res[${featureIndex}]" value="1">
-                </div>
-                <div class="feature-checkbox">
-                    <span>Day Scholar</span>
-                    <input type="hidden" name="feature_day[${featureIndex}]" value="0">
-                    <input type="checkbox" name="feature_day[${featureIndex}]" value="1">
-                </div>
+                ${checkboxesHTML}
                 <button type="button" class="btn-remove-mode" onclick="this.parentElement.remove()"><i class="fas fa-trash"></i></button>
             `;
             container.appendChild(row);

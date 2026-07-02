@@ -287,51 +287,52 @@ function runAutoMigrator($conn) {
                 status ENUM('active', 'inactive') DEFAULT 'active',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+        }
             
-            $checkTeacherExpenses = $conn->query("SHOW TABLES LIKE 'teacher_expenses'");
-            if ($checkTeacherExpenses && $checkTeacherExpenses->num_rows == 0) {
-                $conn->query("
-                    CREATE TABLE teacher_expenses (
-                        id INT AUTO_INCREMENT PRIMARY KEY,
-                        teacher_id INT NOT NULL,
-                        invoice_id INT NULL,
-                        expense_type VARCHAR(150) NOT NULL,
-                        amount DECIMAL(10,2) NOT NULL,
-                        expense_date DATE NOT NULL,
-                        description TEXT,
-                        status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                        FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
-                    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-                ");
-            } else {
-                // Check if invoice_id column exists
-                $checkCol = $conn->query("SHOW COLUMNS FROM teacher_expenses LIKE 'invoice_id'");
-                if ($checkCol && $checkCol->num_rows == 0) {
-                    $conn->query("ALTER TABLE teacher_expenses ADD COLUMN invoice_id INT NULL AFTER teacher_id");
-                }
-            }
-            
-            $checkTeacherInvoices = $conn->query("SHOW TABLES LIKE 'teacher_invoices'");
-            if ($checkTeacherInvoices && $checkTeacherInvoices->num_rows == 0) {
-                $conn->query("CREATE TABLE teacher_invoices (
+        $checkTeacherExpenses = $conn->query("SHOW TABLES LIKE 'teacher_expenses'");
+        if ($checkTeacherExpenses && $checkTeacherExpenses->num_rows == 0) {
+            $conn->query("
+                CREATE TABLE teacher_expenses (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     teacher_id INT NOT NULL,
-                    invoice_number VARCHAR(50) UNIQUE NOT NULL,
+                    invoice_id INT NULL,
+                    expense_type VARCHAR(150) NOT NULL,
                     amount DECIMAL(10,2) NOT NULL,
-                    month_for VARCHAR(20) NULL,
-                    issue_date DATE NOT NULL,
-                    due_date DATE NULL,
-                    status ENUM('unpaid', 'paid') DEFAULT 'unpaid',
+                    expense_date DATE NOT NULL,
+                    description TEXT,
+                    status ENUM('pending', 'approved', 'rejected') DEFAULT 'pending',
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
-                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-            } else {
-                $checkMonth = $conn->query("SHOW COLUMNS FROM teacher_invoices LIKE 'month_for'");
-                if ($checkMonth && $checkMonth->num_rows == 0) {
-                    $conn->query("ALTER TABLE teacher_invoices ADD COLUMN month_for VARCHAR(20) NULL AFTER amount");
-                }
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+            ");
+        } else {
+            // Check if invoice_id column exists
+            $checkCol = $conn->query("SHOW COLUMNS FROM teacher_expenses LIKE 'invoice_id'");
+            if ($checkCol && $checkCol->num_rows == 0) {
+                $conn->query("ALTER TABLE teacher_expenses ADD COLUMN invoice_id INT NULL AFTER teacher_id");
             }
+        }
+        
+        $checkTeacherInvoices = $conn->query("SHOW TABLES LIKE 'teacher_invoices'");
+        if ($checkTeacherInvoices && $checkTeacherInvoices->num_rows == 0) {
+            $conn->query("CREATE TABLE teacher_invoices (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                teacher_id INT NOT NULL,
+                invoice_number VARCHAR(50) UNIQUE NOT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                month_for VARCHAR(20) NULL,
+                issue_date DATE NOT NULL,
+                due_date DATE NULL,
+                status ENUM('unpaid', 'paid') DEFAULT 'unpaid',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (teacher_id) REFERENCES teachers(id) ON DELETE CASCADE
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+        }
+        
+        // Check and add paid_amount column to teacher_invoices
+        $checkPaidAmt = $conn->query("SHOW COLUMNS FROM teacher_invoices LIKE 'paid_amount'");
+        if ($checkPaidAmt && $checkPaidAmt->num_rows == 0) {
+            $conn->query("ALTER TABLE teacher_invoices ADD COLUMN paid_amount DECIMAL(10,2) DEFAULT 0.00 AFTER amount");
         }
         
         // Restore MySQLi reporting mode

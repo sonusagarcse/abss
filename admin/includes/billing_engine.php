@@ -1,7 +1,11 @@
 <?php
 // admin/includes/billing_engine.php - Automated Monthly Fee Generation
 
-$batch_size = 5; // Process max 5 students per page load to keep dashboard fast
+if (isset($skip_email) && $skip_email) {
+    $batch_size = 500; // Process up to 500 students in one request if email is skipped
+} else {
+    $batch_size = 5; // Process max 5 students per page load to keep dashboard fast
+}
 
 if (isset($force_student_id) && $force_student_id > 0) {
     // Force mode: Target specific student, ignore date rules
@@ -271,7 +275,7 @@ if ($due_students && $due_students->num_rows > 0) {
                 log_activity('auto_bill_generated', "Automated bill of ₹" . number_format($total_amount, 2) . " generated for student " . $student['name'] . " ($month_for)");
             }
 
-            if (!empty($student['parent_id'])) {
+            if (!empty($student['parent_id']) && (!isset($skip_email) || !$skip_email)) {
                 $parent_res = $conn->query("SELECT email, parent_name FROM parents WHERE id = " . (int)$student['parent_id']);
                 if ($parent_res && $parent_res->num_rows > 0) {
                     $parent = $parent_res->fetch_assoc();

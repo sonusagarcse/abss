@@ -261,15 +261,26 @@ $invoice_no = $invoice['invoice_number'];
             </tbody>
         </table>
 
-        <!-- Grand Total Strip -->
-        <div class="total-strip">
-            <div class="total-label">Total Amount Payable</div>
-            <div class="total-value">₹ <?php echo number_format($invoice['amount'], 2); ?></div>
+        <!-- Grand Payout Summary -->
+        <div style="background: #f8fafc; border: 1px solid #ffcdd2; border-radius: 8px; padding: 20px 25px; margin-bottom: 25px; position: relative; z-index: 2;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 1rem; font-weight: 700; color: #555;">Net Salary Payable:</span>
+                <span style="font-size: 1.1rem; font-weight: 700; color: #111;">₹ <?php echo number_format($invoice['amount'], 2); ?></span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 1rem; font-weight: 700; color: #2e7d32;">Amount Paid:</span>
+                <span style="font-size: 1.1rem; font-weight: 700; color: #2e7d32;">₹ <?php echo number_format($invoice['paid_amount'], 2); ?></span>
+            </div>
+            <hr style="border: 0; border-top: 2px dashed #cbd5e1; margin: 12px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 1.1rem; font-weight: 800; color: #b71c1c;">Remaining Balance Due:</span>
+                <span style="font-size: 1.4rem; font-weight: 800; color: #b71c1c;">₹ <?php echo number_format(max(0, $invoice['amount'] - $invoice['paid_amount']), 2); ?></span>
+            </div>
         </div>
 
         <!-- Amount in Words -->
         <div class="words-block">
-            Amount payable in words: <strong><?php echo $amount_in_words; ?></strong>
+            Net salary payable in words: <strong><?php echo $amount_in_words; ?></strong>
         </div>
 
     </div>

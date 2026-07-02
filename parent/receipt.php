@@ -240,7 +240,7 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
                 <tr>
                     <th class="text-center" style="width: 8%;">S.No</th>
                     <th>Fee Description</th>
-                    <th>Billing Cycle</th>
+                    <th>Bill Month</th>
                     <th>Method</th>
                     <th class="text-right" style="width: 25%;">Amount</th>
                 </tr>

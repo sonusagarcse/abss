@@ -63,12 +63,14 @@ while($s = $students_res->fetch_assoc()) {
     $students[] = $s;
 }
 
-// Fetch Expenses
+// Fetch Expenses (current month only)
 $expenses_res = $conn->query("
     SELECT e.*, s.name, s.reg_no 
     FROM student_expenses e 
     JOIN students s ON e.student_id = s.id 
-    ORDER BY e.created_at DESC 
+    WHERE MONTH(e.expense_date) = MONTH(CURDATE()) 
+      AND YEAR(e.expense_date) = YEAR(CURDATE())
+    ORDER BY e.expense_date DESC, e.created_at DESC 
     LIMIT 100
 ");
 ?>

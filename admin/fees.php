@@ -3,6 +3,10 @@
 
 require_once 'includes/auth.php';
 
+// Automatically run monthly fee billing engine for due students on page load (without blocking on emails)
+$skip_email = true;
+require_once 'includes/billing_engine.php';
+
 $msg = '';
 $err = '';
 
@@ -83,6 +87,123 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
         }
     } else {
         $err = "Error recording payment.";
+    }
+}
+
+// Handle Manual Fee Generation
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])) {
+    $sid = (int)$_POST['student_id'];
+    $amount = (float)$_POST['amount'];
+    $month = trim($_POST['month_for']);
+    $year = (int)date('Y'); // Dynamic current year
+    $remark = trim($_POST['remark']);
+    $fee_type = trim($_POST['fee_type']); // e.g. 'Day Scholar', 'Hostler', or 'Custom'
+    $send_email = isset($_POST['send_email']) ? true : false;
+
+    $month_for_full = "$month $year";
+    $billing_date = date('Y-m-d');
+
+    // 1. Fetch student info
+    $stmt = $conn->prepare("SELECT name, parent_id, last_billed_date FROM students WHERE id = ? AND status = 'active'");
+    $stmt->bind_param("i", $sid);
+    $stmt->execute();
+    $student_info = $stmt->get_result()->fetch_assoc();
+
+    if ($student_info) {
+        $st_name = $student_info['name'];
+        $parent_id = $student_info['parent_id'];
+
+        $conn->begin_transaction();
+        try {
+            // Check for existing unpaid bill
+            $existing_q = $conn->query("SELECT id, amount, remark, month_for FROM fees_generated WHERE student_id = $sid AND status = 'unpaid' ORDER BY id DESC LIMIT 1");
+            $existing = $existing_q->fetch_assoc();
+
+            if ($existing) {
+                // Update existing unpaid invoice
+                $new_amount = $existing['amount'] + $amount;
+                $new_remark = $existing['remark'] . (empty($remark) ? "" : " | " . $remark);
+                $new_month = $existing['month_for'];
+                if (strpos($new_month, $month_for_full) === false) {
+                    $new_month .= ", " . $month_for_full;
+                }
+
+                $update_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, remark = ?, month_for = ? WHERE id = ?");
+                $update_stmt->bind_param("dssi", $new_amount, $new_remark, $new_month, $existing['id']);
+                $update_stmt->execute();
+                $invoice_id = $existing['id'];
+                $msg = "Successfully added ₹" . number_format($amount, 2) . " to $st_name's existing unpaid invoice.";
+            } else {
+                // Create a new unpaid invoice
+                $final_remark = "Manual Bill. " . $remark;
+                $insert_stmt = $conn->prepare("INSERT INTO fees_generated (student_id, amount, month_for, billing_date, remark, status) VALUES (?, ?, ?, ?, ?, 'unpaid')");
+                $insert_stmt->bind_param("idsss", $sid, $amount, $month_for_full, $billing_date, $final_remark);
+                $insert_stmt->execute();
+                $invoice_id = $conn->insert_id;
+                $msg = "Successfully generated new manual invoice of ₹" . number_format($amount, 2) . " for $st_name.";
+            }
+
+            // If it's a standard monthly fee (any type other than Custom), update last_billed_date to prevent double auto-billing
+            if ($fee_type !== 'Custom') {
+                // Calculate the end of the selected month/year
+                $date_str = "01-$month-$year";
+                $dt = DateTime::createFromFormat('d-F-Y', $date_str);
+                if ($dt) {
+                    $dt->modify('last day of this month');
+                    $new_last_billed = $dt->format('Y-m-d');
+                    
+                    // Only update if it extends their current last_billed_date
+                    $should_update_date = true;
+                    if (!empty($student_info['last_billed_date'])) {
+                        $curr_last_billed = new DateTime($student_info['last_billed_date']);
+                        if ($dt <= $curr_last_billed) {
+                            $should_update_date = false;
+                        }
+                    }
+                    if ($should_update_date) {
+                        $conn->query("UPDATE students SET last_billed_date = '$new_last_billed' WHERE id = $sid");
+                    }
+                }
+            }
+
+            $conn->commit();
+            log_activity('fee_bill_generated', "Manually generated fee of ₹" . number_format($amount, 2) . " for student $st_name ($month_for_full)");
+
+            // Send Email Notification if requested
+            if ($send_email && !empty($parent_id)) {
+                $parent_res = $conn->query("SELECT email, parent_name FROM parents WHERE id = " . (int)$parent_id);
+                if ($parent_res && $parent_res->num_rows > 0) {
+                    $parent = $parent_res->fetch_assoc();
+                    if (!empty($parent['email'])) {
+                        require_once __DIR__ . '/../includes/mail_helper.php';
+                        
+                        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                        $fe_host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+                        $fe_base_url = (strpos($fe_host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$fe_host";
+                        $portal_url = "$fe_base_url/admin/login.php?role=parent";
+
+                        $email_html = get_fee_generated_template(
+                            $st_name, 
+                            $amount, 
+                            $month_for_full, 
+                            $billing_date, 
+                            "Manual Fee: $remark", 
+                            $portal_url
+                        );
+                        send_smtp_email(
+                            $parent['email'], 
+                            "Fee Invoice Generated - " . $st_name . " - ABSS", 
+                            $email_html
+                        );
+                    }
+                }
+            }
+        } catch (Exception $e) {
+            $conn->rollback();
+            $err = "Error generating manual invoice: " . $e->getMessage();
+        }
+    } else {
+        $err = "Student not found or inactive.";
     }
 }
 
@@ -168,11 +289,11 @@ if (isset($_GET['collect_offline'])) {
 
 // Fetch active students into reusable array
 $students_res = $conn->query("
-    SELECT s.id, s.name, COALESCE(SUM(fg.amount), 0) AS total_due
+    SELECT s.id, s.name, s.base_fee, s.monthly_discount, s.scholar_mode, COALESCE(SUM(fg.amount), 0) AS total_due
     FROM students s
     LEFT JOIN fees_generated fg ON s.id = fg.student_id AND fg.status = 'unpaid'
     WHERE s.status = 'active'
-    GROUP BY s.id, s.name
+    GROUP BY s.id, s.name, s.base_fee, s.monthly_discount, s.scholar_mode
     ORDER BY s.name ASC
 ");
 $students_list = [];
@@ -189,7 +310,7 @@ $payments = $conn->query("
 ");
 
 // Fetch bills log
-$filter = isset($_GET['filter']) ? $_GET['filter'] : 'all';
+$filter = isset($_GET['filter']) ? $_GET['filter'] : 'unpaid';
 $status_cond = "";
 if ($filter === 'unpaid') $status_cond = " WHERE fg.status = 'unpaid'";
 if ($filter === 'paid') $status_cond = " WHERE fg.status = 'paid'";
@@ -210,6 +331,16 @@ $due_query = $conn->query("
     AND DATE_ADD(COALESCE(last_billed_date, admission_date), INTERVAL 1 MONTH) <= CURDATE()
 ");
 $due_count = $due_query ? $due_query->fetch_assoc()['due_count'] : 0;
+
+// Retrieve tuition modes from settings database table
+$tuition_modes = [];
+if (!empty($settings['tuition_modes'])) {
+    $tuition_modes = json_decode($settings['tuition_modes'], true);
+} else {
+    $fee_day_scholar = $settings['fee_day_scholar'] ?? '3000';
+    $fee_hostler = $settings['fee_hostler'] ?? '5000';
+    $tuition_modes = ['Day Scholar' => $fee_day_scholar, 'Hostler' => $fee_hostler];
+}
 ?>
 
 <!DOCTYPE html>
@@ -329,6 +460,58 @@ $due_count = $due_query ? $due_query->fetch_assoc()['due_count'] : 0;
                         </select>
                     </div>
                     <button type="submit" name="record_payment" class="btn-portal w-100">Submit Payment</button>
+                </form>
+            </div>
+
+            <!-- Form 1: Generate Manual Fee / Invoice -->
+            <div class="portal-card">
+                <h3 style="margin-bottom: 25px; color:var(--portal-blue);"><i class="fas fa-file-invoice-dollar" style="margin-right:8px; opacity:0.7;"></i> Generate Custom/Manual Fee</h3>
+                <form action="" method="POST">
+                    <div class="portal-input-group">
+                        <label>Student Name</label>
+                        <select name="student_id" id="manual_student_id" required>
+                            <option value="" data-base-fee="0" data-monthly-discount="0" data-scholar-mode="">Select Student...</option>
+                            <?php foreach($students_list as $student): ?>
+                                <option value="<?php echo $student['id']; ?>" data-base-fee="<?php echo $student['base_fee']; ?>" data-monthly-discount="<?php echo $student['monthly_discount']; ?>" data-scholar-mode="<?php echo htmlspecialchars($student['scholar_mode'] ?? 'Day Scholar'); ?>"><?php echo htmlspecialchars($student['name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div class="portal-input-group">
+                            <label>Fee Type</label>
+                            <select name="fee_type" id="manual_fee_type" required>
+                                <option value="Custom">Custom / Extra Charge</option>
+                                <?php foreach(array_keys($tuition_modes) as $mode): ?>
+                                    <option value="<?php echo htmlspecialchars($mode); ?>"><?php echo htmlspecialchars($mode); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="portal-input-group">
+                            <label>Amount (₹)</label>
+                            <input type="number" name="amount" id="manual_amount" placeholder="e.g. 3000" step="0.01" required>
+                            <small id="manual_fee_discount_hint" style="color: #2e7d32; font-weight: 700; display: block; margin-top: 5px;"></small>
+                        </div>
+                    </div>
+                    <div class="portal-input-group">
+                        <label>Billing Month</label>
+                        <select name="month_for" required>
+                            <?php 
+                            foreach($months as $m) {
+                                $sel = (date('F') == $m) ? 'selected' : '';
+                                echo "<option value='$m' $sel>$m</option>";
+                            }
+                            ?>
+                        </select>
+                    </div>
+                    <div class="portal-input-group">
+                        <label>Remarks / Description</label>
+                        <input type="text" name="remark" placeholder="e.g. Monthly Tuition, Uniform Fee, Exam Fee" required>
+                    </div>
+                    <div style="margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" name="send_email" id="send_email" style="cursor: pointer; width: 16px; height: 16px;" checked>
+                        <label for="send_email" style="cursor: pointer; margin: 0; font-size: 0.9rem; color: #5c6bc0; font-weight: 600;">Send Email Notification to Parent</label>
+                    </div>
+                    <button type="submit" name="generate_manual_fee" class="btn-portal w-100">Generate Fee</button>
                 </form>
             </div>
         </div>
@@ -459,6 +642,99 @@ $due_count = $due_query ? $due_query->fetch_assoc()['due_count'] : 0;
                     } else {
                         display.textContent = 'No Pending Dues';
                         display.style.color = '#2e7d32'; // Green for cleared
+                    }
+                }
+            });
+        }
+
+        const manualStudentSelect = document.getElementById('manual_student_id');
+        const manualAmountInput = document.getElementById('manual_amount');
+        const manualFeeTypeSelect = document.getElementById('manual_fee_type');
+        const discountHint = document.getElementById('manual_fee_discount_hint');
+        const tuitionModes = <?php echo json_encode($tuition_modes); ?>;
+
+        function updateManualFeeFields() {
+            if (!manualStudentSelect) return;
+            const selectedStudent = manualStudentSelect.options[manualStudentSelect.selectedIndex];
+            if (!selectedStudent || !selectedStudent.value) {
+                manualAmountInput.value = '';
+                if (discountHint) discountHint.textContent = '';
+                return;
+            }
+
+            const baseFee = parseFloat(selectedStudent.getAttribute('data-base-fee') || 0);
+            const discount = parseFloat(selectedStudent.getAttribute('data-monthly-discount') || 0);
+            const scholarMode = selectedStudent.getAttribute('data-scholar-mode');
+
+            // Auto-select fee type matching student's scholar mode
+            if (scholarMode && manualFeeTypeSelect) {
+                let matched = false;
+                for (let i = 0; i < manualFeeTypeSelect.options.length; i++) {
+                    if (manualFeeTypeSelect.options[i].value.toLowerCase() === scholarMode.toLowerCase()) {
+                        manualFeeTypeSelect.selectedIndex = i;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    manualFeeTypeSelect.value = 'Custom';
+                }
+            }
+
+            const isCustom = manualFeeTypeSelect && manualFeeTypeSelect.value === 'Custom';
+
+            if (isCustom) {
+                if (discountHint) discountHint.textContent = '';
+            } else {
+                const finalAmount = Math.max(0, baseFee - discount);
+                manualAmountInput.value = baseFee > 0 ? finalAmount : '';
+                if (discountHint) {
+                    if (discount > 0) {
+                        discountHint.innerHTML = `<i class="fas fa-percentage"></i> Discount applied: -₹${discount.toFixed(2)} (Base: ₹${baseFee.toFixed(2)})`;
+                        discountHint.style.color = '#2e7d32';
+                    } else {
+                        discountHint.innerHTML = `Base Fee: ₹${baseFee.toFixed(2)} (No discount)`;
+                        discountHint.style.color = '#5c6bc0';
+                    }
+                }
+            }
+        }
+
+        if (manualStudentSelect) {
+            manualStudentSelect.addEventListener('change', updateManualFeeFields);
+        }
+
+        if (manualFeeTypeSelect) {
+            manualFeeTypeSelect.addEventListener('change', function() {
+                const selectedMode = this.value;
+                const selectedStudent = manualStudentSelect.options[manualStudentSelect.selectedIndex];
+                
+                if (selectedMode === 'Custom') {
+                    if (discountHint) discountHint.textContent = '';
+                } else {
+                    const studentScholarMode = selectedStudent ? selectedStudent.getAttribute('data-scholar-mode') : null;
+                    const baseFee = selectedStudent ? parseFloat(selectedStudent.getAttribute('data-base-fee') || 0) : 0;
+                    const discount = selectedStudent ? parseFloat(selectedStudent.getAttribute('data-monthly-discount') || 0) : 0;
+
+                    if (studentScholarMode && selectedMode.toLowerCase() === studentScholarMode.toLowerCase()) {
+                        const finalAmount = Math.max(0, baseFee - discount);
+                        manualAmountInput.value = baseFee > 0 ? finalAmount : (tuitionModes[selectedMode] || '');
+                        if (discountHint) {
+                            if (discount > 0) {
+                                discountHint.innerHTML = `<i class="fas fa-percentage"></i> Discount applied: -₹${discount.toFixed(2)} (Base: ₹${baseFee.toFixed(2)})`;
+                                discountHint.style.color = '#2e7d32';
+                            } else {
+                                discountHint.innerHTML = `Base Fee: ₹${baseFee.toFixed(2)} (No discount)`;
+                                discountHint.style.color = '#5c6bc0';
+                            }
+                        }
+                    } else {
+                        const standardFee = parseFloat(tuitionModes[selectedMode] || 0);
+                        manualAmountInput.value = standardFee > 0 ? standardFee : '';
+                        if (discountHint) {
+                            discountHint.innerHTML = `Standard Rate: ₹${standardFee.toFixed(2)}`;
+                            discountHint.style.color = '#5c6bc0';
+                        }
                     }
                 }
             });

@@ -1,10 +1,36 @@
 <?php
 require_once 'includes/auth.php';
 
+$msg = '';
+$err = '';
+
+// Handle Record Payment Action
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
+    $invoice_id = (int)$_POST['invoice_id'];
+    $pay_amount = (float)$_POST['pay_amount'];
+    
+    // Fetch invoice details
+    $inv_q = $conn->query("SELECT amount, paid_amount FROM teacher_invoices WHERE id = $invoice_id");
+    if ($inv_q && $inv_q->num_rows > 0) {
+        $inv = $inv_q->fetch_assoc();
+        $new_paid = $inv['paid_amount'] + $pay_amount;
+        $status = ($new_paid >= $inv['amount']) ? 'paid' : 'unpaid';
+        
+        $stmt = $conn->prepare("UPDATE teacher_invoices SET paid_amount = ?, status = ? WHERE id = ?");
+        $stmt->bind_param("dsi", $new_paid, $status, $invoice_id);
+        if ($stmt->execute()) {
+            $msg = "Payment of ₹" . number_format($pay_amount, 2) . " recorded successfully.";
+        } else {
+            $err = "Error recording payment.";
+        }
+    }
+}
+
 // Handle Add/Edit Invoice
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_invoice'])) {
     $teacher_id = (int)$_POST['teacher_id'];
     $amount = (float)$_POST['amount'];
+    $paid_amount = isset($_POST['paid_amount']) ? (float)$_POST['paid_amount'] : 0.00;
     $issue_date = trim($_POST['issue_date']);
     $due_date = !empty($_POST['due_date']) ? trim($_POST['due_date']) : null;
     $status = trim($_POST['status']);
@@ -13,8 +39,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_invoice'])) {
     $invoice_number = isset($_POST['invoice_number']) ? trim($_POST['invoice_number']) : '';
 
     if ($id > 0) {
-        $stmt = $conn->prepare("UPDATE teacher_invoices SET teacher_id=?, invoice_number=?, amount=?, month_for=?, issue_date=?, due_date=?, status=? WHERE id=?");
-        $stmt->bind_param("isdssssi", $teacher_id, $invoice_number, $amount, $month_for, $issue_date, $due_date, $status, $id);
+        $stmt = $conn->prepare("UPDATE teacher_invoices SET teacher_id=?, invoice_number=?, amount=?, paid_amount=?, month_for=?, issue_date=?, due_date=?, status=? WHERE id=?");
+        $stmt->bind_param("isddssssi", $teacher_id, $invoice_number, $amount, $paid_amount, $month_for, $issue_date, $due_date, $status, $id);
         $stmt->execute();
     } else {
         $invoice_number = 'TINV-' . date('Ymd') . '-' . rand(1000, 9999);
@@ -86,6 +112,7 @@ if($teachers){
         .status-badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; }
         .status-unpaid { background: #fef2f2; color: #b91c1c; }
         .status-paid { background: #f0fdf4; color: #166534; }
+        .status-partial { background: #fff3e0; color: #e65100; }
     </style>
 </head>
 <body>
@@ -102,6 +129,13 @@ if($teachers){
             </button>
         </div>
 
+        <?php if($msg): ?>
+            <div style="background:#f0fdf4; color:#166534; padding:15px; border-radius:12px; margin-bottom:20px; font-weight:700;"><i class="fas fa-check-circle"></i> <?php echo $msg; ?></div>
+        <?php endif; ?>
+        <?php if($err): ?>
+            <div style="background:#feeef2; color:#d32f2f; padding:15px; border-radius:12px; margin-bottom:20px; font-weight:700;"><i class="fas fa-exclamation-circle"></i> <?php echo $err; ?></div>
+        <?php endif; ?>
+
         <div class="portal-table-container">
             <table>
                 <thead>
@@ -109,25 +143,41 @@ if($teachers){
                         <th>Invoice #</th>
                         <th>Teacher</th>
                         <th>Month</th>
-                        <th>Amount</th>
+                        <th>Net Salary</th>
+                        <th>Paid</th>
+                        <th>Balance</th>
                         <th>Issue Date</th>
                         <th>Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
                 <tbody>
-                    <?php if($invoices && $invoices->num_rows > 0): while($row = $invoices->fetch_assoc()): ?>
+                    <?php if($invoices && $invoices->num_rows > 0): while($row = $invoices->fetch_assoc()): 
+                        $balance = max(0, $row['amount'] - $row['paid_amount']);
+                        $status_label = $row['status'];
+                        $status_class = $row['status'];
+                        if ($row['status'] !== 'paid' && $row['paid_amount'] > 0) {
+                            $status_label = 'partial';
+                            $status_class = 'partial';
+                        }
+                    ?>
                     <tr>
                         <td><strong style="color:var(--portal-blue);"><?php echo htmlspecialchars($row['invoice_number']); ?></strong></td>
                         <td><?php echo htmlspecialchars($row['teacher_name']); ?></td>
                         <td><?php echo !empty($row['month_for']) ? date('M Y', strtotime($row['month_for'].'-01')) : '-'; ?></td>
-                        <td style="color:#2e7d32; font-weight:800;">₹<?php echo number_format($row['amount'], 2); ?></td>
+                        <td style="color:var(--portal-blue); font-weight:700;">₹<?php echo number_format($row['amount'], 2); ?></td>
+                        <td style="color:#2e7d32; font-weight:700;">₹<?php echo number_format($row['paid_amount'], 2); ?></td>
+                        <td style="color:#d32f2f; font-weight:800;">₹<?php echo number_format($balance, 2); ?></td>
                         <td><?php echo date('d M Y', strtotime($row['issue_date'])); ?></td>
-                        <td><?php echo !empty($row['due_date']) ? date('d M Y', strtotime($row['due_date'])) : '-'; ?></td>
                         <td>
-                            <span class="status-badge status-<?php echo $row['status']; ?>"><?php echo $row['status']; ?></span>
+                            <span class="status-badge status-<?php echo $status_class; ?>"><?php echo $status_label; ?></span>
                         </td>
                         <td>
+                            <?php if ($balance > 0): ?>
+                                <button class="btn btn-sm btn-outline-success" style="border:none; color:#2e7d32; cursor:pointer;" onclick='openPaymentModal(<?php echo $row['id']; ?>, <?php echo $balance; ?>, "<?php echo htmlspecialchars($row['invoice_number']); ?>")' title="Record Payment">
+                                    <i class="fas fa-hand-holding-usd"></i>
+                                </button>
+                            <?php endif; ?>
                             <a href="print_teacher_invoice.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-outline-success" target="_blank" style="border:none; color:#2e7d32;" title="Print">
                                 <i class="fas fa-print"></i>
                             </a>
@@ -140,7 +190,7 @@ if($teachers){
                         </td>
                     </tr>
                     <?php endwhile; else: ?>
-                        <tr><td colspan="7" style="text-align:center;">No invoices found.</td></tr>
+                        <tr><td colspan="9" style="text-align:center;">No invoices found.</td></tr>
                     <?php endif; ?>
                 </tbody>
             </table>
@@ -180,6 +230,10 @@ if($teachers){
                             <small style="color: #666; font-size: 0.8rem;">Calculated automatically as (Salary - Expenses) on Save</small>
                         </div>
                         <div class="portal-input-group">
+                            <label>Paid Amount (₹)</label>
+                            <input type="number" name="paid_amount" id="paid_amount" step="0.01" value="0.00">
+                        </div>
+                        <div class="portal-input-group">
                             <label>Month <span style="color:red">*</span></label>
                             <input type="month" name="month_for" id="month_for" required>
                         </div>
@@ -210,6 +264,34 @@ if($teachers){
                 </form>
             </div>
         </div>
+        
+        <!-- Record Payment Modal -->
+        <div class="modal" id="paymentModal">
+            <div class="modal-content" style="max-width: 450px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
+                    <h2 style="color: var(--portal-blue); font-weight: 800; font-size: 1.5rem; margin:0;" id="paymentModalTitle">Record Salary Payment</h2>
+                    <button type="button" onclick="hidePaymentModal()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#9aa5ce;">✕</button>
+                </div>
+                <form action="" method="POST">
+                    <input type="hidden" name="invoice_id" id="pay_invoice_id">
+                    
+                    <div class="portal-input-group">
+                        <label>Outstanding Balance (₹)</label>
+                        <input type="text" id="pay_balance_display" readonly style="background-color: #f8f9fa; border-color: #eef2ff; color: #9aa5ce;">
+                    </div>
+                    
+                    <div class="portal-input-group">
+                        <label>Amount Paid (₹) <span style="color:red">*</span></label>
+                        <input type="number" name="pay_amount" id="pay_amount" step="0.01" min="0.01" required>
+                    </div>
+                    
+                    <div class="portal-btn-row" style="margin-top:35px;">
+                        <button type="submit" name="record_payment" class="btn-portal w-100" style="padding:15px;">Submit Payment</button>
+                        <button type="button" class="btn-glass w-100" onclick="hidePaymentModal()">Discard</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </main>
 
     <script>
@@ -219,6 +301,7 @@ if($teachers){
             document.querySelector('#invoiceModal form').reset();
             document.getElementById('issue_date').value = '<?php echo date('Y-m-d'); ?>';
             document.getElementById('invoice_number').value = '';
+            document.getElementById('paid_amount').value = '0.00';
             document.getElementById('month_for').value = '<?php echo date('Y-m'); ?>';
             document.getElementById('status').value = 'unpaid';
         }
@@ -233,10 +316,24 @@ if($teachers){
             document.getElementById('teacher_id').value = data.teacher_id;
             document.getElementById('invoice_number').value = data.invoice_number;
             document.getElementById('amount').value = data.amount;
+            document.getElementById('paid_amount').value = data.paid_amount;
             document.getElementById('month_for').value = data.month_for || '<?php echo date('Y-m'); ?>';
             document.getElementById('issue_date').value = data.issue_date;
             document.getElementById('due_date').value = data.due_date || '';
             document.getElementById('status').value = data.status;
+        }
+
+        function openPaymentModal(invoiceId, balance, invoiceNumber) {
+            document.getElementById('paymentModal').style.display = 'flex';
+            document.getElementById('pay_invoice_id').value = invoiceId;
+            document.getElementById('pay_balance_display').value = balance.toFixed(2);
+            document.getElementById('pay_amount').value = balance.toFixed(2);
+            document.getElementById('pay_amount').max = balance;
+            document.getElementById('paymentModalTitle').textContent = 'Pay Invoice ' + invoiceNumber;
+        }
+        
+        function hidePaymentModal() {
+            document.getElementById('paymentModal').style.display = 'none';
         }
     </script>
 </body>

@@ -222,7 +222,7 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                 <tr>
                     <th class="text-center" style="width: 8%;">S.No</th>
                     <th>Fee Description</th>
-                    <th>Billing Cycle</th>
+                    <th>Bill Month</th>
                     <th class="text-right" style="width: 25%;">Amount Due</th>
                 </tr>
             </thead>
@@ -288,7 +288,7 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                     <td style="font-weight: 700; color: #1a237e;">
                         <?php echo htmlspecialchars($item_desc); ?>
                     </td>
-                    <td><?php echo htmlspecialchars($bill['month_for']); ?></td>
+                    <td><?php echo date('F Y', strtotime($bill['billing_date'])); ?></td>
                     <td class="text-right" style="font-weight: 700; color:#d32f2f;"><?php echo htmlspecialchars($item_amt); ?></td>
                 </tr>
                 <?php endforeach; ?>
