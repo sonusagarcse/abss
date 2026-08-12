@@ -1,5 +1,6 @@
 /**
- * ABSS Web & Mobile App Polling Notification Client Module
+ * ABSS Web & Mobile APK Polling Notification Client Module
+ * Optimized for standard Web Notifications (new Notification()) & Android Webview APKs.
  */
 (function () {
     const POLLING_INTERVAL = 30000; // 30 seconds
@@ -22,7 +23,6 @@
         if (scriptSrc) {
             return scriptSrc.replace('polling.js', 'notification.php');
         }
-        // Fallback relative to host
         const pathSegments = window.location.pathname.split('/');
         if (pathSegments.includes('abss')) {
             return window.location.origin + '/abss/notifications/notification.php';
@@ -90,19 +90,16 @@
         toast.innerHTML = html;
         container.appendChild(toast);
 
-        // Slide In
         requestAnimationFrame(function () {
             toast.style.transform = 'translateX(0)';
         });
 
-        // Close Event
         const closeBtn = toast.querySelector('.toast-close-btn');
         closeBtn.addEventListener('click', function () {
             toast.style.transform = 'translateX(120%)';
             setTimeout(function () { toast.remove(); }, 400);
         });
 
-        // Auto dismiss after 10 seconds
         setTimeout(function () {
             if (toast.parentNode) {
                 toast.style.transform = 'translateX(120%)';
@@ -116,7 +113,7 @@
         return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
 
-    // Native Browser Notification Permission Request
+    // Native Browser / Android APK Notification Permission Request
     function requestNotificationPermission() {
         if ('Notification' in window) {
             if (Notification.permission === 'default') {
@@ -140,21 +137,28 @@
                     // 1. Show In-App Toast Alert
                     showInAppToast(data);
 
-                    // 2. Trigger Native Device / Web Notification
-                    if ('Notification' in window && Notification.permission === 'granted') {
+                    // 2. Trigger Native Device / Web Notification (Mapped by Android WebView in APK)
+                    if ('Notification' in window) {
                         try {
-                            const n = new Notification(data.title, {
+                            const options = {
                                 body: data.message,
-                                icon: 'https://cdn-icons-png.flaticon.com/512/3602/3602145.png'
-                            });
+                                icon: data.icon || 'https://cdn-icons-png.flaticon.com/512/3602/3602145.png',
+                                badge: data.icon || 'https://cdn-icons-png.flaticon.com/512/3602/3602145.png',
+                                tag: 'notification-' + data.id,
+                                renotify: true
+                            };
+
+                            // Direct standard new Notification call (Captured by Web Notification engine in exported APK)
+                            const notification = new Notification(data.title, options);
+
                             if (data.url) {
-                                n.onclick = function (e) {
+                                notification.onclick = function (e) {
                                     e.preventDefault();
                                     window.open(data.url, '_blank');
                                 };
                             }
                         } catch (e) {
-                            console.warn('[ABSS App Notification] Native notification error:', e);
+                            console.warn('[ABSS App Notification] Native Web Notification error:', e);
                         }
                     }
 

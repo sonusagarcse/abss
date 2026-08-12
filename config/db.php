@@ -86,7 +86,8 @@ function runAutoMigrator($conn) {
                 message TEXT NOT NULL,
                 url VARCHAR(500) DEFAULT NULL,
                 status TINYINT(1) DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_status_id (status, id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
             // Seed settings defaults for SMTP
