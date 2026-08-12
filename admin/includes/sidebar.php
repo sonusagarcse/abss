@@ -121,6 +121,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </a>
         </li>
         <li class="nav-item">
+            <a href="notifications.php" class="nav-link <?php echo $current_page == 'notifications.php' ? 'active' : ''; ?>">
+                <i class="fas fa-bell"></i> Push Notifications
+            </a>
+        </li>
+        <li class="nav-item">
             <a href="achievers.php" class="nav-link <?php echo $current_page == 'achievers.php' ? 'active' : ''; ?>">
                 <i class="fas fa-trophy"></i> Hall of Excellence
             </a>

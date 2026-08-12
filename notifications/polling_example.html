@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Polling Notification Live Demo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background: #f1f5f9; color: #0f172a; padding: 40px 20px; }
+        .card { max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; padding: 32px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; }
+        h1 { font-size: 1.5rem; margin-bottom: 8px; color: #1e293b; }
+        p.subtitle { color: #64748b; font-size: 0.95rem; margin-bottom: 24px; }
+        
+        .status-box { background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 16px; margin-bottom: 24px; }
+        .status-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.9rem; border-bottom: 1px dashed #e2e8f0; }
+        .status-row:last-child { border-bottom: none; }
+        .val { font-weight: 600; font-family: monospace; color: #2563eb; }
+
+        .btn-group { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+        button { padding: 10px 16px; border-radius: 6px; border: none; font-weight: 600; font-size: 0.875rem; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #2563eb; color: white; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-secondary { background: #e2e8f0; color: #334155; }
+        .btn-secondary:hover { background: #cbd5e1; }
+        .btn-outline { background: transparent; border: 1px solid #cbd5e1; color: #334155; }
+
+        .log-box { background: #0f172a; color: #38bdf8; font-family: monospace; font-size: 0.85rem; padding: 16px; border-radius: 8px; max-height: 200px; overflow-y: auto; }
+        .log-line { margin-bottom: 4px; word-break: break-all; }
+        .log-time { color: #64748b; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Polling Notification Demo</h1>
+        <p class="subtitle">This page automatically polls <code>/notifications/notification.php</code> every 30 seconds.</p>
+
+        <div class="status-box">
+            <div class="status-row">
+                <span>Browser Notification Permission:</span>
+                <span id="perm-status" class="val">Checking...</span>
+            </div>
+            <div class="status-row">
+                <span>localStorage (<code>notification_last_id</code>):</span>
+                <span id="last-id-status" class="val">0</span>
+            </div>
+            <div class="status-row">
+                <span>Polling Frequency:</span>
+                <span class="val">Every 30 seconds</span>
+            </div>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn-primary" id="btn-request-perm">Enable Notifications</button>
+            <button class="btn-secondary" id="btn-poll-now">Poll API Now</button>
+            <button class="btn-outline" id="btn-reset-id">Reset last_id to 0</button>
+            <a href="admin.php" style="text-decoration:none;"><button class="btn-secondary">&larr; Open Admin Panel</button></a>
+        </div>
+
+        <h3 style="font-size: 1rem; margin-bottom: 8px;">Activity Log</h3>
+        <div class="log-box" id="log-box">
+            <div class="log-line"><span class="log-time">[System]</span> Polling script initialized...</div>
+        </div>
+    </div>
+
+    <!-- Include the Polling Script -->
+    <script src="polling.js"></script>
+
+    <script>
+        function logMsg(msg) {
+            const box = document.getElementById('log-box');
+            const time = new Date().toLocaleTimeString();
+            const div = document.createElement('div');
+            div.className = 'log-line';
+            div.innerHTML = `<span class="log-time">[${time}]</span> ${msg}`;
+            box.appendChild(div);
+            box.scrollTop = box.scrollHeight;
+        }
+
+        function updateUIState() {
+            document.getElementById('perm-status').innerText = ('Notification' in window) ? Notification.permission : 'Not Supported';
+            document.getElementById('last-id-status').innerText = localStorage.getItem('notification_last_id') || '0';
+        }
+
+        document.getElementById('btn-request-perm').addEventListener('click', function() {
+            if ('Notification' in window) {
+                Notification.requestPermission().then(function(perm) {
+                    updateUIState();
+                    logMsg('Permission requested. Current status: ' + perm);
+                });
+            }
+        });
+
+        document.getElementById('btn-poll-now').addEventListener('click', function() {
+            logMsg('Manual poll triggered...');
+            if (window.NotificationPoller) {
+                window.NotificationPoller.check();
+            }
+        });
+
+        document.getElementById('btn-reset-id').addEventListener('click', function() {
+            if (window.NotificationPoller) {
+                window.NotificationPoller.resetLastId();
+                updateUIState();
+                logMsg('last_id reset to 0.');
+            }
+        });
+
+        window.addEventListener('newNotificationReceived', function(e) {
+            logMsg(`<strong>RECEIVED NOTIFICATION:</strong> #${e.detail.id} - ${e.detail.title} (${e.detail.message})`);
+            updateUIState();
+        });
+
+        setInterval(updateUIState, 1000);
+        updateUIState();
+    </script>
+</body>
+</html>

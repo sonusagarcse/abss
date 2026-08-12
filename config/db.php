@@ -79,6 +79,16 @@ function runAutoMigrator($conn) {
                 INDEX(parent_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
             
+            // Create notifications table if not exists
+            $conn->query("CREATE TABLE IF NOT EXISTS notifications (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                url VARCHAR(500) DEFAULT NULL,
+                status TINYINT(1) DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
             // Seed settings defaults for SMTP
             $smtp_settings = [
                 'smtp_host' => '',
