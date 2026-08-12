@@ -120,5 +120,8 @@
             selector: '.glightbox'
         });
     </script>
+
+    <!-- ABSS Real-time Notification Polling Script -->
+    <script src="notifications/polling.js"></script>
 </body>
 </html>
