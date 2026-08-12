@@ -32,6 +32,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                 $_SESSION['parent_name'] = $parent['parent_name'];
                 $_SESSION['parent_email'] = $parent['email'];
                 
+                // Set persistent 1-year Remember Cookie for App & Web auto-login
+                $secret_key = defined('DB_PASS') ? DB_PASS . '_ABSS_AUTH_SECRET' : 'ABSS_AUTH_SECRET';
+                $token_hash = hash_hmac('sha256', $parent['id'] . '|' . $parent['email'], $secret_key);
+                $cookie_val = $parent['id'] . ':' . $token_hash;
+                setcookie('abss_parent_remember', $cookie_val, [
+                    'expires' => time() + 31536000, // 1 year
+                    'path' => '/',
+                    'domain' => $_SERVER['HTTP_HOST'],
+                    'secure' => isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on',
+                    'httponly' => true,
+                    'samesite' => 'Lax'
+                ]);
+
                 log_activity('login', "Parent successfully logged in");
                 
                 header("Location: ../parent/dashboard.php");

@@ -22,8 +22,14 @@ try {
     // Ensure index exists on database for sub-millisecond execution
     @$db->query("ALTER TABLE notifications ADD INDEX idx_status_id (status, id)");
 
-    $stmt = $db->prepare("SELECT id, title, message, url, created_at FROM notifications WHERE status = 1 AND id > ? ORDER BY id ASC LIMIT 1");
-    $stmt->bind_param("i", $last_id);
+    if ($last_id === 0) {
+        // Initial sync: Fetch the latest active notification directly to set baseline last_id
+        $stmt = $db->prepare("SELECT id, title, message, url, created_at FROM notifications WHERE status = 1 ORDER BY id DESC LIMIT 1");
+    } else {
+        // Incremental poll: Fetch next notification with id > last_id
+        $stmt = $db->prepare("SELECT id, title, message, url, created_at FROM notifications WHERE status = 1 AND id > ? ORDER BY id ASC LIMIT 1");
+        $stmt->bind_param("i", $last_id);
+    }
     $stmt->execute();
     $result = $stmt->get_result();
 

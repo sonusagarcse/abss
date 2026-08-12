@@ -10,6 +10,9 @@ if (isset($_SESSION['admin_id'])) {
     log_activity('logout', "Parent logged out");
 }
 
+if (isset($_COOKIE['abss_parent_remember'])) {
+    setcookie('abss_parent_remember', '', time() - 3600, '/');
+}
 session_destroy();
 header("Location: login.php");
 exit();

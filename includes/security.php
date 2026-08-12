@@ -8,18 +8,23 @@ header("X-XSS-Protection: 1; mode=block");
 // Prevent MIME-sniffing
 header("X-Content-Type-Options: nosniff");
 
-// Start secure sessions
+// Start secure sessions with 1-year persistence for Web & App
 if (session_status() === PHP_SESSION_NONE) {
+    // 1 Year Session Lifetime (31536000 seconds)
+    $oneYear = 31536000;
+    @ini_set('session.gc_maxlifetime', $oneYear);
+    @ini_set('session.cookie_lifetime', $oneYear);
+
     // Determine if HTTPS is used
     $isSecure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
     
     session_set_cookie_params([
-        'lifetime' => defined('SESSION_LIFETIME') ? SESSION_LIFETIME : 86400,
+        'lifetime' => $oneYear,
         'path' => '/',
         'domain' => $_SERVER['HTTP_HOST'],
         'secure' => $isSecure,
         'httponly' => true,
-        'samesite' => 'Strict'
+        'samesite' => 'Lax'
     ]);
     session_start();
 }

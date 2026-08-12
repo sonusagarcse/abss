@@ -124,15 +124,42 @@
         }
     }
 
+    // Dual Persistence Helpers (LocalStorage + Cookie) to prevent WebView data loss
+    function setStoredLastId(id) {
+        if (!id) return;
+        try { localStorage.setItem('notification_last_id', id); } catch (e) {}
+        try { document.cookie = "notification_last_id=" + id + "; path=/; max-age=31536000; SameSite=Lax"; } catch (e) {}
+    }
+
+    function getStoredLastId() {
+        let id = 0;
+        try {
+            const local = localStorage.getItem('notification_last_id');
+            if (local && !isNaN(parseInt(local, 10))) {
+                id = parseInt(local, 10);
+            }
+        } catch (e) {}
+        if (id <= 0) {
+            try {
+                const match = document.cookie.match(/(?:^|; )notification_last_id=([^;]*)/);
+                if (match) {
+                    const cookieVal = parseInt(decodeURIComponent(match[1]), 10);
+                    if (!isNaN(cookieVal) && cookieVal > 0) id = cookieVal;
+                }
+            } catch (e) {}
+        }
+        return id;
+    }
+
     // Main Polling Engine
     function checkNotifications() {
-        const lastId = localStorage.getItem('notification_last_id') || 0;
+        const lastId = getStoredLastId();
 
         fetch(`${API_URL}?last_id=${lastId}`)
             .then(function (res) { return res.json(); })
             .then(function (data) {
-                if (data && data.status === true) {
-                    console.log('[ABSS App Notification] New notification:', data);
+                if (data && data.status === true && data.id) {
+                    const isFirstSync = (lastId === 0);
 
                     // 1. Show In-App Toast Alert
                     showInAppToast(data);
@@ -145,10 +172,9 @@
                                 icon: data.icon || 'https://cdn-icons-png.flaticon.com/512/3602/3602145.png',
                                 badge: data.icon || 'https://cdn-icons-png.flaticon.com/512/3602/3602145.png',
                                 tag: 'notification-' + data.id,
-                                renotify: true
+                                renotify: false
                             };
 
-                            // Direct standard new Notification call (Captured by Web Notification engine in exported APK)
                             const notification = new Notification(data.title, options);
 
                             if (data.url) {
@@ -162,8 +188,8 @@
                         }
                     }
 
-                    // Update last_id
-                    localStorage.setItem('notification_last_id', data.id);
+                    // Store last_id in both LocalStorage & 1-Year Cookie immediately
+                    setStoredLastId(data.id);
 
                     // Fire Custom DOM Event
                     window.dispatchEvent(new CustomEvent('abssNotificationReceived', { detail: data }));
