@@ -1,11 +1,13 @@
 /**
- * ABSS Web & Mobile APK Polling Notification Client Module
- * Optimized for standard Web Notifications (new Notification()) & Android Webview APKs.
+ * ABSS Perfected Real-Time Notification & Polling Engine
+ * Compatible with Web Browsers, Mobile Web PWAs & Android Webview APKs.
  */
 (function () {
-    const POLLING_INTERVAL = 30000; // 30 seconds
+    'use strict';
 
-    // Calculate Absolute API URL dynamically based on script location or domain
+    const POLLING_INTERVAL = 25000; // 25 seconds for sub-minute real-time delivery
+
+    // Calculate Absolute API Endpoint URL
     function getApiUrl() {
         let scriptSrc = '';
         if (document.currentScript && document.currentScript.src) {
@@ -32,6 +34,33 @@
 
     const API_URL = getApiUrl();
 
+    // Web Audio API Synthetic Chime Generator (No external audio file needed!)
+    function playNotificationChime() {
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return;
+            const ctx = new AudioContext();
+            
+            const osc1 = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+            
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
+            osc1.frequency.setValueAtTime(880, ctx.currentTime + 0.1); // A5
+            
+            gain1.gain.setValueAtTime(0.15, ctx.currentTime);
+            gain1.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+            
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+            
+            osc1.start(ctx.currentTime);
+            osc1.stop(ctx.currentTime + 0.5);
+        } catch (e) {
+            // Audio context gesture restrictions fallback silently
+        }
+    }
+
     // In-App Toast Container Setup
     function createToastContainer() {
         let container = document.getElementById('abss-notification-toast-container');
@@ -40,72 +69,102 @@
             container.id = 'abss-notification-toast-container';
             container.setAttribute('style', `
                 position: fixed;
-                top: 20px;
-                right: 20px;
+                top: 25px;
+                right: 25px;
                 z-index: 999999;
                 display: flex;
                 flex-direction: column;
                 gap: 12px;
-                max-width: 380px;
-                width: calc(100% - 40px);
+                max-width: 400px;
+                width: calc(100% - 50px);
                 pointer-events: none;
+                font-family: 'Outfit', 'Segoe UI', sans-serif;
             `);
             document.body.appendChild(container);
         }
         return container;
     }
 
-    // Display In-App Popup Banner
+    // Category Icon Resolver
+    function getCategoryBadge(category) {
+        switch(category) {
+            case 'fee':
+                return { bg: '#fef3c7', color: '#d97706', icon: '💳', border: '#f59e0b' };
+            case 'academic':
+                return { bg: '#eff6ff', color: '#2563eb', icon: '🎓', border: '#2563eb' };
+            case 'admission':
+                return { bg: '#f0fdf4', color: '#16a34a', icon: '🌟', border: '#22c55e' };
+            default:
+                return { bg: '#eff6ff', color: '#2563eb', icon: '🔔', border: '#3b82f6' };
+        }
+    }
+
+    // Display Modern Glassmorphic In-App Toast
     function showInAppToast(data) {
         const container = createToastContainer();
+        const badge = getCategoryBadge(data.category);
+
         const toast = document.createElement('div');
         toast.setAttribute('style', `
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
             color: #0f172a;
-            border-left: 5px solid #2563eb;
-            border-radius: 12px;
-            padding: 16px;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-            font-family: 'Outfit', 'Inter', -apple-system, sans-serif;
+            border-left: 5px solid ${badge.border};
+            border-radius: 16px;
+            padding: 16px 18px;
+            box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.2), 0 8px 16px -6px rgba(0, 0, 0, 0.08);
             pointer-events: auto;
             transform: translateX(120%);
-            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
             position: relative;
+            overflow: hidden;
+            border-top: 1px solid rgba(226, 232, 240, 0.8);
+            border-right: 1px solid rgba(226, 232, 240, 0.8);
+            border-bottom: 1px solid rgba(226, 232, 240, 0.8);
         `);
 
         let html = `
-            <div style="display: flex; align-items: flex-start; gap: 12px;">
-                <div style="background: #eff6ff; color: #2563eb; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-weight: bold;">
-                    🔔
+            <div style="display: flex; align-items: flex-start; gap: 14px;">
+                <div style="background: ${badge.bg}; color: ${badge.color}; width: 42px; height: 42px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 1.2rem; font-weight: bold;">
+                    ${badge.icon}
                 </div>
-                <div style="flex: 1; padding-right: 18px;">
-                    <div style="font-weight: 700; font-size: 0.95rem; color: #1e293b; margin-bottom: 4px;">${escapeHtml(data.title)}</div>
-                    <div style="font-size: 0.85rem; color: #475569; line-height: 1.4;">${escapeHtml(data.message)}</div>
-                    ${data.url ? `<a href="${escapeHtml(data.url)}" target="_blank" style="display: inline-block; margin-top: 10px; font-size: 0.8rem; font-weight: 700; color: #2563eb; text-decoration: none;">View Detail &rarr;</a>` : ''}
+                <div style="flex: 1; padding-right: 15px;">
+                    <div style="font-weight: 800; font-size: 0.95rem; color: #0f172a; margin-bottom: 3px; line-height: 1.2;">${escapeHtml(data.title)}</div>
+                    <div style="font-size: 0.84rem; color: #475569; line-height: 1.45; font-weight: 500;">${escapeHtml(data.message)}</div>
+                    ${data.url ? `<a href="${escapeHtml(data.url)}" target="_blank" style="display: inline-flex; align-items: center; gap: 4px; margin-top: 10px; font-size: 0.8rem; font-weight: 800; color: #2563eb; text-decoration: none;">View Notice Details &rarr;</a>` : ''}
                 </div>
-                <button type="button" class="toast-close-btn" style="position: absolute; top: 12px; right: 12px; background: transparent; border: none; font-size: 1.2rem; line-height: 1; color: #94a3b8; cursor: pointer; padding: 2px;">&times;</button>
+                <button type="button" class="toast-close-btn" style="position: absolute; top: 12px; right: 12px; background: transparent; border: none; font-size: 1.2rem; line-height: 1; color: #94a3b8; cursor: pointer; padding: 2px;" aria-label="Close">&times;</button>
             </div>
+            <div class="toast-progress-bar" style="position: absolute; bottom: 0; left: 0; height: 3px; background: ${badge.border}; width: 100%; transition: width 9s linear;"></div>
         `;
 
         toast.innerHTML = html;
         container.appendChild(toast);
 
+        // Play chime sound
+        playNotificationChime();
+
         requestAnimationFrame(function () {
             toast.style.transform = 'translateX(0)';
+            setTimeout(function() {
+                const bar = toast.querySelector('.toast-progress-bar');
+                if (bar) bar.style.width = '0%';
+            }, 100);
         });
 
         const closeBtn = toast.querySelector('.toast-close-btn');
         closeBtn.addEventListener('click', function () {
             toast.style.transform = 'translateX(120%)';
-            setTimeout(function () { toast.remove(); }, 400);
+            setTimeout(function () { toast.remove(); }, 450);
         });
 
         setTimeout(function () {
             if (toast.parentNode) {
                 toast.style.transform = 'translateX(120%)';
-                setTimeout(function () { toast.remove(); }, 400);
+                setTimeout(function () { toast.remove(); }, 450);
             }
-        }, 10000);
+        }, 9000);
     }
 
     function escapeHtml(str) {
@@ -113,18 +172,22 @@
         return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
     }
 
-    // Native Browser / Android APK Notification Permission Request
+    // Request Browser Notification Permission on User Gesture
     function requestNotificationPermission() {
-        if ('Notification' in window) {
-            if (Notification.permission === 'default') {
+        if ('Notification' in window && Notification.permission === 'default') {
+            const handleGesture = function() {
                 Notification.requestPermission().then(function (permission) {
-                    console.log('[ABSS App Notification] Permission:', permission);
+                    console.log('[ABSS App Notification] Permission granted:', permission);
                 });
-            }
+                window.removeEventListener('click', handleGesture);
+                window.removeEventListener('touchstart', handleGesture);
+            };
+            window.addEventListener('click', handleGesture, { once: true });
+            window.addEventListener('touchstart', handleGesture, { once: true });
         }
     }
 
-    // Dual Persistence Helpers (LocalStorage + Cookie) to prevent WebView data loss
+    // Dual Persistence Helpers (LocalStorage + Cookie fallback)
     function setStoredLastId(id) {
         if (!id) return;
         try { localStorage.setItem('notification_last_id', id); } catch (e) {}
@@ -151,7 +214,7 @@
         return id;
     }
 
-    // Main Polling Engine
+    // Main Notification Polling Routine
     function checkNotifications() {
         const lastId = getStoredLastId();
 
@@ -159,20 +222,25 @@
             .then(function (res) { return res.json(); })
             .then(function (data) {
                 if (data && data.status === true && data.id) {
-                    const isFirstSync = (lastId === 0);
+                    
+                    // If is_baseline is true (initial page visit with last_id=0), set baseline silently
+                    if (data.is_baseline && lastId === 0) {
+                        setStoredLastId(data.id);
+                        return;
+                    }
 
-                    // 1. Show In-App Toast Alert
+                    // Otherwise, a NEW notification has arrived!
                     showInAppToast(data);
 
-                    // 2. Trigger Native Device / Web Notification (Mapped by Android WebView in APK)
-                    if ('Notification' in window) {
+                    // Trigger System / Device Notification
+                    if ('Notification' in window && Notification.permission === 'granted') {
                         try {
                             const options = {
                                 body: data.message,
-                                icon: data.icon || 'https://cdn-icons-png.flaticon.com/512/3602/3602145.png',
-                                badge: data.icon || 'https://cdn-icons-png.flaticon.com/512/3602/3602145.png',
-                                tag: 'notification-' + data.id,
-                                renotify: false
+                                icon: data.icon || 'assets/logo.png',
+                                badge: data.icon || 'assets/logo.png',
+                                tag: 'abss-notif-' + data.id,
+                                renotify: true
                             };
 
                             const notification = new Notification(data.title, options);
@@ -184,23 +252,23 @@
                                 };
                             }
                         } catch (e) {
-                            console.warn('[ABSS App Notification] Native Web Notification error:', e);
+                            console.warn('[ABSS Notification] Device Notification Notice:', e);
                         }
                     }
 
-                    // Store last_id in both LocalStorage & 1-Year Cookie immediately
+                    // Persist new last_id immediately
                     setStoredLastId(data.id);
 
-                    // Fire Custom DOM Event
+                    // Dispatch Custom DOM Event for custom page handlers
                     window.dispatchEvent(new CustomEvent('abssNotificationReceived', { detail: data }));
                 }
             })
             .catch(function (err) {
-                console.error('[ABSS App Notification] Polling error:', err);
+                console.error('[ABSS Notification] Polling error:', err);
             });
     }
 
-    // Initialize module
+    // Initialize notification engine
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () {
             requestNotificationPermission();
@@ -213,12 +281,13 @@
         setInterval(checkNotifications, POLLING_INTERVAL);
     }
 
-    // Global Access
+    // Global Controller Object
     window.ABSSNotificationApp = {
         checkNow: checkNotifications,
         resetLastId: function () {
             localStorage.setItem('notification_last_id', 0);
-            console.log('[ABSS App Notification] last_id reset to 0');
+            document.cookie = "notification_last_id=0; path=/; max-age=0";
+            console.log('[ABSS Notification] Baseline last_id reset to 0');
         }
     };
 })();
