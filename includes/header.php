@@ -26,6 +26,11 @@ if (defined('APP_URL')) {
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/glightbox/dist/css/glightbox.min.css" />
     <link rel="stylesheet" href="css/style.css?v=<?php echo time(); ?>">
     <link rel="manifest" href="app/manifest.json">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="ABSS App">
+    <link rel="apple-touch-icon" href="assets/logo.png">
     <style>
         .top-utility-bar {
             background: #0f172a;

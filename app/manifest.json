@@ -1,28 +1,28 @@
 {
-  "id": "/app/",
-  "name": "ABSS",
-  "short_name": "ABSS",
-  "description": "Monitor Your child Progress",
-  "lang": "en-US",
+  "id": "abss-parent-pwa",
+  "name": "Awasiya Bal Shikshan Sansthan",
+  "short_name": "ABSS App",
+  "description": "Official Parent Portal & Mobile App for Awasiya Bal Shikshan Sansthan",
+  "lang": "en-IN",
   "dir": "ltr",
   "display": "standalone",
-  "scope": "/abss/app/",
-  "start_url": "/abss/app/index.php",
-  "orientation": "any",
-  "background_color": "#ffffff",
-  "theme_color": "#6366f1",
+  "start_url": "index.php",
+  "scope": "./",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
   "icons": [
     {
-      "src": "assets/icon-192.png",
+      "src": "../assets/logo.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
-      "src": "assets/icon-512.png",
+      "src": "../assets/logo.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }

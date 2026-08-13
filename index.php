@@ -260,9 +260,14 @@ include 'includes/header.php';
             $achievers_query = $conn->query("SELECT * FROM achievers ORDER BY created_at DESC LIMIT 6");
             if ($achievers_query && $achievers_query->num_rows > 0):
                 while ($achiever = $achievers_query->fetch_assoc()): ?>
-                    <div style="background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.03); text-align: center; padding-bottom: 20px;">
-                        <div style="height: 200px; overflow: hidden; background: #f1f5f9;">
-                            <img src="<?php echo htmlspecialchars($achiever['image_path']); ?>" alt="<?php echo htmlspecialchars($achiever['name']); ?>" style="width: 100%; height: 100%; object-fit: cover;">
+                    <div style="background: #ffffff; border-radius: 20px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.03); text-align: center; padding-bottom: 20px; transition: transform 0.3s ease;">
+                        <div style="height: 220px; overflow: hidden; background: #f1f5f9; position: relative;">
+                            <a href="<?php echo htmlspecialchars($achiever['image_path']); ?>" class="glightbox" data-gallery="achievers" data-title="<?php echo htmlspecialchars($achiever['name']); ?> - <?php echo htmlspecialchars($achiever['target_school']); ?> (Batch <?php echo htmlspecialchars($achiever['batch_year']); ?>)" style="display: block; width: 100%; height: 100%;">
+                                <img src="<?php echo htmlspecialchars($achiever['image_path']); ?>" alt="<?php echo htmlspecialchars($achiever['name']); ?>" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease;">
+                                <div style="position: absolute; inset: 0; background: rgba(15, 23, 42, 0.35); opacity: 0; transition: opacity 0.3s ease; display: flex; align-items: center; justify-content: center; color: #ffffff; font-size: 1.5rem;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0'">
+                                    <i class="fas fa-search-plus"></i>
+                                </div>
+                            </a>
                         </div>
                         <div style="padding: 15px 15px 0 15px;">
                             <h3 style="margin: 0 0 4px 0; font-size: 1.1rem; color: #0f172a; font-weight: 800;"><?php echo htmlspecialchars($achiever['name']); ?></h3>

@@ -113,7 +113,7 @@ include 'includes/header.php';
                                     </div>
                                 </div>
 
-                                <div class="adm-field-group" style="margin-bottom: 15px;">
+                                <div  class="adm-field-group" style="margin-bottom: 15px;">
                                     <label class="adm-label">Student Full Name <span style="color:#ef4444;">*</span></label>
                                     <input type="text" name="student_name" class="adm-input" placeholder="Rahul Kumar" required>
                                 </div>
