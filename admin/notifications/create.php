@@ -24,13 +24,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
             $failed_count = 0;
             $cleaned_tokens = 0;
 
-            // 1. BROADCAST TO FIREBASE TOPIC 'all' (Matches Firebase Console Broadcast to ALL installed Android APKs!)
+            // 1. BROADCAST TO ALL FIREBASE TOPICS (all, global, news, notice, android)
+            // Matches Firebase Console Broadcast to ALL installed Android APKs 100%!
             if ($target === 'all') {
-                $topicResultAll = sendTopicFcmNotification('all', $title, $message, $image, $url, $category);
-                $topicResultGlobal = sendTopicFcmNotification('global', $title, $message, $image, $url, $category);
-                if ($topicResultAll['success'] || $topicResultGlobal['success']) {
-                    $sent_count++;
-                }
+                broadcastFcmCampaignToAllTopics($title, $message, $image, $url, $category);
+                $sent_count++;
             }
 
             // 2. DISPATCH TO SPECIFIC OR STORED DEVICE TOKENS IN DATABASE

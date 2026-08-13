@@ -55,13 +55,10 @@ try {
     $failed_count = 0;
     $cleaned_tokens = 0;
 
-    // 1. BROADCAST TO FIREBASE TOPIC 'all' & 'global' (Delivers push to ALL Shiaho WebToApp Android apps instantly!)
+    // 1. BROADCAST TO ALL FIREBASE TOPICS (all, global, news, notice, android)
     if (empty($selected_tokens)) {
-        $t1 = sendTopicFcmNotification($target_topic ?: 'all', $title, $message, $image, $url, $category);
-        $t2 = sendTopicFcmNotification('global', $title, $message, $image, $url, $category);
-        if ($t1['success'] || $t2['success']) {
-            $sent_count++;
-        }
+        broadcastFcmCampaignToAllTopics($title, $message, $image, $url, $category);
+        $sent_count++;
     }
 
     // 2. DISPATCH TO SPECIFIC TOKENS IN DATABASE

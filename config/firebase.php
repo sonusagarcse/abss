@@ -117,11 +117,17 @@ function sendFcmNotificationCore($target, $title, $body, $image = null, $url = n
     $projectId = getFirebaseProjectId();
     $endpoint = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
 
-    // Standard FCM HTTP v1 message structure matching Firebase Console Compose Campaign
+    // Clean topic format: if topic string starts with /topics/, strip prefix for HTTP v1 topic key
     $targetKey = $isTopic ? "topic" : "token";
+    $cleanTarget = $target;
+    if ($isTopic && strpos($cleanTarget, '/topics/') === 0) {
+        $cleanTarget = str_replace('/topics/', '', $cleanTarget);
+    }
+
+    // Standard FCM HTTP v1 message structure matching Firebase Console Compose Campaign
     $messagePayload = [
         "message" => [
-            $targetKey => $target,
+            $targetKey => $cleanTarget,
             "notification" => [
                 "title" => $title,
                 "body" => $body
@@ -197,8 +203,23 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
 }
 
 /**
- * Dispatch FCM Notification to Topic (Matches Firebase Console Broadcast to All App Users)
+ * Dispatch FCM Notification to Topic
  */
 function sendTopicFcmNotification($topicName, $title, $body, $image = null, $url = null, $category = 'General') {
     return sendFcmNotificationCore($topicName, $title, $body, $image, $url, $category, true);
+}
+
+/**
+ * Broadcast FCM Campaign across all standard Shiaho WebToApp Android APK topics
+ */
+function broadcastFcmCampaignToAllTopics($title, $body, $image = null, $url = null, $category = 'General') {
+    $topics = ['all', 'global', 'news', 'notice', 'android'];
+    $successes = 0;
+    foreach ($topics as $t) {
+        $res = sendTopicFcmNotification($t, $title, $body, $image, $url, $category);
+        if (!empty($res['success'])) {
+            $successes++;
+        }
+    }
+    return $successes > 0;
 }
