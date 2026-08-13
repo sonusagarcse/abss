@@ -292,8 +292,7 @@
         });
     </script>
 
-    <!-- ABSS Real-time Notification Polling & FCM Client Scripts -->
-    <script src="notifications/polling.js"></script>
+    <!-- Firebase FCM Notification Client Script -->
     <script src="js/fcm-client.js"></script>
 </body>
 </html>

@@ -107,13 +107,7 @@ try {
         $conn->query("DELETE FROM fcm_tokens WHERE id IN ($idsStr)");
     }
 
-    // 3. BROADCAST TO LIVE WEBSITE NOTIFICATION FEED
-    $webNotifStmt = $conn->prepare("INSERT INTO notifications (title, message, url, status) VALUES (?, ?, ?, 1)");
-    $webNotifStmt->bind_param("sss", $title, $message, $url);
-    $webNotifStmt->execute();
-    $webNotifStmt->close();
-
-    // 4. RECORD CAMPAIGN LOG IN NOTIFICATION_HISTORY
+    // 3. RECORD CAMPAIGN LOG IN NOTIFICATION_HISTORY
     $targetAudience = !empty($selected_tokens) ? 'Selected Tokens (' . count($tokens) . ')' : 'All App Users (FCM Topic ' . $target_topic . ')';
     $totalSentLog = max(1, $sent_count);
     $histStmt = $conn->prepare("
@@ -127,7 +121,7 @@ try {
 
     echo json_encode([
         'status' => true,
-        'message' => 'FCM Notification broadcasted successfully to all Android app users & live website feed.',
+        'message' => 'FCM Push Notification broadcasted successfully via Firebase Cloud Messaging.',
         'history_id' => $historyId,
         'sent_count' => $totalSentLog,
         'failed_count' => $failed_count,

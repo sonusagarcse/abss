@@ -77,14 +77,8 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
                 $conn->query("DELETE FROM fcm_tokens WHERE id IN ($idsStr)");
             }
 
-            // 3. BROADCAST TO LIVE WEBSITE NOTIFICATION FEED
-            $webNotifStmt = $conn->prepare("INSERT INTO notifications (title, message, url, status) VALUES (?, ?, ?, 1)");
-            $webNotifStmt->bind_param("sss", $title, $message, $url);
-            $webNotifStmt->execute();
-            $webNotifStmt->close();
-
-            // 4. RECORD CAMPAIGN LOG IN NOTIFICATION_HISTORY
-            $targetAudience = ($target === 'selected' && !empty($selected_tokens)) ? 'Selected Tokens (' . count($tokens) . ')' : 'All App Users (FCM Topic all)';
+            // RECORD CAMPAIGN LOG IN NOTIFICATION_HISTORY
+            $targetAudience = ($target === 'selected' && !empty($selected_tokens)) ? 'Selected Tokens (' . count($tokens) . ')' : 'All App Users (FCM Broadcast Topic)';
             $totalSentLog = max(1, $sent_count);
             $histStmt = $conn->prepare("
                 INSERT INTO notification_history (title, message, image, url, category, target_audience, sent_count, failed_count) 
@@ -94,7 +88,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
             $histStmt->execute();
             $histStmt->close();
 
-            $successMsg = "Push Notification dispatched successfully to all Android App users (FCM Topic 'all') & live website feed.";
+            $successMsg = "Push Notification broadcasted successfully to all Android App users via Firebase Cloud Messaging.";
             if ($cleaned_tokens > 0) {
                 $successMsg .= " ($cleaned_tokens invalid token(s) cleaned)";
             }
