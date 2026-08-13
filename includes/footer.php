@@ -292,7 +292,8 @@
         });
     </script>
 
-    <!-- ABSS Real-time Notification Polling Script -->
+    <!-- ABSS Real-time Notification Polling & FCM Client Scripts -->
     <script src="notifications/polling.js"></script>
+    <script src="js/fcm-client.js"></script>
 </body>
 </html>

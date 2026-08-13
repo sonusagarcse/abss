@@ -35,6 +35,30 @@ function runAutoMigrator($conn) {
         $prev_report = $driver->report_mode;
         $driver->report_mode = MYSQLI_REPORT_OFF;
 
+        // 0. Ensure FCM Notification tables exist unconditionally
+        $conn->query("CREATE TABLE IF NOT EXISTS fcm_tokens (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            token VARCHAR(255) NOT NULL UNIQUE,
+            device_type VARCHAR(50) DEFAULT 'android',
+            app_version VARCHAR(20) DEFAULT '1.0.0',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_token (token)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $conn->query("CREATE TABLE IF NOT EXISTS notification_history (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            message TEXT NOT NULL,
+            image VARCHAR(500) DEFAULT NULL,
+            url VARCHAR(500) DEFAULT NULL,
+            category VARCHAR(50) DEFAULT 'General',
+            target_audience VARCHAR(50) DEFAULT 'All Users',
+            sent_count INT DEFAULT 0,
+            failed_count INT DEFAULT 0,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
         // 1. Check and upgrade Parent and Billing ledgers
         $check = $conn->query("SHOW COLUMNS FROM students LIKE 'parent_id'");
         if ($check && $check->num_rows == 0) {
@@ -88,6 +112,31 @@ function runAutoMigrator($conn) {
                 status TINYINT(1) DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_status_id (status, id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Create fcm_tokens table
+            $conn->query("CREATE TABLE IF NOT EXISTS fcm_tokens (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                token VARCHAR(255) NOT NULL UNIQUE,
+                device_type VARCHAR(50) DEFAULT 'android',
+                app_version VARCHAR(20) DEFAULT '1.0.0',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_token (token)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            // Create notification_history table
+            $conn->query("CREATE TABLE IF NOT EXISTS notification_history (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                image VARCHAR(500) DEFAULT NULL,
+                url VARCHAR(500) DEFAULT NULL,
+                category VARCHAR(50) DEFAULT 'General',
+                target_audience VARCHAR(50) DEFAULT 'All Users',
+                sent_count INT DEFAULT 0,
+                failed_count INT DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
             // Seed settings defaults for SMTP
