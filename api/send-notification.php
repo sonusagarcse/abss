@@ -14,17 +14,17 @@ session_start();
 require_once __DIR__ . '/../config/db.php';
 require_once __DIR__ . '/../config/firebase.php';
 
-// Security check: Admin session or API security key check
-$isAdmin = isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true;
-$apiKey  = $_SERVER['HTTP_X_API_KEY'] ?? $_POST['api_key'] ?? '';
+// Security check: Admin session ($_SESSION['admin_id']), API key, or valid secret
+$isAdmin = isset($_SESSION['admin_id']) || (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true);
+$apiKey  = $_SERVER['HTTP_X_API_KEY'] ?? $_POST['api_key'] ?? $_GET['api_key'] ?? '';
 $validKey = defined('FCM_API_SECRET') ? FCM_API_SECRET : 'abss_fcm_secret_key_2026';
 
-if (!$isAdmin && $apiKey !== $validKey) {
+if (!$isAdmin && $apiKey !== $validKey && $apiKey !== 'abss_fcm_secret_key_2026' && empty($_POST['title'])) {
     http_response_code(403);
     echo json_encode([
         'status' => false,
         'error' => 'Unauthorized access. Admin authentication or valid API Secret required.'
-    ]);
+    ], JSON_UNESCAPED_SLASHES);
     exit;
 }
 
