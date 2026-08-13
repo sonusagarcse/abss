@@ -10,7 +10,6 @@ function getFirebaseServiceAccountPath() {
     if (file_exists($path)) {
         return $path;
     }
-    // Fallback check in parent directories
     $fallback = __DIR__ . '/../service-account.json';
     if (file_exists($fallback)) {
         return $fallback;
@@ -19,8 +18,7 @@ function getFirebaseServiceAccountPath() {
 }
 
 /**
- * Generate OAuth 2.0 Access Token for Firebase HTTP v1 API using Pure PHP JWT Signing (No Composer Required)
- * Works natively on cPanel shared hosting with PHP 8.x + OpenSSL extension.
+ * Generate OAuth 2.0 Access Token for Firebase HTTP v1 API using Pure PHP JWT Signing
  */
 function getFirebaseAccessToken() {
     if (isset($_SESSION['fcm_access_token']) && isset($_SESSION['fcm_access_token_expires']) && $_SESSION['fcm_access_token_expires'] > time()) {
@@ -29,7 +27,7 @@ function getFirebaseAccessToken() {
 
     $saPath = getFirebaseServiceAccountPath();
     if (!$saPath) {
-        throw new Exception("Firebase Service Account JSON file (config/service-account.json) is missing. Please download it from Firebase Console -> Project Settings -> Service Accounts -> 'Generate New Private Key' and upload it to config/service-account.json");
+        throw new Exception("Firebase Service Account JSON file (config/service-account.json) is missing. Upload service-account.json to config/ directory.");
     }
 
     $saData = json_decode(file_get_contents($saPath), true);
@@ -62,7 +60,6 @@ function getFirebaseAccessToken() {
     $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
     $jwt = $signatureInput . "." . $base64UrlSignature;
 
-    // Exchange JWT assertion for OAuth 2.0 Access Token
     $ch = curl_init('https://oauth2.googleapis.com/token');
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_POST, true);
@@ -88,14 +85,11 @@ function getFirebaseAccessToken() {
     }
 
     $_SESSION['fcm_access_token'] = $tokenData['access_token'];
-    $_SESSION['fcm_access_token_expires'] = time() + 3300; // Cache for 55 minutes
+    $_SESSION['fcm_access_token_expires'] = time() + 3300;
 
     return $tokenData['access_token'];
 }
 
-/**
- * Get Firebase Project ID from Service Account JSON or fallback
- */
 function getFirebaseProjectId() {
     $saPath = getFirebaseServiceAccountPath();
     if ($saPath) {
@@ -106,7 +100,7 @@ function getFirebaseProjectId() {
 }
 
 /**
- * Dispatch single FCM HTTP v1 Message to device token
+ * Dispatch single FCM HTTP v1 Message for Android WebToApp APK (Delivers Push even when App is CLOSED)
  */
 function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $url = null, $category = 'General') {
     try {
@@ -123,7 +117,7 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
     $projectId = getFirebaseProjectId();
     $endpoint = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
 
-    // Optimized FCM HTTP v1 payload specifically structured for Shiaho WebToApp v2.4.3 & Android Native Push Receivers
+    // Standard high-priority payload for Shiaho WebToApp / Android APK background delivery
     $messagePayload = [
         "message" => [
             "token" => $targetToken,
@@ -133,15 +127,16 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
             ],
             "android" => [
                 "priority" => "HIGH",
-                "direct_boot_ok" => true,
+                "ttl" => "86400s",
                 "notification" => [
                     "title" => $title,
                     "body" => $body,
                     "sound" => "default",
-                    "color" => "#2563eb",
-                    "channel_id" => "high_importance_channel",
-                    "click_action" => "FLUTTER_NOTIFICATION_CLICK",
-                    "notification_priority" => "PRIORITY_MAX"
+                    "default_sound" => true,
+                    "default_vibrate_timings" => true,
+                    "default_light_settings" => true,
+                    "notification_priority" => "PRIORITY_MAX",
+                    "visibility" => "PUBLIC"
                 ]
             ],
             "data" => [
@@ -177,7 +172,7 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
         'Authorization: Bearer ' . $accessToken,
         'Content-Type: application/json; UTF-8'
     ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 12);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 
     $response = curl_exec($ch);
@@ -190,7 +185,6 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
         return ['success' => true, 'name' => $resData['name'], 'response' => $resData];
     }
 
-    // Detect un-registered or expired tokens
     $isUnregistered = false;
     if (isset($resData['error']['details'])) {
         foreach ($resData['error']['details'] as $detail) {
