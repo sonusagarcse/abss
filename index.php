@@ -40,7 +40,7 @@ include 'includes/header.php';
                         <i class="fas fa-file-pdf"></i> Download Prospectus
                     </a>
 
-                    <a href="app/index.php" class="hero-cta-btn btn-app-download">
+                    <a href="app/index" class="hero-cta-btn btn-app-download">
                         <i class="fab fa-android"></i> Download App
                     </a>
                 </div>
