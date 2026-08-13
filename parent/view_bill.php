@@ -1,5 +1,5 @@
 <?php
-// parent/view_bill.php - Professional Parent Fee Invoice View
+// parent/view_bill.php - Professional Parent Fee Invoice View with Mobile Responsiveness & Razorpay Integration
 require_once 'includes/auth.php';
 
 $pid = (int)$_SESSION['parent_id'];
@@ -12,7 +12,7 @@ $bill_id = (int)$_GET['id'];
 
 // Fetch bill details with student scholar mode & class admitted
 $stmt = $conn->prepare("
-    SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, p.parent_name, p.phone
+    SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, p.parent_name, p.phone, p.email as parent_email
     FROM fees_generated fg
     JOIN students s ON fg.student_id = s.id
     LEFT JOIN parents p ON s.parent_id = p.id
@@ -31,6 +31,9 @@ $school_name = $settings['school_name'] ?? 'Awasiya Bal Shikshan Sansthan';
 $school_address = $settings['address'] ?? 'Lok Kala Bhavan, Gewalganj, Imamganj, Gaya, Bihar 824206';
 $school_phone = $settings['phone'] ?? '+91 9523012888';
 $school_email = $settings['email'] ?? 'abssimamganj@gmail.com';
+
+// Razorpay Key Configuration
+$razorpay_key = $settings['razorpay_key_id'] ?? 'rzp_test_abss1234567890';
 
 // Function to convert amount to words
 function amountToWords($number) {
@@ -79,28 +82,32 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
     <title>Fee Invoice - <?php echo $invoice_no; ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
     <style>
-        body { font-family: 'Outfit', sans-serif; background: #525659; margin: 0; padding: 30px 0; -webkit-print-color-adjust: exact; }
+        body { font-family: 'Outfit', sans-serif; background: #525659; margin: 0; padding: 20px 10px; -webkit-print-color-adjust: exact; }
         
-        .control-bar { max-width: 800px; margin: 0 auto 20px; background: #fff; padding: 15px 30px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .btn-control { text-decoration: none; font-weight: 700; font-size: 0.9rem; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: inherit; transition: 0.3s; }
+        .control-bar { max-width: 800px; margin: 0 auto 20px; background: #fff; padding: 15px 25px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); flex-wrap: wrap; gap: 12px; }
+        .btn-control { text-decoration: none; font-weight: 700; font-size: 0.9rem; padding: 10px 18px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: inherit; transition: 0.3s; }
         .btn-back { background: #f0f4f8; color: #1a237e; }
         .btn-back:hover { background: #e2ebf0; }
 
-        .receipt-container { max-width: 800px; margin: 0 auto; background: #fff; padding: 45px; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); box-sizing: border-box; position: relative; overflow: hidden; border: 1px solid #dcdcdc; }
-        
-        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 8rem; color: rgba(211, 47, 47, 0.04); font-weight: 800; pointer-events: none; text-align: center; width: 120%; z-index: 1; user-select: none; border: 15px double rgba(211, 47, 47, 0.04); padding: 20px; }
+        .btn-pay-rzp { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #ffffff; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3); }
+        .btn-pay-rzp:hover { background: linear-gradient(135deg, #1d4ed8, #1e40af); transform: translateY(-1px); }
 
-        .receipt-header { display: flex; justify-content: space-between; border-bottom: 3px double #e0e0e0; padding-bottom: 25px; margin-bottom: 30px; position: relative; z-index: 2; }
+        .receipt-container { max-width: 800px; margin: 0 auto; background: #fff; padding: 40px 45px; border-radius: 6px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); box-sizing: border-box; position: relative; overflow: hidden; border: 1px solid #dcdcdc; }
+        
+        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 7rem; color: rgba(211, 47, 47, 0.04); font-weight: 800; pointer-events: none; text-align: center; width: 120%; z-index: 1; user-select: none; border: 15px double rgba(211, 47, 47, 0.04); padding: 20px; }
+
+        .receipt-header { display: flex; justify-content: space-between; border-bottom: 3px double #e0e0e0; padding-bottom: 25px; margin-bottom: 30px; position: relative; z-index: 2; flex-wrap: wrap; gap: 20px; }
         .school-branding { display: flex; align-items: center; gap: 18px; }
-        .school-branding img { height: 70px; }
-        .school-info h2 { margin: 0 0 4px 0; color: #1a237e; font-size: 1.55rem; font-weight: 800; }
-        .school-info p { margin: 0; color: #555; font-size: 0.84rem; line-height: 1.4; font-weight: 500; }
+        .school-branding img { height: 65px; width: auto; }
+        .school-info h2 { margin: 0 0 4px 0; color: #1a237e; font-size: 1.45rem; font-weight: 800; }
+        .school-info p { margin: 0; color: #555; font-size: 0.82rem; line-height: 1.4; font-weight: 500; }
         
         .receipt-meta { text-align: right; }
-        .receipt-title { font-size: 1.3rem; font-weight: 800; color: #d32f2f; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
-        .receipt-no { font-family: monospace; font-size: 0.95rem; font-weight: 700; color: #333; margin-bottom: 4px; }
-        .receipt-date { font-size: 0.84rem; color: #666; font-weight: 600; }
+        .receipt-title { font-size: 1.25rem; font-weight: 800; color: #d32f2f; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .receipt-no { font-family: monospace; font-size: 0.92rem; font-weight: 700; color: #333; margin-bottom: 4px; }
+        .receipt-date { font-size: 0.82rem; color: #666; font-weight: 600; }
 
         .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; position: relative; z-index: 2; }
         .details-col h4 { margin: 0 0 10px 0; color: #1a237e; font-size: 0.82rem; text-transform: uppercase; border-bottom: 2px solid #f0f0f0; padding-bottom: 4px; letter-spacing: 0.05em; }
@@ -110,18 +117,37 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
         .kv-label { color: #666; font-weight: 500; width: 38%; }
         .kv-value { color: #111; font-weight: 700; }
 
-        .item-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; position: relative; z-index: 2; }
+        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 20px; }
+        .item-table { width: 100%; border-collapse: collapse; min-width: 500px; position: relative; z-index: 2; }
         .item-table th { background: #feeef2; color: #d32f2f; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; padding: 10px 12px; border-top: 1px solid #d32f2f; border-bottom: 2px solid #d32f2f; }
-        .item-table td { padding: 12px 14px; font-size: 0.9rem; border-bottom: 1px solid #e2e8f0; color: #333; }
+        .item-table td { padding: 12px 14px; font-size: 0.88rem; border-bottom: 1px solid #e2e8f0; color: #333; }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
 
-        .total-strip { background: #feeef2; padding: 14px 25px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; z-index: 2; border: 1px solid #ffcdd2; }
+        .total-strip { background: #feeef2; padding: 14px 25px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; z-index: 2; border: 1px solid #ffcdd2; flex-wrap: wrap; gap: 10px; }
         .total-label { font-size: 1.05rem; font-weight: 800; color: #b71c1c; }
         .total-value { font-size: 1.35rem; font-weight: 800; color: #b71c1c; }
 
-        .words-block { font-size: 0.85rem; color: #555; margin-bottom: 40px; font-style: italic; border-left: 3px solid #d32f2f; padding-left: 14px; position: relative; z-index: 2; }
+        .words-block { font-size: 0.85rem; color: #555; margin-bottom: 30px; font-style: italic; border-left: 3px solid #d32f2f; padding-left: 14px; position: relative; z-index: 2; }
         .words-block strong { color: #d32f2f; font-style: normal; font-weight: 700; }
+
+        /* Mobile Responsiveness Rules (max-width: 640px) */
+        @media (max-width: 640px) {
+            body { padding: 10px 5px; }
+            .control-bar { padding: 12px 15px; border-radius: 10px; flex-direction: column; align-items: stretch; }
+            .btn-control { justify-content: center; width: 100%; }
+            .receipt-container { padding: 25px 18px; border-radius: 12px; }
+            .watermark { font-size: 4rem; }
+            .receipt-header { flex-direction: column; align-items: flex-start; gap: 15px; }
+            .school-branding { flex-direction: column; align-items: flex-start; text-align: left; gap: 10px; }
+            .school-branding img { height: 50px; }
+            .school-info h2 { font-size: 1.25rem; }
+            .receipt-meta { text-align: left; width: 100%; border-top: 1px dashed #e2e8f0; padding-top: 10px; }
+            .details-grid { grid-template-columns: 1fr; gap: 20px; }
+            .item-table th, .item-table td { padding: 8px 10px; font-size: 0.82rem; }
+            .total-strip { flex-direction: column; align-items: flex-start; gap: 6px; }
+            .total-value { font-size: 1.2rem; }
+        }
 
         @media print {
             body { background: #fff; padding: 0; }
@@ -134,9 +160,14 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
 
     <!-- Control Panel -->
     <div class="control-bar">
-        <div style="display:flex; gap: 10px;">
+        <div style="display:flex; gap: 10px; flex-wrap:wrap; width:100%;">
             <a href="fees.php" class="btn-control btn-back"><i class="fas fa-chevron-left"></i> Back to Dues</a>
             <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print / Download PDF</button>
+            <?php if ($bill['status'] === 'unpaid'): ?>
+                <button type="button" onclick="payWithRazorpay()" class="btn-control btn-pay-rzp" style="margin-left:auto;">
+                    <i class="fas fa-credit-card"></i> Pay Online (Razorpay)
+                </button>
+            <?php endif; ?>
         </div>
     </div>
 
@@ -200,81 +231,86 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
         </div>
 
         <!-- Ledger itemization table -->
-        <table class="item-table">
-            <thead>
-                <tr>
-                    <th class="text-center" style="width: 8%;">S.No</th>
-                    <th>Fee Description</th>
-                    <th style="width: 25%;">Bill Month</th>
-                    <th class="text-right" style="width: 22%;">Amount Due</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php 
-                $remarks = explode('|', $bill['remark'] ? $bill['remark'] : 'Tuition Fee');
-                $sno = 1;
-
-                foreach ($remarks as $rem) {
-                    $rem = trim($rem);
-                    if (strpos($rem, 'Auto-generated Bill.') !== false) {
-                        $rem = trim(str_replace('Auto-generated Bill.', '', $rem));
-                    }
-                    if (empty($rem)) continue;
-
-                    $item_desc = $rem;
-                    $item_month = $bill['month_for'];
-                    $item_amt = '₹ ' . number_format($bill['amount'], 2);
-
-                    // Extract month string from () or [] if present in item remark
-                    if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
-                        $item_month = trim($m_match[1]);
-                        $rem = trim(str_replace($m_match[0], '', $rem));
-                    } elseif (preg_match('/\[(.*?)\]/', $rem, $m_match)) {
-                        $item_month = trim($m_match[1]);
-                        $rem = trim(str_replace($m_match[0], '', $rem));
-                    }
-
-                    // Extract amount from : ₹ or :
-                    if (strpos($rem, ': ₹') !== false) {
-                        $parts = explode(': ₹', $rem);
-                        $item_desc = trim($parts[0]);
-                        $item_amt = '₹ ' . trim($parts[1]);
-                    } elseif (strpos($rem, ':') !== false) {
-                        $parts = explode(':', $rem);
-                        $item_desc = trim($parts[0]);
-                        $item_amt = '₹ ' . trim($parts[1]);
-                    } else {
-                        $item_desc = trim($rem);
-                    }
-
-                    // Clean up description if any residual amounts were left in description string
-                    if (preg_match('/₹\s*[0-9\.,]+/', $item_desc, $amt_match)) {
-                        $item_desc = trim(str_replace($amt_match[0], '', $item_desc));
-                    }
-
-                    if (empty($item_desc)) $item_desc = "Tuition Fee";
-                    ?>
+        <div class="table-responsive">
+            <table class="item-table">
+                <thead>
                     <tr>
-                        <td class="text-center"><?php echo $sno++; ?></td>
-                        <td style="font-weight: 700; color: #1a237e;">
-                            <?php echo htmlspecialchars($item_desc); ?>
-                        </td>
-                        <td style="font-weight: 700; color: #2563eb;">
-                            <?php echo htmlspecialchars($item_month); ?>
-                        </td>
-                        <td class="text-right" style="font-weight: 800; color:#b71c1c;">
-                            <?php echo htmlspecialchars($item_amt); ?>
-                        </td>
+                        <th class="text-center" style="width: 8%;">S.No</th>
+                        <th>Fee Description</th>
+                        <th style="width: 25%;">Bill Month</th>
+                        <th class="text-right" style="width: 22%;">Amount Due</th>
                     </tr>
-                    <?php
-                }
-                ?>
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    <?php 
+                    $remarks = explode('|', $bill['remark'] ? $bill['remark'] : 'Tuition Fee');
+                    $sno = 1;
+
+                    foreach ($remarks as $rem) {
+                        $rem = trim($rem);
+                        if (strpos($rem, 'Auto-generated Bill.') !== false) {
+                            $rem = trim(str_replace('Auto-generated Bill.', '', $rem));
+                        }
+                        if (empty($rem)) continue;
+
+                        $item_desc = $rem;
+                        $item_month = $bill['month_for'];
+                        $item_amt = '₹ ' . number_format($bill['amount'], 2);
+
+                        // Extract month string from () or [] if present in item remark
+                        if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
+                            $item_month = trim($m_match[1]);
+                            $rem = trim(str_replace($m_match[0], '', $rem));
+                        } elseif (preg_match('/\[(.*?)\]/', $rem, $m_match)) {
+                            $item_month = trim($m_match[1]);
+                            $rem = trim(str_replace($m_match[0], '', $rem));
+                        }
+
+                        // Extract amount from : ₹ or :
+                        if (strpos($rem, ': ₹') !== false) {
+                            $parts = explode(': ₹', $rem);
+                            $item_desc = trim($parts[0]);
+                            $item_amt = '₹ ' . trim($parts[1]);
+                        } elseif (strpos($rem, ':') !== false) {
+                            $parts = explode(':', $rem);
+                            $item_desc = trim($parts[0]);
+                            $item_amt = '₹ ' . trim($parts[1]);
+                        } else {
+                            $item_desc = trim($rem);
+                        }
+
+                        // Clean up description if any residual amounts were left in description string
+                        if (preg_match('/₹\s*[0-9\.,]+/', $item_desc, $amt_match)) {
+                            $item_desc = trim(str_replace($amt_match[0], '', $item_desc));
+                        }
+
+                        if (empty($item_desc)) $item_desc = "Tuition Fee";
+                        ?>
+                        <tr>
+                            <td class="text-center"><?php echo $sno++; ?></td>
+                            <td style="font-weight: 700; color: #1a237e;">
+                                <?php echo htmlspecialchars($item_desc); ?>
+                            </td>
+                            <td style="font-weight: 700; color: #2563eb;">
+                                <?php echo htmlspecialchars($item_month); ?>
+                            </td>
+                            <td class="text-right" style="font-weight: 800; color:#b71c1c;">
+                                <?php echo htmlspecialchars($item_amt); ?>
+                            </td>
+                        </tr>
+                        <?php
+                    }
+                    ?>
+                </tbody>
+            </table>
+        </div>
 
         <!-- Grand Total Strip -->
         <div class="total-strip">
-            <div class="total-label">Total Amount Due</div>
+            <div>
+                <div class="total-label">Total Amount Due</div>
+                <small style="color:#64748b; font-weight:600;">Status: <span style="text-transform:uppercase; font-weight:800; color:<?php echo $bill['status']==='paid'?'#15803d':'#dc2626'; ?>;"><?php echo $bill['status']; ?></span></small>
+            </div>
             <div class="total-value">₹ <?php echo number_format($bill['amount'], 2); ?></div>
         </div>
 
@@ -285,5 +321,41 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
 
     </div>
 
+    <!-- Hidden form for Razorpay Payment Verification -->
+    <form id="razorpayForm" action="verify_payment.php" method="POST" style="display:none;">
+        <input type="hidden" name="razorpay_payment_id" id="razorpay_payment_id">
+        <input type="hidden" name="bill_id" value="<?php echo $bill['id']; ?>">
+    </form>
+
+    <script>
+        function payWithRazorpay() {
+            var options = {
+                "key": "<?php echo htmlspecialchars($razorpay_key); ?>",
+                "amount": "<?php echo round($bill['amount'] * 100); ?>", // Amount in paise
+                "currency": "INR",
+                "name": "<?php echo addslashes($school_name); ?>",
+                "description": "Fee Invoice #<?php echo $bill['id']; ?> (<?php echo addslashes($bill['month_for']); ?>)",
+                "image": "../assets/logo.png",
+                "handler": function (response){
+                    document.getElementById('razorpay_payment_id').value = response.razorpay_payment_id;
+                    document.getElementById('razorpayForm').submit();
+                },
+                "prefill": {
+                    "name": "<?php echo addslashes($bill['parent_name'] ?? ''); ?>",
+                    "email": "<?php echo addslashes($bill['parent_email'] ?? ''); ?>",
+                    "contact": "<?php echo addslashes($bill['phone'] ?? ''); ?>"
+                },
+                "notes": {
+                    "student_name": "<?php echo addslashes($bill['student_name']); ?>",
+                    "invoice_id": "<?php echo $bill['id']; ?>"
+                },
+                "theme": {
+                    "color": "#1d4ed8"
+                }
+            };
+            var rzp = new Razorpay(options);
+            rzp.open();
+        }
+    </script>
 </body>
 </html>
