@@ -100,7 +100,7 @@ function getFirebaseProjectId() {
 }
 
 /**
- * Dispatch single FCM HTTP v1 Message for Android WebToApp APK (Delivers Push even when App is CLOSED)
+ * Dispatch single FCM HTTP v1 Message matching exact Firebase Console Compose Notification format
  */
 function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $url = null, $category = 'General') {
     try {
@@ -117,27 +117,13 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
     $projectId = getFirebaseProjectId();
     $endpoint = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
 
-    // Standard high-priority payload for Shiaho WebToApp / Android APK background delivery
+    // Exact FCM HTTP v1 payload identical to Firebase Console Compose Notification
     $messagePayload = [
         "message" => [
             "token" => $targetToken,
             "notification" => [
                 "title" => $title,
                 "body" => $body
-            ],
-            "android" => [
-                "priority" => "HIGH",
-                "ttl" => "86400s",
-                "notification" => [
-                    "title" => $title,
-                    "body" => $body,
-                    "sound" => "default",
-                    "default_sound" => true,
-                    "default_vibrate_timings" => true,
-                    "default_light_settings" => true,
-                    "notification_priority" => "PRIORITY_MAX",
-                    "visibility" => "PUBLIC"
-                ]
             ],
             "data" => [
                 "title" => $title,
@@ -146,20 +132,13 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
                 "category" => $category,
                 "click_url" => $url ?: '',
                 "url" => $url ?: '',
-                "image_url" => $image ?: '',
                 "image" => $image ?: ''
-            ],
-            "webpush" => [
-                "fcm_options" => [
-                    "link" => $url ?: ''
-                ]
             ]
         ]
     ];
 
     if (!empty($image)) {
         $messagePayload['message']['notification']['image'] = $image;
-        $messagePayload['message']['android']['notification']['image'] = $image;
     }
 
     $jsonPayload = json_encode($messagePayload, JSON_UNESCAPED_SLASHES);
