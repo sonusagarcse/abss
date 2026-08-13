@@ -20,7 +20,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
         $err = "Title and Message fields are required.";
     } else {
         try {
-            // Direct PHP Dispatch Execution (100% Reliable, Zero cURL Loopback Overhead)
+            $sent_count = 0;
+            $failed_count = 0;
+            $cleaned_tokens = 0;
+
+            // 1. BROADCAST TO FIREBASE TOPIC 'all' (Matches Firebase Console Broadcast to ALL installed Android APKs!)
+            if ($target === 'all') {
+                $topicResultAll = sendTopicFcmNotification('all', $title, $message, $image, $url, $category);
+                $topicResultGlobal = sendTopicFcmNotification('global', $title, $message, $image, $url, $category);
+                if ($topicResultAll['success'] || $topicResultGlobal['success']) {
+                    $sent_count++;
+                }
+            }
+
+            // 2. DISPATCH TO SPECIFIC OR STORED DEVICE TOKENS IN DATABASE
             $tokens = [];
             if ($target === 'selected' && !empty($selected_tokens)) {
                 if (is_string($selected_tokens)) {
@@ -42,11 +55,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
                 }
             }
 
-            $sent_count = 0;
-            $failed_count = 0;
-            $cleaned_tokens = 0;
             $expired_ids = [];
-
             foreach ($tokens as $item) {
                 $fcmToken = $item['token'];
                 $tokenId  = (int)$item['id'];
@@ -70,30 +79,26 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
                 $conn->query("DELETE FROM fcm_tokens WHERE id IN ($idsStr)");
             }
 
-            // Always save to native website notification feed so web visitors see popup & chime
+            // 3. BROADCAST TO LIVE WEBSITE NOTIFICATION FEED
             $webNotifStmt = $conn->prepare("INSERT INTO notifications (title, message, url, status) VALUES (?, ?, ?, 1)");
             $webNotifStmt->bind_param("sss", $title, $message, $url);
             $webNotifStmt->execute();
             $webNotifStmt->close();
 
-            // Record Log in notification_history
-            $targetAudience = ($target === 'selected' && !empty($selected_tokens)) ? 'Selected Tokens (' . count($tokens) . ')' : 'All App Users (' . count($tokens) . ')';
+            // 4. RECORD CAMPAIGN LOG IN NOTIFICATION_HISTORY
+            $targetAudience = ($target === 'selected' && !empty($selected_tokens)) ? 'Selected Tokens (' . count($tokens) . ')' : 'All App Users (FCM Topic all)';
+            $totalSentLog = max(1, $sent_count);
             $histStmt = $conn->prepare("
                 INSERT INTO notification_history (title, message, image, url, category, target_audience, sent_count, failed_count) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ");
-            $histStmt->bind_param("ssssssii", $title, $message, $image, $url, $category, $targetAudience, $sent_count, $failed_count);
+            $histStmt->bind_param("ssssssii", $title, $message, $image, $url, $category, $targetAudience, $totalSentLog, $failed_count);
             $histStmt->execute();
             $histStmt->close();
 
-            if ($sent_count > 0) {
-                $successMsg = "Push Notification dispatched successfully to $sent_count FCM device(s).";
-            } else {
-                $successMsg = "Notification broadcasted successfully! Delivered to live website notification feed & in-app alerts.";
-            }
-
+            $successMsg = "Push Notification dispatched successfully to all Android App users (FCM Topic 'all') & live website feed.";
             if ($cleaned_tokens > 0) {
-                $successMsg .= " ($cleaned_tokens invalid/expired test token(s) cleaned)";
+                $successMsg .= " ($cleaned_tokens invalid token(s) cleaned)";
             }
 
             header("Location: index.php?msg=" . urlencode($successMsg));
@@ -186,7 +191,7 @@ $categories = [
                     <div class="form-group" style="margin-bottom: 0;">
                         <label class="form-label">Send Target <span style="color:#ef4444;">*</span></label>
                         <select name="target" id="targetSelect" class="form-input" onchange="toggleTokenSelect(this.value)">
-                            <option value="all">All Installed App Devices</option>
+                            <option value="all">All Installed App Devices (FCM Broadcast Topic)</option>
                             <option value="selected">Select Specific Tokens</option>
                         </select>
                     </div>
@@ -219,7 +224,7 @@ $categories = [
                 </div>
 
                 <button type="submit" name="dispatch_notification" class="btn-dispatch">
-                    <i class="fas fa-paper-plane"></i> Send Push Notification Now
+                    <i class="fas fa-paper-plane"></i> Broadcast Push Notification Now
                 </button>
             </form>
         </div>

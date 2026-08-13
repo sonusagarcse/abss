@@ -100,9 +100,9 @@ function getFirebaseProjectId() {
 }
 
 /**
- * Dispatch single FCM HTTP v1 Message matching exact Firebase Console Compose Notification format
+ * Dispatch single FCM HTTP v1 Message to target token or FCM Topic (identical to Firebase Console Compose)
  */
-function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $url = null, $category = 'General') {
+function sendFcmNotificationCore($target, $title, $body, $image = null, $url = null, $category = 'General', $isTopic = false) {
     try {
         $accessToken = getFirebaseAccessToken();
     } catch (Exception $e) {
@@ -117,10 +117,11 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
     $projectId = getFirebaseProjectId();
     $endpoint = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
 
-    // Exact FCM HTTP v1 payload identical to Firebase Console Compose Notification
+    // Standard FCM HTTP v1 message structure matching Firebase Console Compose Campaign
+    $targetKey = $isTopic ? "topic" : "token";
     $messagePayload = [
         "message" => [
-            "token" => $targetToken,
+            $targetKey => $target,
             "notification" => [
                 "title" => $title,
                 "body" => $body
@@ -186,4 +187,18 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
         'error' => $resData['error']['message'] ?? ('FCM HTTP ' . $httpCode . ' Dispatch Failure: ' . $response),
         'raw' => $response
     ];
+}
+
+/**
+ * Dispatch FCM Notification to Single Device Token
+ */
+function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $url = null, $category = 'General') {
+    return sendFcmNotificationCore($targetToken, $title, $body, $image, $url, $category, false);
+}
+
+/**
+ * Dispatch FCM Notification to Topic (Matches Firebase Console Broadcast to All App Users)
+ */
+function sendTopicFcmNotification($topicName, $title, $body, $image = null, $url = null, $category = 'General') {
+    return sendFcmNotificationCore($topicName, $title, $body, $image, $url, $category, true);
 }
