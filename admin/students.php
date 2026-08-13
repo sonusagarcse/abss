@@ -155,6 +155,39 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             }
             $conn->query("UPDATE students SET student_photo = '" . $conn->real_escape_string($new_sp) . "' WHERE id = $new_id");
         }
+
+        // Dispatch Student Registration Email to Parent & Admin
+        require_once __DIR__ . '/../includes/mail_helper.php';
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+        $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
+        $login_url = "$base_url/parent/login.php";
+
+        $welcome_html = get_base_template(
+            "Student Enrollment Confirmation",
+            '<div class="greeting">Welcome to ABSS Family!</div>
+             <p>Dear <strong>' . htmlspecialchars($parent_name) . '</strong>,</p>
+             <p>Student <strong>' . htmlspecialchars($name) . '</strong> has been enrolled successfully in <strong>Awasiya Bal Shikshan Sansthan</strong>.</p>
+             <div class="info-card">
+                 <table role="presentation" width="100%">
+                     <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Registration No</td><td style="padding:8px 0; font-weight:900; color:#2563eb; text-align:right;">' . htmlspecialchars($reg_no) . '</td></tr>
+                     <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Student Name</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($name) . '</td></tr>
+                     <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Target School</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($target_school) . '</td></tr>
+                     <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Class / Batch</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($class_admitted) . '</td></tr>
+                     <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Scholar Mode</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($scholar_mode) . '</td></tr>
+                 </table>
+             </div>
+             <div style="background:#f8fafc; padding:15px; border-radius:12px; border:1px solid #e2e8f0; font-size:14px; margin-bottom:20px;">
+                 <div><strong>Parent Portal Login:</strong> <a href="' . $login_url . '" style="color:#2563eb;">' . $login_url . '</a></div>
+                 <div><strong>Registered Phone / Password:</strong> ' . htmlspecialchars($phone) . '</div>
+             </div>
+             <a href="' . $login_url . '" style="background:#2563eb; color:#fff; padding:12px 24px; border-radius:50px; text-decoration:none; font-weight:800; display:inline-block;">Access Parent Portal →</a>'
+        );
+
+        if (!empty($guardian_email)) {
+            send_smtp_email($guardian_email, "Welcome to ABSS - Student Registration (" . $name . ")", $welcome_html);
+        }
+        send_smtp_email('abssimamganj@gmail.com', "New Student Enrolled - " . $name . " (" . $reg_no . ")", $welcome_html);
     }
     
     // Auto-update parent invoice to reflect new changes

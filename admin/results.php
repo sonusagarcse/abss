@@ -31,7 +31,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_result'])) {
         
         if ($student_res && !empty($student_res['parent_email'])) {
             require_once __DIR__ . '/../includes/mail_helper.php';
-            // Dynamic host URL builder - works on localhost and live server
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
             $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
@@ -50,6 +49,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_result'])) {
                 "Result Published: " . $exam . " - " . $student_res['student_name'] . " - ABSS", 
                 $email_html
             );
+            send_smtp_email('abssimamganj@gmail.com', "Result Published: " . $exam . " - " . $student_res['student_name'], $email_html);
         }
     } else {
         $msg = "Error recording result.";

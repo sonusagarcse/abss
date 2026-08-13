@@ -9,6 +9,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
         <img src="../assets/logo.png" alt="ABSS Logo">
         <span>ABSS Parent Portal</span>
     </div>
+    <button type="button" class="hamburger-btn" id="hamburgerMenuBtn" aria-label="Open Navigation">
+        <i class="fas fa-bars"></i>
+    </button>
 </div>
 
 <!-- Mobile Bottom Navigation Bar -->

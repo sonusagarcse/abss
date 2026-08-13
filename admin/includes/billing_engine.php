@@ -210,25 +210,29 @@ if ($due_students && $due_students->num_rows > 0) {
                 log_activity('auto_bill_generated', "Automated bill of ₹" . number_format($total_amount, 2) . " processed for student " . $student['name'] . " ($month_for)");
             }
 
-            if (!empty($student['parent_id']) && (!isset($skip_email) || !$skip_email)) {
+            if (!empty($student['parent_id'])) {
                 $parent_res = $conn->query("SELECT email, parent_name FROM parents WHERE id = " . (int)$student['parent_id']);
                 if ($parent_res && $parent_res->num_rows > 0) {
                     $parent = $parent_res->fetch_assoc();
+                    $bill_view_url = "$fe_base_url/parent/view_bill.php?id=$invoice_id";
+                    
+                    $email_html = get_fee_generated_template(
+                        $student['name'], 
+                        $total_amount, 
+                        $month_for, 
+                        $bill_month_date, 
+                        $new_month_remark . " | Bill ID: #$invoice_id", 
+                        $bill_view_url
+                    );
+
                     if (!empty($parent['email'])) {
-                        $email_html = get_fee_generated_template(
-                            $student['name'], 
-                            $total_amount, 
-                            $month_for, 
-                            $bill_month_date, 
-                            $new_month_remark, 
-                            $portal_url
-                        );
                         send_smtp_email(
                             $parent['email'], 
-                            "New Tuition Invoice Generated - " . $student['name'] . " - ABSS", 
+                            "New Tuition Fee Invoice #" . $invoice_id . " Generated - " . $student['name'] . " - ABSS", 
                             $email_html
                         );
                     }
+                    send_smtp_email('abssimamganj@gmail.com', "Fee Invoice #" . $invoice_id . " Generated - " . $student['name'] . " (₹" . number_format($total_amount, 2) . ")", $email_html);
                 }
             }
         } catch (Exception $e) {

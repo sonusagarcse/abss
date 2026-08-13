@@ -1,7 +1,26 @@
 <?php
 $current_page = basename($_SERVER['PHP_SELF']);
 ?>
-<div class="sidebar">
+<!-- Mobile Top Header -->
+<div class="mobile-header">
+    <div class="mobile-brand">
+        <img src="../assets/logo.png" alt="Logo">
+        <span>ABSS Faculty</span>
+    </div>
+    <button type="button" class="hamburger-btn" onclick="toggleTeacherSidebar()" aria-label="Open Navigation">
+        <i class="fas fa-bars"></i>
+    </button>
+</div>
+
+<!-- Mobile Dimming Background Backdrop Overlay -->
+<div class="sidebar-overlay" id="teacherSidebarOverlay" onclick="toggleTeacherSidebar()"></div>
+
+<div class="sidebar" id="teacherSidebar">
+    <!-- Close Circular Button -->
+    <button type="button" class="close-sidebar-btn" onclick="toggleTeacherSidebar()" aria-label="Close Navigation">
+        <i class="fas fa-times"></i>
+    </button>
+
     <div class="sidebar-brand">
         <img src="../assets/logo.png" alt="Logo">
         <span>ABSS Faculty</span>
@@ -44,3 +63,19 @@ $current_page = basename($_SERVER['PHP_SELF']);
         <i class="fas fa-sign-out-alt"></i> Logout Faculty
     </a>
 </div>
+
+<script>
+function toggleTeacherSidebar() {
+    var sidebar = document.getElementById('teacherSidebar');
+    var overlay = document.getElementById('teacherSidebarOverlay');
+    if (sidebar && overlay) {
+        sidebar.classList.toggle('open');
+        overlay.classList.toggle('active');
+        if (sidebar.classList.contains('open')) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+    }
+}
+</script>

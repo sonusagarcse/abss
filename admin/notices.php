@@ -26,12 +26,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_notice'])) {
             $msg = "Notice published successfully.";
             log_activity('notice_created', "Published school notice: $title");
             
-            // Broadcast notice to all parents
+            // Broadcast notice to all parents & admin
+            require_once __DIR__ . '/../includes/mail_helper.php';
+            $notice_date = date('Y-m-d');
+            $email_html = get_essential_update_template($title, $content, $type, $notice_date);
+
             $parents_emails = $conn->query("SELECT email FROM parents WHERE email IS NOT NULL AND email != ''");
             if ($parents_emails && $parents_emails->num_rows > 0) {
-                require_once __DIR__ . '/../includes/mail_helper.php';
-                $notice_date = date('Y-m-d');
-                $email_html = get_essential_update_template($title, $content, $type, $notice_date);
                 while ($parent = $parents_emails->fetch_assoc()) {
                     send_smtp_email(
                         $parent['email'], 
@@ -40,6 +41,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_notice'])) {
                     );
                 }
             }
+            send_smtp_email('abssimamganj@gmail.com', "School Announcement Published: " . $title, $email_html);
         } else {
             $msg = "Error publishing notice.";
         }

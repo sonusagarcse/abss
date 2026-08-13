@@ -90,11 +90,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['raise_ticket'])) {
                      </div>'
                 );
                 
-                send_smtp_email(
-                    $admin_email,
-                    "Alert: New Helpdesk Ticket Raised - " . $parent['parent_name'],
-                    $admin_html
-                );
+                $dest_emails = ['abssimamganj@gmail.com'];
+                if (!empty($settings['email']) && $settings['email'] !== 'abssimamganj@gmail.com') {
+                    $dest_emails[] = $settings['email'];
+                }
+
+                foreach ($dest_emails as $d_email) {
+                    send_smtp_email(
+                        $d_email,
+                        "Alert: New Helpdesk Ticket Raised (#ABSS-TKT-" . str_pad($tkt_id, 4, '0', STR_PAD_LEFT) . ") - " . $parent['parent_name'],
+                        $admin_html
+                    );
+                }
             }
         } else {
             $err = "Error submitting support ticket. Please try again.";

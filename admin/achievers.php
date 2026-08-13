@@ -54,78 +54,126 @@ $achievers = $conn->query("SELECT * FROM achievers ORDER BY created_at DESC");
     <title>Manage Achievers | ABSS Portal</title>
     <?php include 'includes/head_css.php'; ?>
     <style>
-        .upload-section { background: #fff; padding: 40px; border-radius: 35px; box-shadow: 0 10px 30px rgba(0,0,0,0.02); margin-bottom: 50px; }
-        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 30px; }
-        .photo-card { background: #fff; border-radius: 30px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.02); border: 1px solid #f0f4f8; transition: 0.3s; }
-        .photo-card:hover { transform: translateY(-5px); box-shadow: 0 15px 40px rgba(0,0,0,0.04); }
-        .photo-card img { width: 100%; height: 250px; object-fit: cover; }
-        .photo-info { padding: 25px; }
-        .photo-info h3 { margin: 0 0 5px 0; color: var(--portal-blue); font-size: 1.2rem; font-weight: 800; }
-        .photo-info p { margin: 0 0 15px 0; font-weight: 600; color: #5c6bc0; font-size: 0.9rem; }
-        .action-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f0f4f8; padding-top: 15px; }
-        .delete-btn { color: #d32f2f; font-weight: 800; text-decoration: none; font-size: 0.8rem; }
-        .badge { background: #eef2ff; color: var(--portal-blue); padding: 5px 12px; border-radius: 50px; font-size: 0.8rem; font-weight: 700; }
+        .achievers-layout-2col {
+            display: grid;
+            grid-template-columns: 360px 1fr;
+            gap: 25px;
+            align-items: start;
+        }
+        
+        .upload-section { 
+            background: #fff; 
+            padding: 30px; 
+            border-radius: var(--radius-lg); 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.02); 
+            border: 1px solid #e2e8f0; 
+            position: sticky;
+            top: 20px;
+        }
+
+        .gallery-grid { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); 
+            gap: 20px; 
+        }
+
+        .photo-card { 
+            background: #fff; 
+            border-radius: 20px; 
+            overflow: hidden; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.02); 
+            border: 1px solid #e2e8f0; 
+            transition: all 0.25s ease; 
+        }
+        .photo-card:hover { transform: translateY(-3px); box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        .photo-card img { width: 100%; height: 180px; object-fit: cover; }
+        .photo-info { padding: 18px; }
+        .photo-info h3 { margin: 0 0 4px 0; color: var(--portal-dark); font-size: 1.05rem; font-weight: 800; }
+        .photo-info p { margin: 0 0 12px 0; font-weight: 600; color: #64748b; font-size: 0.85rem; }
+        .action-row { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #f1f5f9; padding-top: 12px; }
+        .delete-btn { color: #dc2626; font-weight: 800; text-decoration: none; font-size: 0.78rem; }
+        .badge { background: #eff6ff; color: var(--portal-blue); padding: 4px 10px; border-radius: 50px; font-size: 0.76rem; font-weight: 800; }
+
+        @media (max-width: 900px) {
+            .achievers-layout-2col { grid-template-columns: 1fr; }
+            .upload-section { position: static; }
+        }
     </style>
 </head>
 <body>
     <?php include 'includes/sidebar.php'; ?>
 
     <main class="main-content">
-        <header style="margin-bottom: 40px;">
-            <h1>Hall of Excellence</h1>
-            <p>Manage student achievers and entrance exam placements.</p>
+        <header style="margin-bottom: 25px;">
+            <h1 style="margin:0 0 4px 0; font-size:1.8rem;">Hall of Excellence</h1>
+            <p style="margin:0; color:#64748b;">Manage student achievers and entrance exam placements in 2-column view.</p>
         </header>
 
         <?php if($msg): ?>
-            <div style="background:#f0fdf4; color:#166534; padding:15px 25px; border-radius:16px; margin-bottom:30px; font-weight:700;">
+            <div style="background:#dcfce7; color:#15803d; padding:14px 20px; border-radius:var(--radius-md); margin-bottom:25px; font-weight:700; border:1px solid #bbf7d0;">
                 <i class="fas fa-check-circle"></i> <?php echo $msg; ?>
             </div>
         <?php endif; ?>
 
-        <div class="upload-section">
-            <h3 style="margin-bottom: 25px;">Add New Achiever</h3>
-            <form action="" method="POST" enctype="multipart/form-data" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: flex-start;">
+        <!-- 2-COLUMN SIDE-BY-SIDE LAYOUT -->
+        <div class="achievers-layout-2col">
+            
+            <!-- LEFT COLUMN: ADD FORM -->
+            <div class="upload-section">
+                <h3 style="margin:0 0 20px 0; font-size:1.1rem; color:var(--portal-dark); font-weight:800; padding-bottom:10px; border-bottom:2px solid #f1f5f9;">
+                    <i class="fas fa-user-plus" style="color:var(--portal-blue);"></i> Add New Achiever
+                </h3>
                 
-                <div class="portal-input-group">
-                    <label>Student Name</label>
-                    <input type="text" name="name" placeholder="E.g. Rahul Kumar" required>
-                </div>
-
-                <div class="portal-input-group">
-                    <label>Target School / Exam</label>
-                    <input type="text" name="target_school" placeholder="E.g. Netarhat Residential" required>
-                </div>
-
-                <div class="portal-input-group">
-                    <label>Batch / Year</label>
-                    <input type="text" name="batch_year" placeholder="E.g. Batch 2024-25" required>
-                </div>
-
-                <div class="portal-input-group">
-                    <label>Student Photo</label>
-                    <input type="file" name="photo" accept="image/*" required style="padding: 12px 20px;">
-                </div>
-
-                <div style="grid-column: 1 / -1;">
-                    <button type="submit" class="btn-portal" style="padding: 16px 40px;">Add Achiever</button>
-                </div>
-            </form>
-        </div>
-
-        <div class="gallery-grid">
-            <?php if($achievers): while($row = $achievers->fetch_assoc()): ?>
-            <div class="photo-card">
-                <img src="../<?php echo $row['image_path']; ?>" alt="Student Photo">
-                <div class="photo-info">
-                    <h3><?php echo htmlspecialchars($row['name']); ?></h3>
-                    <p><?php echo htmlspecialchars($row['batch_year']); ?></p>
-                    <div class="action-row">
-                        <span class="badge"><?php echo htmlspecialchars($row['target_school']); ?></span>
-                        <a href="?delete=<?php echo $row['id']; ?>" class="delete-btn" onclick="return confirm('Delete this achiever?')">DELETE</a>
+                <form action="" method="POST" enctype="multipart/form-data">
+                    <div class="portal-input-group">
+                        <label>Student Name</label>
+                        <input type="text" name="name" placeholder="Rahul Kumar" required>
                     </div>
+
+                    <div class="portal-input-group">
+                        <label>Target School / Exam</label>
+                        <input type="text" name="target_school" placeholder="Netarhat Residential" required>
+                    </div>
+
+                    <div class="portal-input-group">
+                        <label>Batch / Year</label>
+                        <input type="text" name="batch_year" placeholder="Batch 2024-25" required>
+                    </div>
+
+                    <div class="portal-input-group">
+                        <label>Student Photo</label>
+                        <input type="file" name="photo" accept="image/*" required style="padding: 10px;">
+                    </div>
+
+                    <button type="submit" class="btn-portal w-100" style="padding: 14px; font-weight:800; margin-top:10px;">
+                        <i class="fas fa-plus-circle"></i> Add Achiever
+                    </button>
+                </form>
+            </div>
+
+            <!-- RIGHT COLUMN: EXISTING ACHIEVERS LIST GRID -->
+            <div>
+                <div class="gallery-grid">
+                    <?php if($achievers && $achievers->num_rows > 0): while($row = $achievers->fetch_assoc()): ?>
+                    <div class="photo-card">
+                        <img src="../<?php echo htmlspecialchars($row['image_path']); ?>" alt="Student Photo">
+                        <div class="photo-info">
+                            <h3><?php echo htmlspecialchars($row['name']); ?></h3>
+                            <p><?php echo htmlspecialchars($row['batch_year']); ?></p>
+                            <div class="action-row">
+                                <span class="badge"><?php echo htmlspecialchars($row['target_school']); ?></span>
+                                <a href="?delete=<?php echo $row['id']; ?>" class="delete-btn" onclick="return confirm('Delete this achiever?')">DELETE</a>
+                            </div>
+                        </div>
+                    </div>
+                    <?php endwhile; else: ?>
+                    <div style="grid-column:1/-1; background:#fff; padding:40px; border-radius:20px; text-align:center; color:#94a3b8; font-weight:600; border:1px solid #e2e8f0;">
+                        No achievers added yet. Use the form on the left to add achievers.
+                    </div>
+                    <?php endif; ?>
                 </div>
             </div>
-            <?php endwhile; endif; ?>
+
         </div>
     </main>
 </body>

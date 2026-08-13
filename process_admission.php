@@ -20,17 +20,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $gender         = trim($_POST['gender'] ?? '');
     $home_address   = trim($_POST['home_address'] ?? '');
     $city           = trim($_POST['city'] ?? '');
-    $state          = trim($_POST['state'] ?? '');
+    $state          = trim($_POST['state'] ?? 'Bihar');
     $zip_code       = trim($_POST['zip_code'] ?? '');
     $prev_school    = trim($_POST['prev_school'] ?? '');
     $target_program = trim($_POST['target_program'] ?? '');
     $scholar_mode   = trim($_POST['scholar_mode'] ?? '');
+
+    // Combine full address string
+    $full_address = $home_address;
+    if (!empty($city)) $full_address .= ", $city";
+    if (!empty($state)) $full_address .= ", $state";
+    if (!empty($zip_code)) $full_address .= " - $zip_code";
 
     // Guardian info
     $parent_name           = trim($_POST['parent_name'] ?? '');
     $phone                 = trim($_POST['phone'] ?? '');
     $email                 = trim($_POST['email'] ?? '');
     $address               = trim($_POST['address'] ?? '');
+    if (empty($address)) {
+        $address = $full_address;
+    }
     $guardian_relationship = trim($_POST['guardian_relationship'] ?? '');
 
     // Emergency contact
@@ -38,7 +47,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $emergency_relationship = trim($_POST['emergency_relationship'] ?? '');
     $emergency_phone        = trim($_POST['emergency_phone'] ?? '');
 
-    // Medical (all optional)
+    // Medical (optional)
     $has_allergies            = isset($_POST['has_allergies']) ? 1 : 0;
     $allergies_detail         = trim($_POST['allergies_detail'] ?? '');
     $has_medical_condition    = isset($_POST['has_medical_condition']) ? 1 : 0;
@@ -54,7 +63,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (!is_dir($upload_dir)) mkdir($upload_dir, 0755, true);
     if (!empty($_FILES['student_photo']['name'])) {
         $sp_ext = strtolower(pathinfo($_FILES['student_photo']['name'], PATHINFO_EXTENSION));
-        if (in_array($sp_ext, ['jpg','jpeg','png','gif','webp']) && $_FILES['student_photo']['size'] < 3 * 1024 * 1024) {
+        if (in_array($sp_ext, ['jpg','jpeg','png','gif','webp']) && $_FILES['student_photo']['size'] < 5 * 1024 * 1024) {
             $sp_name = 'adm_pic_' . time() . '_' . rand(1000,9999) . '.' . $sp_ext;
             if (move_uploaded_file($_FILES['student_photo']['tmp_name'], $upload_dir . $sp_name)) {
                 $student_photo = 'uploads/students/' . $sp_name;
@@ -67,16 +76,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $error_msg    = '';
 
     try {
+        // Query matching admissions table schema (address, city, state, zip_code)
         $sql = "INSERT INTO admissions (
-                    student_name, dob, gender, home_address, city, state, zip_code, prev_school,
-                    parent_name, phone, email, address, guardian_relationship,
+                    student_name, dob, gender, address, city, state, zip_code, prev_school,
+                    parent_name, phone, email, guardian_relationship,
                     emergency_contact_name, emergency_relationship, emergency_phone,
                     has_allergies, allergies_detail, has_medical_condition, medical_condition_detail,
                     physician_name, physician_phone, insurance_provider, insurance_policy,
                     scholar_mode, target_program, student_photo
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
                     ?, ?, ?,
                     ?, ?, ?, ?,
                     ?, ?, ?, ?,
@@ -86,9 +96,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         if ($stmt) {
             $stmt->bind_param(
-                "ssssssssssssssssissssssssss",
-                $student_name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
-                $parent_name, $phone, $email, $address, $guardian_relationship,
+                "ssssssssssssssisssssssssss",
+                $student_name, $dob, $gender, $address, $city, $state, $zip_code, $prev_school,
+                $parent_name, $phone, $email, $guardian_relationship,
                 $emergency_contact_name, $emergency_relationship, $emergency_phone,
                 $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
                 $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
@@ -97,12 +107,55 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($stmt->execute()) {
                 $success      = true;
                 $admission_id = $stmt->insert_id;
-                // Log admission application
-                log_activity('admission_application', "Guest submitted admission request for student $student_name (#$admission_id)");
+                log_activity('admission_application', "Guest submitted online admission for student $student_name (#$admission_id)");
+
+                // Dispatch Email Notification to Admin & Parent
+                require_once __DIR__ . '/includes/mail_helper.php';
+                $admin_notify_email = 'abssimamganj@gmail.com';
+                
+                $admin_html = get_base_template(
+                    "New Online Admission Application",
+                    '<div class="greeting">New Online Admission Application #' . str_pad($admission_id, 5, '0', STR_PAD_LEFT) . '</div>
+                     <p>A new student admission application has been registered online.</p>
+                     <div class="info-card">
+                         <table role="presentation" width="100%">
+                             <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Student Name</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($student_name) . '</td></tr>
+                             <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Date of Birth</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($dob) . '</td></tr>
+                             <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Gender</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($gender) . '</td></tr>
+                             <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Target Program</td><td style="padding:8px 0; font-weight:900; color:#2563eb; text-align:right;">' . htmlspecialchars($target_program) . '</td></tr>
+                             <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Scholar Mode</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($scholar_mode) . '</td></tr>
+                             <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Guardian Name</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($parent_name) . ' (' . htmlspecialchars($guardian_relationship) . ')</td></tr>
+                             <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Phone Number</td><td style="padding:8px 0; font-weight:900; color:#059669; text-align:right;">' . htmlspecialchars($phone) . '</td></tr>
+                             <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Email Address</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($email ?: '—') . '</td></tr>
+                             <tr><td style="padding:8px 0; font-weight:700; color:#64748b;">Full Address</td><td style="padding:8px 0; font-weight:900; color:#0f172a; text-align:right;">' . htmlspecialchars($address) . '</td></tr>
+                         </table>
+                     </div>'
+                );
+
+                send_smtp_email($admin_notify_email, "New Online Admission #" . str_pad($admission_id, 5, '0', STR_PAD_LEFT) . " - " . $student_name, $admin_html);
+
+                if (!empty($email)) {
+                    $parent_html = get_base_template(
+                        "Admission Application Received",
+                        '<div class="greeting">Application Received</div>
+                         <p>Dear <strong>' . htmlspecialchars($parent_name) . '</strong>,</p>
+                         <p>Thank you for registering <strong>' . htmlspecialchars($student_name) . '</strong> for session 2026-27 at Awasiya Bal Shikshan Sansthan.</p>
+                         <div class="info-card">
+                             <div style="font-size:1.1rem; font-weight:900; color:#2563eb; margin-bottom:6px;">Application #' . str_pad($admission_id, 5, '0', STR_PAD_LEFT) . '</div>
+                             <div><strong>Program:</strong> ' . htmlspecialchars($target_program) . ' (' . htmlspecialchars($scholar_mode) . ')</div>
+                             <div><strong>Status:</strong> Under Review</div>
+                         </div>
+                         <p>Our admission counselor will contact you at <strong>' . htmlspecialchars($phone) . '</strong> shortly.</p>'
+                    );
+                    send_smtp_email($email, "Application Received - " . $student_name . " - ABSS", $parent_html);
+                }
+
+            } else {
+                $error_msg = "Database Execution Error: " . $stmt->error;
             }
             $stmt->close();
         } else {
-            $error_msg = "Database Error: Unable to prepare statement.";
+            $error_msg = "Database Error: Unable to prepare statement (" . $conn->error . ")";
         }
     } catch (mysqli_sql_exception $e) {
         $error_msg = "Database Error: " . $e->getMessage();
@@ -116,19 +169,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <meta charset='UTF-8'>
         <meta name='viewport' content='width=device-width, initial-scale=1.0'>
         <title>Application Submitted | ABSS</title>
-        <link href='https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap' rel='stylesheet'>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+        <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
         <style>
-            body { font-family: 'Poppins', sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #010c1f 0%, #0d47a1 100%); color: #fff; }
-            .card { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.2); padding: 50px 40px; border-radius: 30px; box-shadow: 0 20px 50px rgba(0,0,0,0.2); text-align: center; max-width: 560px; width: 90%; }
-            .icon-wrapper { width: 80px; height: 80px; background: #4caf50; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 40px; margin: 0 auto 20px; box-shadow: 0 10px 20px rgba(76, 175, 80, 0.3); }
-            h1 { margin-bottom: 15px; font-size: 2rem; color: #fff; }
-            p { opacity: 0.9; margin-bottom: 25px; line-height: 1.6; font-size: 1.05rem; }
-            .btn { background: #ffd600; color: #010c1f; padding: 15px 35px; border-radius: 50px; text-decoration: none; font-weight: 700; display: inline-block; transition: 0.3s; box-shadow: 0 10px 20px rgba(255, 214, 0, 0.2); }
-            .btn:hover { background: #fff; transform: translateY(-3px); }
-            .details-box { background: rgba(0,0,0,0.2); padding: 18px 20px; border-radius: 15px; margin-bottom: 25px; text-align: left; font-size: 0.9rem; line-height: 1.9; }
-            .details-box strong { color: #ffd600; }
-            .reg-no-badge { display: inline-block; background: rgba(255,214,0,0.15); border: 2px solid #ffd600; color: #ffd600; font-size: 1.4rem; font-weight: 800; padding: 8px 25px; border-radius: 50px; margin: 10px 0 20px; letter-spacing: 0.05em; }
+            body { font-family: 'Outfit', sans-serif; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0d47a1 100%); color: #fff; padding: 20px; }
+            .card { background: rgba(255, 255, 255, 0.08); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.18); padding: 45px 35px; border-radius: 30px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); text-align: center; max-width: 520px; width: 100%; }
+            .icon-wrapper { width: 80px; height: 80px; background: #22c55e; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 38px; margin: 0 auto 20px; box-shadow: 0 10px 25px rgba(34, 197, 94, 0.4); }
+            h1 { margin: 0 0 12px 0; font-size: 2rem; color: #fff; font-weight: 900; }
+            p { opacity: 0.9; margin-bottom: 25px; line-height: 1.6; font-size: 1rem; color: #cbd5e1; }
+            .btn { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; padding: 14px 32px; border-radius: 50px; text-decoration: none; font-weight: 800; display: inline-block; transition: 0.3s; box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3); }
+            .btn:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(37, 99, 235, 0.4); }
+            .details-box { background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(255,255,255,0.1); padding: 18px 20px; border-radius: 18px; margin-bottom: 25px; text-align: left; font-size: 0.9rem; line-height: 1.9; }
+            .details-box strong { color: #38bdf8; }
+            .reg-no-badge { display: inline-block; background: rgba(56, 189, 248, 0.15); border: 2px solid #38bdf8; color: #38bdf8; font-size: 1.4rem; font-weight: 900; padding: 8px 25px; border-radius: 50px; margin: 10px 0 20px; letter-spacing: 0.05em; }
         </style>
     </head>
     <body>
@@ -136,36 +189,28 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <?php if($success): ?>
                 <div class="icon-wrapper"><i class="fas fa-check"></i></div>
                 <h1>Application Submitted!</h1>
-                <p>Thank you, <strong><?php echo htmlspecialchars($student_name); ?></strong>! Your admission application has been received successfully.</p>
+                <p>Thank you, <strong><?php echo htmlspecialchars($student_name); ?></strong>! Your online admission request has been recorded.</p>
                 <div class="reg-no-badge">Application #<?php echo str_pad($admission_id, 5, '0', STR_PAD_LEFT); ?></div>
                 <div class="details-box">
                     <div><strong>Application ID:</strong> #<?php echo str_pad($admission_id, 5, '0', STR_PAD_LEFT); ?></div>
-                    <div><strong>Student:</strong> <?php echo htmlspecialchars($student_name); ?></div>
-                    <div><strong>D.O.B:</strong> <?php echo $dob ? date('d M Y', strtotime($dob)) : '—'; ?></div>
+                    <div><strong>Student Name:</strong> <?php echo htmlspecialchars($student_name); ?></div>
+                    <div><strong>Date of Birth:</strong> <?php echo $dob ? date('d M Y', strtotime($dob)) : '—'; ?></div>
                     <div><strong>Program:</strong> <?php echo htmlspecialchars($target_program); ?></div>
                     <div><strong>Mode:</strong> <?php echo htmlspecialchars($scholar_mode); ?></div>
                     <div><strong>Guardian:</strong> <?php echo htmlspecialchars($parent_name); ?></div>
-                    <div><strong>Status:</strong> <span style="color: #4caf50; font-weight: bold;">Under Review</span></div>
+                    <div><strong>Status:</strong> <span style="color: #4ade80; font-weight: 800;">Under Review</span></div>
                 </div>
-                <p style="font-size: 0.9rem; opacity: 0.7;">Our admission counselor will review your application and contact you at <strong><?php echo htmlspecialchars($phone); ?></strong> with next steps.</p>
+                <p style="font-size: 0.88rem; opacity: 0.8;">Our admission desk will review your application and contact you at <strong><?php echo htmlspecialchars($phone); ?></strong> with next steps.</p>
+                <a href="index.php" class="btn"><i class="fas fa-home"></i> Return to Homepage</a>
             <?php else: ?>
-                <div class="icon-wrapper" style="background: #f44336;"><i class="fas fa-times"></i></div>
-                <h1>Submission Failed</h1>
-                <p>Sorry, there was an error processing your application.</p>
-                <?php if(!empty($error_msg)): ?>
-                    <div class="details-box" style="background: rgba(244, 67, 54, 0.2);">
-                        <strong style="color: #ff9999;">Error:</strong> <span style="color: #fff;"><?php echo htmlspecialchars($error_msg); ?></span>
-                    </div>
-                <?php endif; ?>
-                <p>Please try again or contact us for support.</p>
+                <div class="icon-wrapper" style="background:#ef4444; box-shadow: 0 10px 25px rgba(239, 68, 68, 0.4);"><i class="fas fa-exclamation-triangle"></i></div>
+                <h1>Submission Error</h1>
+                <p style="color:#fca5a5;"><?php echo htmlspecialchars($error_msg); ?></p>
+                <a href="admission.php" class="btn" style="background:#ef4444;"><i class="fas fa-arrow-left"></i> Back to Admission Form</a>
             <?php endif; ?>
-            <a href='index.php' class='btn'>Return to Homepage</a>
         </div>
     </body>
     </html>
     <?php
-} else {
-    header("Location: index.php");
-    exit();
 }
 ?>

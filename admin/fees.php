@@ -1,5 +1,5 @@
 <?php
-// admin/fees.php - Fee Management & Billing Ledger
+// admin/fees.php - Fee Management & Billing Ledger (2-Column Grid Redesign)
 require_once 'includes/auth.php';
 
 // Automatically run monthly fee billing engine for due students on page load (without blocking on emails)
@@ -119,7 +119,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
         if ($student_res && !empty($student_res['parent_email'])) {
             require_once __DIR__ . '/../includes/mail_helper.php';
             
-            // Dynamic host url builder
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
             $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
@@ -149,15 +148,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
     $sid = (int)$_POST['student_id'];
     $amount = (float)$_POST['amount'];
     $month = trim($_POST['month_for']);
-    $year = (int)date('Y'); // Dynamic current year
+    $year = (int)date('Y');
     $remark = trim($_POST['remark']);
-    $fee_type = trim($_POST['fee_type']); // e.g. 'Day Scholar', 'Hostler', or 'Custom'
+    $fee_type = trim($_POST['fee_type']);
     $send_email = isset($_POST['send_email']) ? true : false;
 
     $month_for_full = "$month $year";
     $billing_date = date('Y-m-d');
 
-    // 1. Fetch student info
     $stmt = $conn->prepare("SELECT name, parent_id, last_billed_date FROM students WHERE id = ? AND status = 'active'");
     $stmt->bind_param("i", $sid);
     $stmt->execute();
@@ -169,12 +167,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
 
         $conn->begin_transaction();
         try {
-            // Check for existing unpaid bill
             $existing_q = $conn->query("SELECT id, amount, remark, month_for FROM fees_generated WHERE student_id = $sid AND status = 'unpaid' ORDER BY id DESC LIMIT 1");
             $existing = $existing_q->fetch_assoc();
 
             if ($existing) {
-                // Update existing unpaid invoice
                 $new_amount = $existing['amount'] + $amount;
                 $new_remark = $existing['remark'] . (empty($remark) ? "" : " | " . $remark . " [" . $month_for_full . "]: ₹" . number_format($amount, 2));
                 $new_month = $existing['month_for'];
@@ -188,7 +184,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
                 $invoice_id = $existing['id'];
                 $msg = "Successfully added ₹" . number_format($amount, 2) . " to $st_name's existing unpaid invoice.";
             } else {
-                // Create a new unpaid invoice
                 $final_remark = "Manual Bill. " . $remark . " [" . $month_for_full . "]: ₹" . number_format($amount, 2);
                 $insert_stmt = $conn->prepare("INSERT INTO fees_generated (student_id, amount, month_for, billing_date, remark, status) VALUES (?, ?, ?, ?, ?, 'unpaid')");
                 $insert_stmt->bind_param("idsss", $sid, $amount, $month_for_full, $billing_date, $final_remark);
@@ -197,7 +192,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
                 $msg = "Successfully generated new manual invoice of ₹" . number_format($amount, 2) . " for $st_name.";
             }
 
-            // If it's a standard monthly fee, update last_billed_date
             if ($fee_type !== 'Custom') {
                 $date_str = "01-$month-$year";
                 $dt = DateTime::createFromFormat('d-F-Y', $date_str);
@@ -213,7 +207,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
                 log_activity('manual_fee_generated', "Generated manual fee of ₹" . number_format($amount, 2) . " for student $st_name ($month_for_full)");
             }
 
-            // 2. Email notification to parent
             if ($send_email && $parent_id) {
                 $parent_stmt = $conn->prepare("SELECT email FROM parents WHERE id = ?");
                 $parent_stmt->bind_param("i", $parent_id);
@@ -330,6 +323,7 @@ $bills = $conn->query("
 $tuition_modes = [];
 if (!empty($settings['tuition_modes'])) {
     $tuition_modes = json_decode($settings['tuition_modes'], true);
+} else {
     $fee_day_scholar = $settings['fee_day_scholar'] ?? '3000';
     $fee_hostler = $settings['fee_hostler'] ?? '5000';
     $fee_tuition = $settings['fee_tuition'] ?? '1500';
@@ -345,9 +339,14 @@ if (!empty($settings['tuition_modes'])) {
     <title>Fee Management & Ledger | ABSS Admin</title>
     <?php include 'includes/head_css.php'; ?>
     <style>
-        .form-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 35px; }
-        .list-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
-        .amount-tag { background: #dcfce7; color: #15803d; padding: 6px 12px; border-radius: 8px; font-weight: 800; font-size: 0.88rem; }
+        .fees-main-2col {
+            display: grid;
+            grid-template-columns: 420px 1fr;
+            gap: 25px;
+            align-items: start;
+        }
+
+        .amount-tag { background: #dcfce7; color: #15803d; padding: 5px 10px; border-radius: 8px; font-weight: 800; font-size: 0.85rem; }
         .status-badge { padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; }
         .status-paid { background: #dcfce7; color: #15803d; }
         .status-unpaid { background: #fee2e2; color: #b91c1c; }
@@ -399,15 +398,22 @@ if (!empty($settings['tuition_modes'])) {
             max-width: 500px;
             box-shadow: 0 20px 40px rgba(0,0,0,0.15);
         }
+
+        @media (max-width: 1100px) {
+            .fees-main-2col {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+        }
     </style>
 </head>
 <body>
     <?php include 'includes/sidebar.php'; ?>
 
     <main class="main-content">
-        <header style="margin-bottom: 30px;">
+        <header style="margin-bottom: 25px;">
             <h1 style="font-size: 1.8rem; margin-bottom: 4px;">Fee Management & Ledger</h1>
-            <p style="margin: 0;">Generate monthly invoices, collect payments, and manage fee records.</p>
+            <p style="margin: 0; color:#64748b;">Collect payments, generate manual fees, and view real-time billing logs in 2-column view.</p>
         </header>
 
         <?php if($msg): ?>
@@ -421,203 +427,255 @@ if (!empty($settings['tuition_modes'])) {
             </div>
         <?php endif; ?>
 
-        <!-- Form Section -->
-        <div class="form-cols">
-            <!-- Form 1: Collect Fee -->
-            <div class="portal-card">
-                <h3 style="margin-bottom: 20px; font-size: 1.2rem;"><i class="fas fa-hand-holding-usd" style="color:var(--portal-blue); margin-right:8px;"></i> Collect Fee Payment</h3>
-                <form action="" method="POST">
-                    <input type="hidden" name="record_payment" value="1">
-                    <div class="portal-input-group">
-                        <label style="display:flex; justify-content:space-between;">
-                            <span>Select Student</span>
-                            <span id="display_total_due" style="font-weight:800; display:none;"></span>
-                        </label>
-                        <select name="student_id" id="collect_student_id" required>
-                            <option value="" data-due="0">-- Select Student --</option>
-                            <?php foreach($students_list as $student): ?>
-                                <option value="<?php echo $student['id']; ?>" data-due="<?php echo $student['total_due']; ?>"><?php echo htmlspecialchars($student['name']); ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <!-- 2-COLUMN SIDE-BY-SIDE GRID LAYOUT -->
+        <div class="fees-main-2col">
+            
+            <!-- LEFT COLUMN: CONTROLS & FORMS -->
+            <div>
+                <!-- Form 1: Collect Fee -->
+                <div class="portal-card" style="margin-bottom: 25px;">
+                    <h3 style="margin-bottom: 20px; font-size: 1.15rem; color:var(--portal-dark); font-weight:800; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">
+                        <i class="fas fa-hand-holding-usd" style="color:var(--portal-blue); margin-right:8px;"></i> Collect Fee Payment
+                    </h3>
+                    <form action="" method="POST">
+                        <input type="hidden" name="record_payment" value="1">
                         <div class="portal-input-group">
-                            <label>Amount Paid (₹)</label>
-                            <input type="number" step="0.01" name="amount" placeholder="e.g. 3000" required>
-                        </div>
-                        <div class="portal-input-group">
-                            <label>For Month</label>
-                            <select name="month_for" required>
-                                <?php 
-                                $months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-                                foreach($months as $m) {
-                                    $sel = (date('F') == $m) ? 'selected' : '';
-                                    echo "<option value='$m' $sel>$m</option>";
-                                }
-                                ?>
-                            </select>
-                        </div>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <div class="portal-input-group">
-                            <label>Payment Method</label>
-                            <select name="payment_method" required>
-                                <option value="Cash">Cash (Offline Direct)</option>
-                                <option value="UPI / Online">UPI / Online Transfer</option>
-                                <option value="Bank Transfer">Bank Transfer / Cheque</option>
-                            </select>
-                        </div>
-                        <div class="portal-input-group">
-                            <label>Payment Date</label>
-                            <input type="date" name="payment_date" value="<?php echo date('Y-m-d'); ?>" required>
-                        </div>
-                    </div>
-                    <button type="submit" class="btn-portal" style="width: 100%;">
-                        <i class="fas fa-receipt"></i> Record Fee Payment
-                    </button>
-                </form>
-            </div>
-
-            <!-- Form 2: Manual Fee Generation -->
-            <div class="portal-card">
-                <h3 style="margin-bottom: 20px; font-size: 1.2rem;"><i class="fas fa-file-invoice-dollar" style="color:#7c3aed; margin-right:8px;"></i> Generate Manual Fee</h3>
-                <form action="" method="POST">
-                    <input type="hidden" name="generate_manual_fee" value="1">
-                    <div class="portal-input-group">
-                        <label>Select Student</label>
-                        <select name="student_id" id="manual_student_id" required>
-                            <option value="">-- Select Student --</option>
-                            <?php foreach($students_list as $student): ?>
-                                <option value="<?php echo $student['id']; ?>" 
-                                        data-scholar-mode="<?php echo htmlspecialchars($student['scholar_mode'] ?? ''); ?>"
-                                        data-base-fee="<?php echo $student['base_fee']; ?>"
-                                        data-monthly-discount="<?php echo $student['monthly_discount']; ?>">
-                                    <?php echo htmlspecialchars($student['name']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        <div class="portal-input-group">
-                            <label>Fee Category / Type</label>
-                            <select name="fee_type" id="manual_fee_type" required>
-                                <?php foreach($tuition_modes as $modeName => $modeRate): ?>
-                                    <option value="<?php echo htmlspecialchars($modeName); ?>"><?php echo htmlspecialchars($modeName); ?> (₹<?php echo number_format($modeRate); ?>)</option>
+                            <label style="display:flex; justify-content:space-between;">
+                                <span>Select Student</span>
+                                <span id="display_total_due" style="font-weight:800; display:none;"></span>
+                            </label>
+                            <select name="student_id" id="collect_student_id" required>
+                                <option value="" data-due="0">-- Select Student --</option>
+                                <?php foreach($students_list as $student): ?>
+                                    <option value="<?php echo $student['id']; ?>" data-due="<?php echo $student['total_due']; ?>"><?php echo htmlspecialchars($student['name']); ?></option>
                                 <?php endforeach; ?>
-                                <option value="Custom">Custom / Add-on Fee</option>
                             </select>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="portal-input-group">
+                                <label>Amount Paid (₹)</label>
+                                <input type="number" step="0.01" name="amount" placeholder="3000" required>
+                            </div>
+                            <div class="portal-input-group">
+                                <label>For Month</label>
+                                <select name="month_for" required>
+                                    <?php 
+                                    $months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+                                    foreach($months as $m) {
+                                        $sel = (date('F') == $m) ? 'selected' : '';
+                                        echo "<option value='$m' $sel>$m</option>";
+                                    }
+                                    ?>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="portal-input-group">
+                                <label>Method</label>
+                                <select name="payment_method" required>
+                                    <option value="Cash">Cash (Offline Direct)</option>
+                                    <option value="UPI / Online">UPI / Online Transfer</option>
+                                    <option value="Bank Transfer">Bank Transfer / Cheque</option>
+                                </select>
+                            </div>
+                            <div class="portal-input-group">
+                                <label>Payment Date</label>
+                                <input type="date" name="payment_date" value="<?php echo date('Y-m-d'); ?>" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-portal" style="width: 100%; padding: 13px;">
+                            <i class="fas fa-receipt"></i> Record Fee Payment
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Form 2: Manual Fee Generation -->
+                <div class="portal-card">
+                    <h3 style="margin-bottom: 20px; font-size: 1.15rem; color:var(--portal-dark); font-weight:800; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">
+                        <i class="fas fa-file-invoice-dollar" style="color:#7c3aed; margin-right:8px;"></i> Generate Manual Fee
+                    </h3>
+                    <form action="" method="POST">
+                        <input type="hidden" name="generate_manual_fee" value="1">
+                        <div class="portal-input-group">
+                            <label>Select Student</label>
+                            <select name="student_id" id="manual_student_id" required>
+                                <option value="">-- Select Student --</option>
+                                <?php foreach($students_list as $student): ?>
+                                    <option value="<?php echo $student['id']; ?>" 
+                                            data-scholar-mode="<?php echo htmlspecialchars($student['scholar_mode'] ?? ''); ?>"
+                                            data-base-fee="<?php echo $student['base_fee']; ?>"
+                                            data-monthly-discount="<?php echo $student['monthly_discount']; ?>">
+                                        <?php echo htmlspecialchars($student['name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="portal-input-group">
+                                <label>Category</label>
+                                <select name="fee_type" id="manual_fee_type" required>
+                                    <?php foreach($tuition_modes as $modeName => $modeRate): ?>
+                                        <option value="<?php echo htmlspecialchars($modeName); ?>"><?php echo htmlspecialchars($modeName); ?> (₹<?php echo number_format($modeRate); ?>)</option>
+                                    <?php endforeach; ?>
+                                    <option value="Custom">Custom / Add-on Fee</option>
+                                </select>
+                            </div>
+                            <div class="portal-input-group">
+                                <label>For Month</label>
+                                <select name="month_for" required>
+                                    <?php 
+                                    foreach($months as $m) {
+                                        $sel = (date('F') == $m) ? 'selected' : '';
+                                        echo "<option value='$m' $sel>$m</option>";
+                                    }
+                                    ?>
+                                </select>
+                            </div>
                         </div>
                         <div class="portal-input-group">
-                            <label>For Month</label>
-                            <select name="month_for" required>
-                                <?php 
-                                foreach($months as $m) {
-                                    $sel = (date('F') == $m) ? 'selected' : '';
-                                    echo "<option value='$m' $sel>$m</option>";
-                                }
-                                ?>
-                            </select>
+                            <label>Amount (₹)</label>
+                            <input type="number" step="0.01" name="amount" id="manual_amount" placeholder="Calculated rate" required>
+                            <small id="manual_fee_discount_hint" style="display:block; margin-top:4px; font-weight:700; color:#2563eb;"></small>
                         </div>
-                    </div>
-                    <div class="portal-input-group">
-                        <label>Amount (₹)</label>
-                        <input type="number" step="0.01" name="amount" id="manual_amount" placeholder="Calculated rate" required>
-                        <small id="manual_fee_discount_hint" style="display:block; margin-top:5px; font-weight:700;"></small>
-                    </div>
-                    <div class="portal-input-group">
-                        <label>Remarks / Item Description</label>
-                        <input type="text" name="remark" placeholder="e.g. Monthly Tuition, Exam Fee, Uniform" required>
-                    </div>
-                    <button type="submit" class="btn-portal" style="width: 100%; background: linear-gradient(135deg, #7c3aed, #6d28d9);">
-                        <i class="fas fa-plus-circle"></i> Generate Manual Invoice
-                    </button>
-                </form>
+                        <div class="portal-input-group">
+                            <label>Remarks / Item Description</label>
+                            <input type="text" name="remark" placeholder="e.g. Monthly Tuition, Exam Fee, Uniform" required>
+                        </div>
+                        <button type="submit" class="btn-portal" style="width: 100%; padding: 13px; background: linear-gradient(135deg, #7c3aed, #6d28d9);">
+                            <i class="fas fa-plus-circle"></i> Generate Manual Invoice
+                        </button>
+                    </form>
+                </div>
             </div>
-        </div>
 
-        <!-- Ledger Logs Section -->
-        <div class="list-cols">
-            <!-- List 1: Billed Invoices -->
-            <div class="portal-card">
-                <form id="bulkDeleteForm" method="POST">
-                    <input type="hidden" name="bulk_delete_bills" value="1">
-                    
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px; margin-bottom:20px;">
-                        <h3 style="font-size: 1.2rem; margin:0;"><i class="fas fa-file-invoice" style="color:var(--portal-blue); margin-right:8px;"></i> Generated Invoices</h3>
+            <!-- RIGHT COLUMN: MASTER LEDGER & INVOICES TABLES -->
+            <div>
+                <!-- List 1: Billed Invoices -->
+                <div class="portal-card" style="margin-bottom: 25px;">
+                    <form id="bulkDeleteForm" method="POST">
+                        <input type="hidden" name="bulk_delete_bills" value="1">
                         
-                        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-                            <button type="button" id="btnBulkDelete" onclick="submitBulkDelete()" class="btn-quick-collect btn-action-delete" style="display:none; padding:7px 14px; font-weight:800;">
-                                <i class="fas fa-trash-alt"></i> Delete Selected (<span id="selectedCount">0</span>)
-                            </button>
-
-                            <input type="text" id="search_bills_input" onkeyup="filterBillsTable()" placeholder="🔍 Search student, month..." style="padding:8px 14px; border-radius:10px; border:1px solid #cbd5e1; font-size:0.85rem; width:180px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; border-bottom:2px solid #f1f5f9; padding-bottom:12px;">
+                            <h3 style="font-size: 1.15rem; margin:0; font-weight:800;"><i class="fas fa-file-invoice" style="color:var(--portal-blue); margin-right:8px;"></i> Generated Invoices</h3>
                             
-                            <select name="filter" onchange="window.location.href='fees.php?filter=' + this.value" style="padding: 8px 12px; border-radius: 10px; border: 1px solid #cbd5e1; font-size:0.85rem;">
-                                <option value="all" <?php echo ($filter=='all')?'selected':''; ?>>All Invoices</option>
-                                <option value="unpaid" <?php echo ($filter=='unpaid')?'selected':''; ?>>Unpaid Only</option>
-                                <option value="paid" <?php echo ($filter=='paid')?'selected':''; ?>>Paid Only</option>
-                            </select>
-                        </div>
-                    </div>
+                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                <button type="button" id="btnBulkDelete" onclick="submitBulkDelete()" class="btn-quick-collect btn-action-delete" style="display:none; padding:6px 12px; font-weight:800;">
+                                    <i class="fas fa-trash-alt"></i> Delete Selected (<span id="selectedCount">0</span>)
+                                </button>
 
+                                <input type="text" id="search_bills_input" onkeyup="filterBillsTable()" placeholder="🔍 Search student..." style="padding:7px 12px; border-radius:10px; border:1px solid #cbd5e1; font-size:0.82rem; width:150px;">
+                                
+                                <select name="filter" onchange="window.location.href='fees.php?filter=' + this.value" style="padding: 7px 10px; border-radius: 10px; border: 1px solid #cbd5e1; font-size:0.82rem;">
+                                    <option value="all" <?php echo ($filter=='all')?'selected':''; ?>>All Invoices</option>
+                                    <option value="unpaid" <?php echo ($filter=='unpaid')?'selected':''; ?>>Unpaid Only</option>
+                                    <option value="paid" <?php echo ($filter=='paid')?'selected':''; ?>>Paid Only</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="portal-table-container">
+                            <table id="billsTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 35px; text-align: center;">
+                                            <input type="checkbox" id="selectAllBills" onclick="toggleSelectAllBills(this)" style="cursor:pointer; width:15px; height:15px;">
+                                        </th>
+                                        <th>Student</th>
+                                        <th>Amount</th>
+                                        <th>Actions & Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($bills->num_rows == 0): ?>
+                                        <tr>
+                                            <td colspan="4" style="text-align: center; color: #94a3b8; padding: 25px;">No invoice records found.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php while($b = $bills->fetch_assoc()): ?>
+                                            <tr class="bill-row">
+                                                <td style="text-align: center;">
+                                                    <input type="checkbox" name="selected_bill_ids[]" value="<?php echo $b['id']; ?>" class="bill-checkbox" onclick="updateBulkDeleteState()" style="cursor:pointer; width:15px; height:15px;">
+                                                </td>
+                                                <td>
+                                                    <strong class="bill-student-name" style="color:var(--portal-dark); font-size:0.9rem;"><?php echo htmlspecialchars($b['name']); ?></strong><br>
+                                                    <small style="color:#64748b; font-weight:600;">Inv #<?php echo $b['id']; ?> • <?php echo date('d M, Y', strtotime($b['billing_date'])); ?></small>
+                                                </td>
+                                                <td>
+                                                    <div style="font-weight:900; color:var(--portal-dark); font-size:1rem;">₹ <?php echo number_format($b['amount'], 2); ?></div>
+                                                    <small class="bill-month-for" style="color:var(--portal-blue); font-weight:700;"><?php echo htmlspecialchars($b['month_for']); ?></small>
+                                                </td>
+                                                <td>
+                                                    <div class="bill-remark" style="font-size:0.8rem; margin-bottom:8px; color:#475569; max-width:240px; word-break:break-word;">
+                                                        <?php echo htmlspecialchars($b['remark']); ?>
+                                                    </div>
+                                                    <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                                                        <span class="status-badge status-<?php echo $b['status']; ?>"><?php echo $b['status']; ?></span>
+                                                        
+                                                        <a href="view_bill.php?id=<?php echo $b['id']; ?>" class="btn-quick-collect" title="View Bill">
+                                                            <i class="fas fa-eye"></i>
+                                                        </a>
+                                                        
+                                                        <button type="button" class="btn-quick-collect btn-action-edit" 
+                                                                onclick="openEditModal(<?php echo $b['id']; ?>, <?php echo $b['amount']; ?>, '<?php echo addslashes($b['month_for']); ?>', '<?php echo addslashes($b['remark']); ?>', '<?php echo $b['status']; ?>')" 
+                                                                title="Edit Bill Details">
+                                                            <i class="fas fa-edit"></i>
+                                                        </button>
+
+                                                        <button type="button" class="btn-quick-collect btn-action-delete" onclick="submitSingleDelete(<?php echo $b['id']; ?>)" title="Delete Invoice">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+
+                                                        <?php if ($b['status'] === 'unpaid'): ?>
+                                                            <a href="?collect_offline=<?php echo $b['id']; ?>" class="btn-quick-collect" style="background:#dcfce7; color:#15803d; border-color:#bbf7d0;" onclick="return confirm('Record cash payment of ₹<?php echo number_format($b['amount'], 2); ?> for <?php echo htmlspecialchars($b['name']); ?>?')" title="Quick Collect Cash">
+                                                                <i class="fas fa-check"></i> Cash
+                                                            </a>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        <?php endwhile; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Single Delete Hidden Form -->
+                <form id="singleDeleteForm" method="POST">
+                    <input type="hidden" name="delete_bill" value="1">
+                    <input type="hidden" name="bill_id" id="single_delete_bill_id">
+                </form>
+
+                <!-- List 2: Recent Collections -->
+                <div class="portal-card">
+                    <h3 style="margin-bottom: 18px; font-size: 1.15rem; font-weight:800; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">
+                        <i class="fas fa-history" style="color:var(--portal-blue); margin-right:8px;"></i> Recent Payment Logs
+                    </h3>
                     <div class="portal-table-container">
-                        <table id="billsTable">
+                        <table>
                             <thead>
                                 <tr>
-                                    <th style="width: 40px; text-align: center;">
-                                        <input type="checkbox" id="selectAllBills" onclick="toggleSelectAllBills(this)" style="cursor:pointer; width:16px; height:16px;">
-                                    </th>
                                     <th>Student</th>
-                                    <th>Amount / Month</th>
-                                    <th>Remarks & Actions</th>
+                                    <th>Month</th>
+                                    <th>Amount</th>
+                                    <th>Date / Method</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php if ($bills->num_rows == 0): ?>
+                                <?php if ($payments->num_rows == 0): ?>
                                     <tr>
-                                        <td colspan="4" style="text-align: center; color: #94a3b8; padding: 25px;">No invoice records found.</td>
+                                        <td colspan="4" style="text-align: center; color: #94a3b8; padding: 25px;">No payments recorded yet.</td>
                                     </tr>
                                 <?php else: ?>
-                                    <?php while($b = $bills->fetch_assoc()): ?>
-                                        <tr class="bill-row">
-                                            <td style="text-align: center;">
-                                                <input type="checkbox" name="selected_bill_ids[]" value="<?php echo $b['id']; ?>" class="bill-checkbox" onclick="updateBulkDeleteState()" style="cursor:pointer; width:16px; height:16px;">
-                                            </td>
+                                    <?php while($p = $payments->fetch_assoc()): ?>
+                                        <tr>
+                                            <td><strong style="color:var(--portal-dark); font-size:0.9rem;"><?php echo htmlspecialchars($p['name']); ?></strong></td>
+                                            <td><span style="font-weight:700; color:var(--portal-blue); font-size:0.85rem;"><?php echo htmlspecialchars($p['month_for']); ?></span></td>
+                                            <td><span class="amount-tag">₹ <?php echo number_format($p['amount'], 2); ?></span></td>
                                             <td>
-                                                <strong class="bill-student-name" style="color:var(--portal-dark); font-size:0.95rem;"><?php echo htmlspecialchars($b['name']); ?></strong><br>
-                                                <small style="color:#64748b; font-weight:600;">Inv #<?php echo $b['id']; ?> • <?php echo date('d M, Y', strtotime($b['billing_date'])); ?></small>
-                                            </td>
-                                            <td>
-                                                <div style="font-weight:800; color:var(--portal-dark); font-size:1.05rem;">₹ <?php echo number_format($b['amount'], 2); ?></div>
-                                                <small class="bill-month-for" style="color:var(--portal-blue); font-weight:700;"><?php echo htmlspecialchars($b['month_for']); ?></small>
-                                            </td>
-                                            <td>
-                                                <div class="bill-remark" style="font-size:0.82rem; margin-bottom:10px; line-height:1.4; color:#475569; max-width:260px; word-break:break-word;">
-                                                    <?php echo htmlspecialchars($b['remark']); ?>
-                                                </div>
-                                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                                    <span class="status-badge status-<?php echo $b['status']; ?>"><?php echo $b['status']; ?></span>
-                                                    
-                                                    <a href="view_bill.php?id=<?php echo $b['id']; ?>" class="btn-quick-collect" title="View Printable Bill">
-                                                        <i class="fas fa-eye"></i> View
-                                                    </a>
-                                                    
-                                                    <button type="button" class="btn-quick-collect btn-action-edit" 
-                                                            onclick="openEditModal(<?php echo $b['id']; ?>, <?php echo $b['amount']; ?>, '<?php echo addslashes($b['month_for']); ?>', '<?php echo addslashes($b['remark']); ?>', '<?php echo $b['status']; ?>')" 
-                                                            title="Edit Bill Details">
-                                                        <i class="fas fa-edit"></i> Edit
-                                                    </button>
-
-                                                    <button type="button" class="btn-quick-collect btn-action-delete" onclick="submitSingleDelete(<?php echo $b['id']; ?>)" title="Delete Invoice">
-                                                        <i class="fas fa-trash"></i> Delete
-                                                    </button>
-
-                                                    <?php if ($b['status'] === 'unpaid'): ?>
-                                                        <a href="?collect_offline=<?php echo $b['id']; ?>" class="btn-quick-collect" style="background:#dcfce7; color:#15803d; border-color:#bbf7d0;" onclick="return confirm('Record offline cash collection of ₹<?php echo number_format($b['amount'], 2); ?> for <?php echo htmlspecialchars($b['name']); ?>?')" title="Quick Collect Cash">
-                                                            <i class="fas fa-check"></i> Collect Cash
-                                                        </a>
-                                                    <?php endif; ?>
-                                                </div>
+                                                <div style="font-weight:700; color:#334155; font-size:0.82rem;"><?php echo date('d M, Y', strtotime($p['payment_date'])); ?></div>
+                                                <small style="color:#64748b;"><i class="fas fa-wallet"></i> <?php echo htmlspecialchars($p['payment_method']); ?></small>
                                             </td>
                                         </tr>
                                     <?php endwhile; ?>
@@ -625,50 +683,9 @@ if (!empty($settings['tuition_modes'])) {
                             </tbody>
                         </table>
                     </div>
-                </form>
-            </div>
-
-            <!-- Single Delete Hidden Form -->
-            <form id="singleDeleteForm" method="POST">
-                <input type="hidden" name="delete_bill" value="1">
-                <input type="hidden" name="bill_id" id="single_delete_bill_id">
-            </form>
-
-            <!-- List 2: Recent Collections -->
-            <div class="portal-card">
-                <h3 style="margin-bottom: 20px; font-size: 1.2rem;"><i class="fas fa-history" style="color:var(--portal-blue); margin-right:8px;"></i> Recent Payment Logs</h3>
-                <div class="portal-table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Student</th>
-                                <th>Month</th>
-                                <th>Amount</th>
-                                <th>Date / Method</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if ($payments->num_rows == 0): ?>
-                                <tr>
-                                    <td colspan="4" style="text-align: center; color: #94a3b8; padding: 25px;">No payments recorded yet.</td>
-                                </tr>
-                            <?php else: ?>
-                                <?php while($p = $payments->fetch_assoc()): ?>
-                                    <tr>
-                                        <td><strong style="color:var(--portal-dark);"><?php echo htmlspecialchars($p['name']); ?></strong></td>
-                                        <td><span style="font-weight:700; color:var(--portal-blue); font-size:0.88rem;"><?php echo htmlspecialchars($p['month_for']); ?></span></td>
-                                        <td><span class="amount-tag">₹ <?php echo number_format($p['amount'], 2); ?></span></td>
-                                        <td>
-                                            <div style="font-weight:700; color:#334155; font-size:0.85rem;"><?php echo date('d M, Y', strtotime($p['payment_date'])); ?></div>
-                                            <small style="color:#64748b;"><i class="fas fa-wallet"></i> <?php echo htmlspecialchars($p['payment_method']); ?></small>
-                                        </td>
-                                    </tr>
-                                <?php endwhile; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
                 </div>
             </div>
+
         </div>
     </main>
 
@@ -719,183 +736,145 @@ if (!empty($settings['tuition_modes'])) {
         function toggleSelectAllBills(master) {
             const checkboxes = document.querySelectorAll('.bill-checkbox');
             checkboxes.forEach(cb => {
-                if (cb.closest('tr').style.display !== 'none') {
-                    cb.checked = master.checked;
-                }
+                cb.checked = master.checked;
             });
             updateBulkDeleteState();
         }
 
         // Update Bulk Delete Button Visibility & Counter
         function updateBulkDeleteState() {
-            const selected = document.querySelectorAll('.bill-checkbox:checked');
-            const btn = document.getElementById('btnBulkDelete');
+            const checkedCount = document.querySelectorAll('.bill-checkbox:checked').length;
+            const btnBulk = document.getElementById('btnBulkDelete');
             const counter = document.getElementById('selectedCount');
             
-            if (counter) counter.textContent = selected.length;
-            if (btn) {
-                if (selected.length > 0) {
-                    btn.style.display = 'inline-flex';
-                } else {
-                    btn.style.display = 'none';
-                }
+            if (checkedCount > 0) {
+                btnBulk.style.display = 'inline-flex';
+                counter.innerText = checkedCount;
+            } else {
+                btnBulk.style.display = 'none';
             }
         }
 
-        // Submit Bulk Delete Form
+        // Confirm Bulk Delete Action
         function submitBulkDelete() {
-            const selected = document.querySelectorAll('.bill-checkbox:checked');
-            if (selected.length === 0) {
-                alert('Please select at least one invoice to delete.');
-                return;
-            }
-            if (confirm('Are you sure you want to delete ' + selected.length + ' selected invoice(s)? This action cannot be undone.')) {
+            const checkedCount = document.querySelectorAll('.bill-checkbox:checked').length;
+            if (checkedCount === 0) return;
+            
+            if (confirm(`Are you sure you want to permanently delete ${checkedCount} selected invoice(s)? This action cannot be undone.`)) {
                 document.getElementById('bulkDeleteForm').submit();
             }
         }
 
-        // Submit Single Delete Form
-        function submitSingleDelete(id) {
-            if (confirm('Are you sure you want to delete Invoice #' + id + '?')) {
-                document.getElementById('single_delete_bill_id').value = id;
+        // Single Delete Handler
+        function submitSingleDelete(billId) {
+            if (confirm(`Are you sure you want to delete Invoice #${billId}?`)) {
+                document.getElementById('single_delete_bill_id').value = billId;
                 document.getElementById('singleDeleteForm').submit();
             }
         }
 
-        // Live Bills Search Filter
-        function filterBillsTable() {
-            const input = document.getElementById('search_bills_input');
-            const filter = input.value.toLowerCase();
-            const rows = document.querySelectorAll('.bill-row');
-
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                if (text.includes(filter)) {
-                    row.style.display = '';
-                } else {
-                    row.style.display = 'none';
-                    // Uncheck hidden row checkboxes so select all doesn't delete hidden items
-                    const cb = row.querySelector('.bill-checkbox');
-                    if (cb) cb.checked = false;
-                }
-            });
-            updateBulkDeleteState();
-        }
-
-        // Open Edit Bill Modal
-        function openEditModal(id, amount, monthFor, remark, status) {
+        // Modal Open Handler
+        function openEditModal(id, amount, month, remark, status) {
+            document.getElementById('modal_bill_id_title').innerText = id;
             document.getElementById('edit_bill_id').value = id;
-            document.getElementById('modal_bill_id_title').textContent = id;
             document.getElementById('edit_bill_amount').value = amount;
-            document.getElementById('edit_bill_month_for').value = monthFor;
+            document.getElementById('edit_bill_month_for').value = month;
             document.getElementById('edit_bill_remark').value = remark;
             document.getElementById('edit_bill_status').value = status;
             
             document.getElementById('editBillModal').classList.add('active');
         }
 
+        // Modal Close Handler
         function closeEditModal() {
             document.getElementById('editBillModal').classList.remove('active');
         }
 
-        // Student selection helper for collection form
-        const collectStudentSelect = document.getElementById('collect_student_id');
-        if (collectStudentSelect) {
-            collectStudentSelect.addEventListener('change', function() {
-                var selected = this.options[this.selectedIndex];
-                var due = parseFloat(selected.getAttribute('data-due') || 0);
-                var display = document.getElementById('display_total_due');
-                
-                if(!this.value) {
-                    display.style.display = 'none';
-                } else {
-                    display.style.display = 'inline-block';
+        // Live Fee Rate & Discount Auto-Calculation
+        document.addEventListener('DOMContentLoaded', function() {
+            const studentSelect = document.getElementById('manual_student_id');
+            const feeTypeSelect = document.getElementById('manual_fee_type');
+            const amountInput = document.getElementById('manual_amount');
+            const discountHint = document.getElementById('manual_fee_discount_hint');
+            const collectSelect = document.getElementById('collect_student_id');
+            const dueDisplay = document.getElementById('display_total_due');
+
+            function updateManualAmount() {
+                const opt = studentSelect.options[studentSelect.selectedIndex];
+                if (!opt || !opt.value) {
+                    discountHint.innerText = '';
+                    return;
+                }
+
+                const baseFee = parseFloat(opt.getAttribute('data-base-fee')) || 0;
+                const monthlyDiscount = parseFloat(opt.getAttribute('data-monthly-discount')) || 0;
+                const selectedType = feeTypeSelect.value;
+
+                if (selectedType !== 'Custom') {
+                    let calcAmount = baseFee > 0 ? baseFee : 0;
+                    if (calcAmount <= 0) {
+                        <?php foreach($tuition_modes as $mName => $mRate): ?>
+                            if (selectedType === '<?php echo addslashes($mName); ?>') calcAmount = <?php echo (float)$mRate; ?>;
+                        <?php endforeach; ?>
+                    }
+
+                    const finalAmount = Math.max(0, calcAmount - monthlyDiscount);
+                    amountInput.value = finalAmount.toFixed(2);
+
+                    if (monthlyDiscount > 0) {
+                        discountHint.innerText = `Standard Rate: ₹${calcAmount.toFixed(2)} - Monthly Discount: ₹${monthlyDiscount.toFixed(2)} = Net ₹${finalAmount.toFixed(2)}`;
+                    } else {
+                        discountHint.innerText = `Standard Rate: ₹${finalAmount.toFixed(2)}`;
+                    }
+                }
+            }
+
+            if (studentSelect && feeTypeSelect && amountInput) {
+                studentSelect.addEventListener('change', updateManualAmount);
+                feeTypeSelect.addEventListener('change', updateManualAmount);
+            }
+
+            if (collectSelect && dueDisplay) {
+                collectSelect.addEventListener('change', function() {
+                    const opt = collectSelect.options[collectSelect.selectedIndex];
+                    const due = parseFloat(opt.getAttribute('data-due')) || 0;
                     if (due > 0) {
-                        display.textContent = 'Total Dues: ₹' + due.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                        display.style.color = '#dc2626';
+                        dueDisplay.innerText = `Pending Due: ₹${due.toFixed(2)}`;
+                        dueDisplay.style.color = '#dc2626';
+                        dueDisplay.style.display = 'inline';
+                    } else if (opt.value) {
+                        dueDisplay.innerText = `All Dues Paid`;
+                        dueDisplay.style.color = '#16a34a';
+                        dueDisplay.style.display = 'inline';
                     } else {
-                        display.textContent = 'No Pending Dues';
-                        display.style.color = '#166534';
+                        dueDisplay.style.display = 'none';
                     }
-                }
-            });
-        }
-
-        const manualStudentSelect = document.getElementById('manual_student_id');
-        const manualAmountInput = document.getElementById('manual_amount');
-        const manualFeeTypeSelect = document.getElementById('manual_fee_type');
-        const discountHint = document.getElementById('manual_fee_discount_hint');
-        const tuitionModes = <?php echo json_encode($tuition_modes); ?>;
-
-        function updateManualFeeFields() {
-            if (!manualStudentSelect) return;
-            const selectedStudent = manualStudentSelect.options[manualStudentSelect.selectedIndex];
-            if (!selectedStudent || !selectedStudent.value) {
-                manualAmountInput.value = '';
-                if (discountHint) discountHint.textContent = '';
-                return;
+                });
             }
+        });
 
-            const baseFee = parseFloat(selectedStudent.getAttribute('data-base-fee') || 0);
-            const discount = parseFloat(selectedStudent.getAttribute('data-monthly-discount') || 0);
-            const scholarMode = selectedStudent.getAttribute('data-scholar-mode');
+        // Quick Search Filter for Bills Table
+        function filterBillsTable() {
+            const input = document.getElementById("search_bills_input");
+            const filter = input.value.toLowerCase();
+            const table = document.getElementById("billsTable");
+            const rows = table.getElementsByClassName("bill-row");
 
-            if (scholarMode && manualFeeTypeSelect) {
-                for (let i = 0; i < manualFeeTypeSelect.options.length; i++) {
-                    if (manualFeeTypeSelect.options[i].value.toLowerCase() === scholarMode.toLowerCase()) {
-                        manualFeeTypeSelect.selectedIndex = i;
-                        break;
-                    }
-                }
-            }
+            for (let i = 0; i < rows.length; i++) {
+                const nameCol = rows[i].querySelector(".bill-student-name");
+                const monthCol = rows[i].querySelector(".bill-month-for");
+                const remarkCol = rows[i].querySelector(".bill-remark");
 
-            const isCustom = manualFeeTypeSelect && manualFeeTypeSelect.value === 'Custom';
+                const nameText = nameCol ? nameCol.textContent.toLowerCase() : "";
+                const monthText = monthCol ? monthCol.textContent.toLowerCase() : "";
+                const remarkText = remarkCol ? remarkCol.textContent.toLowerCase() : "";
 
-            if (isCustom) {
-                if (discountHint) discountHint.textContent = '';
-            } else {
-                const finalAmount = Math.max(0, baseFee - discount);
-                manualAmountInput.value = baseFee > 0 ? finalAmount : '';
-                if (discountHint) {
-                    discountHint.innerHTML = `<i class="fas fa-check-circle"></i> Net Monthly Fee: ₹${finalAmount.toFixed(2)}`;
-                    discountHint.style.color = '#166534';
-                }
-            }
-        }
-
-        if (manualStudentSelect) {
-            manualStudentSelect.addEventListener('change', updateManualFeeFields);
-        }
-
-        if (manualFeeTypeSelect) {
-            manualFeeTypeSelect.addEventListener('change', function() {
-                const selectedMode = this.value;
-                const selectedStudent = manualStudentSelect.options[manualStudentSelect.selectedIndex];
-                
-                if (selectedMode === 'Custom') {
-                    if (discountHint) discountHint.textContent = '';
+                if (nameText.includes(filter) || monthText.includes(filter) || remarkText.includes(filter)) {
+                    rows[i].style.display = "";
                 } else {
-                    const studentScholarMode = selectedStudent ? selectedStudent.getAttribute('data-scholar-mode') : null;
-                    const baseFee = selectedStudent ? parseFloat(selectedStudent.getAttribute('data-base-fee') || 0) : 0;
-                    const discount = selectedStudent ? parseFloat(selectedStudent.getAttribute('data-monthly-discount') || 0) : 0;
-
-                    if (studentScholarMode && selectedMode.toLowerCase() === studentScholarMode.toLowerCase()) {
-                        const finalAmount = Math.max(0, baseFee - discount);
-                        manualAmountInput.value = baseFee > 0 ? finalAmount : (tuitionModes[selectedMode] || '');
-                        if (discountHint) {
-                            discountHint.innerHTML = `<i class="fas fa-check-circle"></i> Net Monthly Fee: ₹${finalAmount.toFixed(2)}`;
-                            discountHint.style.color = '#166534';
-                        }
-                    } else {
-                        const standardFee = parseFloat(tuitionModes[selectedMode] || 0);
-                        manualAmountInput.value = standardFee > 0 ? standardFee : '';
-                        if (discountHint) {
-                            discountHint.innerHTML = `Standard Rate: ₹${standardFee.toFixed(2)}`;
-                            discountHint.style.color = '#475569';
-                        }
-                    }
+                    rows[i].style.display = "none";
                 }
-            });
+            }
         }
     </script>
 </body>
