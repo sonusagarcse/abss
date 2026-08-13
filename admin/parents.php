@@ -51,30 +51,30 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_parent'])) {
             }
         } else {
             // New Parent
-            if (empty($password)) {
-                $err = "Password is required for new parent accounts.";
+            $check = $conn->prepare("SELECT id FROM parents WHERE email = ?");
+            $check->bind_param("s", $email);
+            $check->execute();
+            if ($check->get_result()->num_rows > 0) {
+                $err = "A parent account with this email already exists.";
             } else {
-                $check = $conn->prepare("SELECT id FROM parents WHERE email = ?");
-                $check->bind_param("s", $email);
-                $check->execute();
-                if ($check->get_result()->num_rows > 0) {
-                    $err = "A parent account with this email already exists.";
-                } else {
-                    $pass_hash = password_hash($password, PASSWORD_DEFAULT);
-                    $stmt = $conn->prepare("INSERT INTO parents (parent_name, email, password, phone) VALUES (?, ?, ?, ?)");
-                    $stmt->bind_param("ssss", $parent_name, $email, $pass_hash, $phone);
-                    
-                    if ($stmt->execute()) {
-                        $new_parent_id = $conn->insert_id;
-                        if (!empty($selected_students)) {
-                            $ids_str = implode(',', array_map('intval', $selected_students));
-                            $conn->query("UPDATE students SET parent_id = $new_parent_id WHERE id IN ($ids_str)");
-                        }
-                        $msg = "Parent account created successfully.";
-                        log_activity('parent_created', "Created parent registry account for $parent_name ($email)");
-                    } else {
-                        $err = "Error creating parent account.";
+                // Default password is the mobile number (phone)
+                if (empty($password)) {
+                    $password = !empty($phone) ? $phone : $email;
+                }
+                $pass_hash = password_hash($password, PASSWORD_DEFAULT);
+                $stmt = $conn->prepare("INSERT INTO parents (parent_name, email, password, phone) VALUES (?, ?, ?, ?)");
+                $stmt->bind_param("ssss", $parent_name, $email, $pass_hash, $phone);
+                
+                if ($stmt->execute()) {
+                    $new_parent_id = $conn->insert_id;
+                    if (!empty($selected_students)) {
+                        $ids_str = implode(',', array_map('intval', $selected_students));
+                        $conn->query("UPDATE students SET parent_id = $new_parent_id WHERE id IN ($ids_str)");
                     }
+                    $msg = "Parent account created successfully.";
+                    log_activity('parent_created', "Created parent registry account for $parent_name ($email)");
+                } else {
+                    $err = "Error creating parent account.";
                 }
             }
         }

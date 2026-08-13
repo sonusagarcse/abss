@@ -172,7 +172,7 @@ if (!empty($settings['tuition_modes'])) {
 
                     <!-- Unpaid Invoices Log -->
                     <h3 style="font-size:1.1rem; margin-bottom:15px; color:#d32f2f;"><i class="fas fa-file-invoice-dollar" style="margin-right:8px; opacity:0.7;"></i> Outstanding Invoices (Unpaid Fees)</h3>
-                    <div class="portal-table-container" style="margin-bottom: 40px;">
+                    <div class="table-responsive portal-table-container" style="margin-bottom: 40px;">
                         <table>
                             <thead>
                                 <tr>
@@ -209,7 +209,7 @@ if (!empty($settings['tuition_modes'])) {
 
                     <!-- Payments Log -->
                     <h3 style="font-size:1.1rem; margin-bottom:15px; color:var(--portal-indigo);"><i class="fas fa-history" style="margin-right:8px; opacity:0.7;"></i> Recorded Payment Ledger</h3>
-                    <div class="portal-table-container">
+                    <div class="table-responsive portal-table-container">
                         <table>
                             <thead>
                                 <tr>
@@ -233,7 +233,7 @@ if (!empty($settings['tuition_modes'])) {
                                             <td><?php echo date('d F, Y', strtotime($pay['payment_date'])); ?></td>
                                             <td style="font-weight: 700; color: #5c6bc0;"><i class="fas fa-credit-card" style="margin-right:8px; opacity:0.5;"></i> <?php echo htmlspecialchars($pay['payment_method']); ?></td>
                                             <td>
-                                                <a href="receipt?id=<?php echo $pay['id']; ?>" target="_blank" class="btn-receipt">
+                                                <a href="receipt.php?id=<?php echo $pay['id']; ?>" target="_blank" class="btn-receipt">
                                                     <i class="fas fa-file-pdf"></i> View & Print
                                                 </a>
                                             </td>

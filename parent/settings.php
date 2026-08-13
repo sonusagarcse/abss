@@ -92,23 +92,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_password'])) {
             </div>
         <?php endif; ?>
 
-        <div style="max-width: 600px;">
+        <div style="max-width: 580px;">
             <div class="portal-card">
-                <h3 style="margin-bottom: 25px; color:var(--portal-indigo);"><i class="fas fa-key" style="margin-right:8px; color:var(--portal-purple);"></i> Update Password</h3>
+                <h3 style="margin-bottom: 22px; color:var(--portal-indigo);"><i class="fas fa-lock" style="margin-right:8px; color:var(--portal-purple);"></i> Account Password & Security</h3>
                 <form action="" method="POST">
                     <div class="portal-input-group">
-                        <label>Current Security Password</label>
-                        <input type="password" name="current_password" placeholder="••••••••" required>
+                        <label><i class="fas fa-key" style="color:var(--portal-purple); margin-right:6px;"></i> Current Security Password *</label>
+                        <input type="password" name="current_password" placeholder="Enter current password" required>
                     </div>
+
                     <div class="portal-input-group">
-                        <label>New Password</label>
-                        <input type="password" name="new_password" placeholder="••••••••" minlength="6" required>
+                        <label><i class="fas fa-shield-alt" style="color:var(--portal-purple); margin-right:6px;"></i> New Password *</label>
+                        <input type="password" name="new_password" placeholder="At least 6 characters" minlength="6" required>
                     </div>
+
                     <div class="portal-input-group">
-                        <label>Confirm New Password</label>
-                        <input type="password" name="confirm_password" placeholder="••••••••" minlength="6" required>
+                        <label><i class="fas fa-check-double" style="color:var(--portal-purple); margin-right:6px;"></i> Confirm New Password *</label>
+                        <input type="password" name="confirm_password" placeholder="Re-enter new password" minlength="6" required>
                     </div>
-                    <button type="submit" name="update_password" class="btn-portal w-100" style="padding:18px;">Save Password Changes</button>
+
+                    <button type="submit" name="update_password" class="btn-portal w-100"><i class="fas fa-save"></i> Save Security Password</button>
                 </form>
             </div>
         </div>

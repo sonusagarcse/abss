@@ -37,10 +37,9 @@
             <div class="footer-links">
                 <h3>Portals</h3>
                 <ul>
-                    <li><a href="admin/login.php?role=admin">Admin Login</a></li>
-                    <li><a href="admin/login.php?role=teacher">Teacher Portal</a></li>
-                    <li><a href="admin/login.php?role=parent">Parent Portal</a></li>
-                    <li><a href="admin/login.php">Staff Login</a></li>
+                    <li><a href="admin/login.php">Admin Login</a></li>
+                    <li><a href="teacher/login.php">Teacher Portal</a></li>
+                    <li><a href="parent/login.php">Parent Portal</a></li>
                 </ul>
             </div>
             <div class="footer-contact" id="contact">

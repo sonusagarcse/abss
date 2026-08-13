@@ -30,7 +30,7 @@ if (!isset($_SESSION['parent_id']) && isset($_COOKIE['abss_parent_remember'])) {
 }
 
 if (!isset($_SESSION['parent_id'])) {
-    header("Location: ../admin/login.php?role=parent");
+    header("Location: login.php");
     exit();
 }
 

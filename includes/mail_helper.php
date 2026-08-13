@@ -341,7 +341,7 @@ function get_essential_update_template($notice_title, $notice_content, $notice_t
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
     $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
-    $login_url = "$base_url/admin/login.php?role=parent";
+    $login_url = "$base_url/parent/login.php";
     
     $content = '
     <div class="greeting">Important School Announcement</div>
@@ -403,7 +403,7 @@ function get_ticket_resolved_template($parent_name, $subject, $ticket_id) {
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
     $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
-    $login_url = "$base_url/admin/login.php?role=parent";
+    $login_url = "$base_url/parent/login.php";
     
     $content = '
     <div class="greeting">Support Ticket Resolved</div>

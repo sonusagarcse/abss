@@ -35,7 +35,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_result'])) {
             $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
             $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
             $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
-            $dashboard_url = "$base_url/admin/login.php?role=parent";
+            $dashboard_url = "$base_url/parent/login.php";
             $email_html = get_result_published_template(
                 $student_res['student_name'], 
                 $exam, 

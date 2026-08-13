@@ -1,14 +1,14 @@
 <?php
-// admin/includes/sidebar.php
+// admin/includes/sidebar.php - Frosted Glass Admin Navigation Drawer
 $current_page = basename($_SERVER['PHP_SELF']);
 ?>
-<!-- Mobile Sticky Blur Header -->
+<!-- Mobile Sticky Glass Header -->
 <div class="mobile-header">
     <div class="mobile-brand">
         <img src="../assets/logo.png" alt="Logo">
-        <span>ABSS Admin</span>
+        <span>ABSS Command Center</span>
     </div>
-    <button class="hamburger-btn" onclick="toggleSidebar()">
+    <button class="hamburger-btn" onclick="toggleSidebar()" aria-label="Open Navigation">
         <i class="fas fa-bars"></i>
     </button>
 </div>
@@ -18,14 +18,26 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 <div class="sidebar">
     <!-- Mobile Close Circular Button -->
-    <button class="close-sidebar-btn" onclick="toggleSidebar()">
+    <button class="close-sidebar-btn" onclick="toggleSidebar()" aria-label="Close Navigation">
         <i class="fas fa-times"></i>
     </button>
     
     <div class="sidebar-brand">
         <img src="../assets/logo.png" alt="Logo">
-        <span>ABSS Portal</span>
+        <div>
+            <span>ABSS Admin</span>
+            <small>Management Portal</small>
+        </div>
     </div>
+
+    <div style="background: rgba(248, 250, 252, 0.8); border-radius: 14px; padding: 12px 16px; margin-bottom: 20px; border: 1px solid #e2e8f0;">
+        <span style="font-size:0.68rem; color:#94a3b8; font-weight:800; text-transform:uppercase; display:block; margin-bottom:3px;">ACTIVE SESSION</span>
+        <span style="font-weight:800; color:var(--portal-dark); font-size:0.9rem; display:flex; align-items:center; gap:8px;">
+            <i class="fas fa-shield-alt" style="color:var(--portal-blue); font-size:1rem;"></i>
+            Administrator Desk
+        </span>
+    </div>
+
     <ul class="nav-menu">
         <li class="nav-item">
             <a href="dashboard.php" class="nav-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
@@ -44,23 +56,23 @@ $current_page = basename($_SERVER['PHP_SELF']);
         </li>
         <li class="nav-item dropdown">
             <a href="#" class="nav-link <?php echo in_array($current_page, ['teachers.php', 'teacher_expenses.php', 'teacher_invoices.php']) ? 'active' : ''; ?>" onclick="toggleTeacherMenu(event)">
-                <i class="fas fa-chalkboard-teacher"></i> Teacher Management 
-                <i class="fas fa-chevron-down" style="float:right; margin-top:5px; font-size: 12px; transition: transform 0.3s;" id="teacherMenuIcon"></i>
+                <i class="fas fa-chalkboard-teacher"></i> Teacher Module 
+                <i class="fas fa-chevron-down" style="float:right; margin-top:5px; font-size: 11px; transition: transform 0.3s;" id="teacherMenuIcon"></i>
             </a>
-            <ul class="submenu" id="teacherMenu" style="display: <?php echo in_array($current_page, ['teachers.php', 'teacher_expenses.php', 'teacher_invoices.php']) ? 'block' : 'none'; ?>; padding-left: 20px; list-style: none; margin-top: 5px;">
-                <li style="margin-bottom: 5px;">
-                    <a href="teachers.php" class="nav-link <?php echo $current_page == 'teachers.php' ? 'active' : ''; ?>" style="padding: 8px 15px; font-size: 0.9em;">
-                        <i class="fas fa-user-tie"></i> Teachers
+            <ul class="submenu" id="teacherMenu" style="display: <?php echo in_array($current_page, ['teachers.php', 'teacher_expenses.php', 'teacher_invoices.php']) ? 'block' : 'none'; ?>; padding-left: 15px; list-style: none; margin-top: 4px;">
+                <li style="margin-bottom: 4px;">
+                    <a href="teachers.php" class="nav-link <?php echo $current_page == 'teachers.php' ? 'active' : ''; ?>" style="padding: 10px 14px; font-size: 0.88em;">
+                        <i class="fas fa-user-tie"></i> Teachers Directory
                     </a>
                 </li>
-                <li style="margin-bottom: 5px;">
-                    <a href="teacher_expenses.php" class="nav-link <?php echo $current_page == 'teacher_expenses.php' ? 'active' : ''; ?>" style="padding: 8px 15px; font-size: 0.9em;">
-                        <i class="fas fa-receipt"></i> Expense Management
+                <li style="margin-bottom: 4px;">
+                    <a href="teacher_expenses.php" class="nav-link <?php echo $current_page == 'teacher_expenses.php' ? 'active' : ''; ?>" style="padding: 10px 14px; font-size: 0.88em;">
+                        <i class="fas fa-receipt"></i> Expense Approvals
                     </a>
                 </li>
                 <li>
-                    <a href="teacher_invoices.php" class="nav-link <?php echo $current_page == 'teacher_invoices.php' ? 'active' : ''; ?>" style="padding: 8px 15px; font-size: 0.9em;">
-                        <i class="fas fa-file-invoice-dollar"></i> Invoice Generation
+                    <a href="teacher_invoices.php" class="nav-link <?php echo $current_page == 'teacher_invoices.php' ? 'active' : ''; ?>" style="padding: 10px 14px; font-size: 0.88em;">
+                        <i class="fas fa-file-invoice-dollar"></i> Salary Invoices
                     </a>
                 </li>
             </ul>
@@ -72,7 +84,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
         </li>
         <li class="nav-item">
             <a href="document_approvals.php" class="nav-link <?php echo $current_page == 'document_approvals.php' ? 'active' : ''; ?>">
-                <i class="fas fa-check-double"></i> Review Documents
+                <i class="fas fa-check-double"></i> Document Verification
             </a>
         </li>
         <li class="nav-item">
@@ -146,13 +158,13 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </a>
         </li>
     </ul>
+
     <a href="logout.php" class="nav-link logout-link">
-        <i class="fas fa-sign-out-alt"></i> Logout System
+        <i class="fas fa-sign-out-alt"></i> Logout Admin
     </a>
 </div>
 
 <script>
-    // Smooth Mobile Sliding Sidebar Drawer Toggler
     function toggleSidebar() {
         const sidebar = document.querySelector('.sidebar');
         const overlay = document.querySelector('.sidebar-overlay');
@@ -175,7 +187,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
         }
     }
     
-    // Set initial icon rotation based on current page
     document.addEventListener('DOMContentLoaded', function() {
         const menu = document.getElementById('teacherMenu');
         const icon = document.getElementById('teacherMenuIcon');

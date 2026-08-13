@@ -103,8 +103,16 @@ $settings = getAllSettings();
             <i class="fas fa-globe"></i> Explore Website
         </a>
 
-        <a href="admin/login.php?role=parent" class="action-btn">
+        <a href="parent/login.php" class="action-btn" style="background: linear-gradient(135deg, #059669, #047857);">
             <i class="fas fa-user-friends"></i> Parent Login
+        </a>
+
+        <a href="teacher/login.php" class="action-btn" style="background: linear-gradient(135deg, #7c3aed, #6d28d9);">
+            <i class="fas fa-chalkboard-teacher"></i> Teacher Login
+        </a>
+
+        <a href="admin/login.php" class="action-btn" style="background: linear-gradient(135deg, #0d47a1, #002171);">
+            <i class="fas fa-shield-alt"></i> Admin Login
         </a>
 
         <div class="home-footer">

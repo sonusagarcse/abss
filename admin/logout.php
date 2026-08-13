@@ -1,19 +1,21 @@
 <?php
-// admin/logout.php - Session Termination & Audit Log
+// admin/logout.php - Independent Admin Logout Handler
 
-require_once '../config/db.php';
-// session_start() is already handled in db.php via tracker_helper.php -> security.php
+require_once __DIR__ . '/../includes/security.php';
 
 if (isset($_SESSION['admin_id'])) {
-    log_activity('logout', "Admin logged out");
-} elseif (isset($_SESSION['parent_id'])) {
-    log_activity('logout', "Parent logged out");
+    if (function_exists('log_activity')) {
+        log_activity('logout', "Admin logged out: " . ($_SESSION['username'] ?? ''));
+    }
+    unset($_SESSION['admin_id']);
+    unset($_SESSION['username']);
+    unset($_SESSION['user_id']);
 }
 
-if (isset($_COOKIE['abss_parent_remember'])) {
-    setcookie('abss_parent_remember', '', time() - 3600, '/');
+// Destroy session file ONLY if no other portal sessions (Teacher/Parent) are active
+if (!isset($_SESSION['teacher_id']) && !isset($_SESSION['parent_id'])) {
+    session_destroy();
 }
-session_destroy();
+
 header("Location: login.php");
 exit();
-?>

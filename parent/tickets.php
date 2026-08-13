@@ -157,10 +157,10 @@ $tickets = $conn->query("
         <div class="ticket-grid">
             <!-- Form Card: Raise Ticket -->
             <div class="portal-card" style="height: fit-content;">
-                <h3 style="margin-bottom: 25px; color:var(--portal-blue);"><i class="fas fa-paper-plane" style="margin-right:8px; color:var(--portal-purple);"></i> New Support Ticket</h3>
+                <h3 style="margin-bottom: 22px; color:var(--portal-indigo);"><i class="fas fa-paper-plane" style="margin-right:8px; color:var(--portal-purple);"></i> New Support Ticket</h3>
                 <form action="" method="POST">
                     <div class="portal-input-group">
-                        <label>Regarding Student / Ward (Optional)</label>
+                        <label><i class="fas fa-child" style="color:var(--portal-purple); margin-right:6px;"></i> Regarding Student / Ward (Optional)</label>
                         <select name="student_id">
                             <option value="">-- General Question / Other --</option>
                             <?php foreach($children_list as $child): ?>
@@ -169,57 +169,65 @@ $tickets = $conn->query("
                         </select>
                     </div>
                     <div class="portal-input-group">
-                        <label>Subject / Topic</label>
+                        <label><i class="fas fa-heading" style="color:var(--portal-purple); margin-right:6px;"></i> Subject / Topic *</label>
                         <input type="text" name="subject" placeholder="e.g. Question about monthly fees" required>
                     </div>
                     <div class="portal-input-group">
-                        <label>Detailed Message</label>
-                        <textarea name="message" rows="6" placeholder="Describe your concern or question in detail..." required></textarea>
+                        <label><i class="fas fa-align-left" style="color:var(--portal-purple); margin-right:6px;"></i> Detailed Message *</label>
+                        <textarea name="message" rows="5" placeholder="Describe your concern or query in detail..." required></textarea>
                     </div>
-                    <button type="submit" name="raise_ticket" class="btn-portal w-100" style="padding:18px;">Submit Support Request</button>
+                    <button type="submit" name="raise_ticket" class="btn-portal w-100"><i class="fas fa-paper-plane"></i> Submit Support Ticket</button>
                 </form>
             </div>
 
             <!-- List Card: Ticket History -->
-            <div class="list-section">
-                <h3 style="margin-bottom: 20px; padding-left: 10px;"><i class="fas fa-history" style="margin-right:8px; color:var(--portal-blue);"></i> Ticket History</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Ticket Details</th>
-                            <th>Description</th>
-                            <th>Status</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if ($tickets->num_rows == 0): ?>
+            <div class="portal-card" style="min-width: 0;">
+                <h3 style="margin-bottom: 20px;"><i class="fas fa-history" style="margin-right:8px; color:var(--portal-purple);"></i> Ticket History</h3>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
                             <tr>
-                                <td colspan="3" style="text-align: center; color: #9aa5ce; padding: 40px;">No support tickets raised yet.</td>
+                                <th>Ticket Details</th>
+                                <th>Description</th>
+                                <th>Status</th>
                             </tr>
-                        <?php else: ?>
-                            <?php while($t = $tickets->fetch_assoc()): ?>
+                        </thead>
+                        <tbody>
+                            <?php if ($tickets->num_rows == 0): ?>
                                 <tr>
-                                    <td style="color:var(--portal-blue); font-weight:800;">
-                                        #ABSS-TKT-<?php echo str_pad($t['id'], 4, '0', STR_PAD_LEFT); ?><br>
-                                        <small style="color:#9aa5ce; font-weight:600;"><?php echo date('d M, Y', strtotime($t['created_at'])); ?></small>
-                                    </td>
-                                    <td>
-                                        <div style="font-weight:700; color:var(--portal-indigo); font-size:0.95rem;"><?php echo htmlspecialchars($t['subject']); ?></div>
-                                        <?php if ($t['student_name']): ?>
-                                            <div style="font-size:0.75rem; color:var(--portal-purple); font-weight:700; margin-top:2px;"><i class="fas fa-child"></i> Ward: <?php echo htmlspecialchars($t['student_name']); ?></div>
-                                        <?php endif; ?>
-                                        <div class="ticket-message">
-                                            <?php echo nl2br(htmlspecialchars($t['message'])); ?>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <span class="status-badge status-<?php echo $t['status']; ?>"><?php echo $t['status']; ?></span>
-                                    </td>
+                                    <td colspan="3" style="text-align: center; color: #94a3b8; padding: 40px;">No support tickets raised yet.</td>
                                 </tr>
-                            <?php endwhile; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
+                            <?php else: ?>
+                                <?php while($t = $tickets->fetch_assoc()): ?>
+                                    <tr>
+                                        <td style="color:var(--portal-indigo); font-weight:800;">
+                                            #ABSS-TKT-<?php echo str_pad($t['id'], 4, '0', STR_PAD_LEFT); ?><br>
+                                            <small style="color:#94a3b8; font-weight:600;"><?php echo date('d M, Y', strtotime($t['created_at'])); ?></small>
+                                        </td>
+                                        <td>
+                                            <div style="font-weight:700; color:var(--portal-indigo); font-size:0.95rem;"><?php echo htmlspecialchars($t['subject']); ?></div>
+                                            <?php if ($t['student_name']): ?>
+                                                <div style="font-size:0.75rem; color:var(--portal-purple); font-weight:700; margin-top:2px;"><i class="fas fa-child"></i> Ward: <?php echo htmlspecialchars($t['student_name']); ?></div>
+                                            <?php endif; ?>
+                                            <div class="ticket-message">
+                                                <?php echo nl2br(htmlspecialchars($t['message'])); ?>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <?php 
+                                            $st = $t['status'];
+                                            $st_class = 'badge-warning';
+                                            if ($st === 'resolved') $st_class = 'badge-success';
+                                            if ($st === 'closed') $st_class = 'badge-danger';
+                                            ?>
+                                            <span class="badge <?php echo $st_class; ?>"><?php echo htmlspecialchars($st); ?></span>
+                                        </td>
+                                    </tr>
+                                <?php endwhile; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </main>

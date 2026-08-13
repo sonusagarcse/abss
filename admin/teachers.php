@@ -32,13 +32,23 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_teacher'])) {
         }
     }
 
+    // Ensure password column exists
+    $checkPassCol = $conn->query("SHOW COLUMNS FROM teachers LIKE 'password'");
+    if ($checkPassCol && $checkPassCol->num_rows == 0) {
+        $conn->query("ALTER TABLE teachers ADD COLUMN password VARCHAR(255) NULL AFTER phone");
+    }
+
     if ($id > 0) {
         $stmt = $conn->prepare("UPDATE teachers SET name=?, email=?, phone=?, department=?, designation=?, join_date=?, salary=?, status=?, photo=? WHERE id=?");
         $stmt->bind_param("ssssssdssi", $name, $email, $phone, $department, $designation, $join_date, $salary, $status, $photo_path, $id);
         $stmt->execute();
     } else {
-        $stmt = $conn->prepare("INSERT INTO teachers (name, email, phone, department, designation, join_date, salary, status, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("ssssssdss", $name, $email, $phone, $department, $designation, $join_date, $salary, $status, $photo_path);
+        // Automatic Credentials: Default password is the mobile number (phone)
+        $default_password = !empty($phone) ? $phone : (!empty($email) ? $email : '123456');
+        $pass_hash = password_hash($default_password, PASSWORD_DEFAULT);
+
+        $stmt = $conn->prepare("INSERT INTO teachers (name, email, phone, password, department, designation, join_date, salary, status, photo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("sssssssdss", $name, $email, $phone, $pass_hash, $department, $designation, $join_date, $salary, $status, $photo_path);
         $stmt->execute();
     }
     

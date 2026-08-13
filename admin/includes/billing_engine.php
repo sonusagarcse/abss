@@ -1,5 +1,5 @@
 <?php
-// admin/includes/billing_engine.php - Automated Monthly Fee Generation
+// admin/includes/billing_engine.php - Perfected Automated Fee Generation Engine
 
 if (isset($skip_email) && $skip_email) {
     $batch_size = 500; // Process up to 500 students in one request if email is skipped
@@ -7,24 +7,27 @@ if (isset($skip_email) && $skip_email) {
     $batch_size = 5; // Process max 5 students per page load to keep dashboard fast
 }
 
+// Simulated custom test date override support
+$engine_eval_date = (!empty($simulated_test_date)) ? $simulated_test_date : date('Y-m-d');
+
 if (isset($force_student_id) && $force_student_id > 0) {
     // Force mode: Target specific student, ignore date rules
     $query = "
-        SELECT id, name, base_fee, monthly_discount, parent_id, admission_date, last_billed_date
+        SELECT id, name, scholar_mode, base_fee, monthly_discount, parent_id, admission_date, last_billed_date
         FROM students
         WHERE id = " . (int)$force_student_id . " AND status = 'active'
     ";
 } else {
     // Auto mode: Target due students
-    // A student is due if last_billed_date is NULL (new) OR last_billed_date < 1st of current month
+    // A student is due if last_billed_date is NULL (new admission) OR last_billed_date < 1st of evaluation month
     $query = "
-        SELECT id, name, base_fee, monthly_discount, parent_id, admission_date, last_billed_date
+        SELECT id, name, scholar_mode, base_fee, monthly_discount, parent_id, admission_date, last_billed_date
         FROM students
         WHERE status = 'active'
         AND (
             last_billed_date IS NULL
             OR
-            last_billed_date < DATE_FORMAT(CURDATE(), '%Y-%m-01')
+            last_billed_date < DATE_FORMAT('$engine_eval_date', '%Y-%m-01')
         )
         LIMIT $batch_size
     ";
@@ -39,26 +42,38 @@ if ($due_students && $due_students->num_rows > 0) {
     $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
     $fe_host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
     $fe_base_url = (strpos($fe_host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$fe_host";
-    $portal_url = "$fe_base_url/admin/login.php?role=parent";
+    $portal_url = "$fe_base_url/parent/login.php";
 
     while ($student = $due_students->fetch_assoc()) {
         $sid = (int)$student['id'];
         $base_fee = (float)$student['base_fee'];
         $discount = (float)$student['monthly_discount'];
+        $scholar_mode = trim($student['scholar_mode'] ?? '');
+
+        // Dynamic base fee resolution if base_fee is unset or 0 in student profile
+        if ($base_fee <= 0) {
+            $settings = function_exists('getAllSettings') ? getAllSettings() : [];
+            $tuition_modes = !empty($settings['tuition_modes']) ? json_decode($settings['tuition_modes'], true) : [];
+            
+            if (isset($tuition_modes[$scholar_mode]) && (float)$tuition_modes[$scholar_mode] > 0) {
+                $base_fee = (float)$tuition_modes[$scholar_mode];
+            } elseif (strpos(strtolower($scholar_mode), 'tuition') !== false) {
+                $base_fee = (float)($settings['fee_tuition'] ?? 1500);
+            } elseif (strpos(strtolower($scholar_mode), 'host') !== false) {
+                $base_fee = (float)($settings['fee_hostler'] ?? 5000);
+            } else {
+                $base_fee = (float)($settings['fee_day_scholar'] ?? 3000);
+            }
+        }
         
+        // Direct Net Base Fee calculation (base_fee minus monthly discount)
+        $net_base_fee = max(0, $base_fee - $discount);
         $is_first_bill = is_null($student['last_billed_date']);
 
-        // Check for existing unpaid bill FIRST to know what period we are rebuilding
-        $existing_unpaid = $conn->query("SELECT id, amount, remark, month_for, billing_date FROM fees_generated WHERE student_id = $sid AND status = 'unpaid' ORDER BY id DESC LIMIT 1");
-        $existing = null;
-        if ($existing_unpaid && $existing_unpaid->num_rows > 0) {
-            $existing = $existing_unpaid->fetch_assoc();
-        }
-
-        if ($is_first_bill || (isset($force_student_id) && $existing && strpos($existing['remark'], 'Prorated') !== false)) {
-            // It's the first bill or we are rebuilding a prorated first bill
+        if ($is_first_bill) {
+            // New Admission: Prorated billing from admission date to end of admission month (FIRST MONTH ONLY)
             if (empty($student['admission_date'])) {
-                $adm_date = new DateTime();
+                $adm_date = new DateTime($engine_eval_date);
             } else {
                 $adm_date = new DateTime($student['admission_date']);
             }
@@ -76,144 +91,68 @@ if ($due_students && $due_students->num_rows > 0) {
             $is_prorated = ($days_active < $days_in_month);
             $proration_msg = $is_prorated ? " (Prorated: $days_active/$days_in_month days)" : "";
         } else {
-            // Regular monthly invoice for the month following last_billed_date
+            // Subsequent Months: Full 100% monthly calculation starting on 1st of month
             $last_billed = new DateTime($student['last_billed_date']);
             
             $target_month = clone $last_billed;
             $target_month->modify('first day of next month');
             
             if (!isset($force_student_id)) {
-                $today = new DateTime();
+                $today = new DateTime($engine_eval_date);
                 $today->setTime(0,0,0);
                 if ($today < $target_month) {
-                    continue; // Safeguard
-                }
-            } else {
-                // If it's an update, we should only rebuild the *currently* unpaid months, not advance to the next month unless it's due
-                if ($existing) {
-                    // We shouldn't advance the month_for if we are just rebuilding. 
-                    // Let's use the date from the existing invoice to determine the month_for.
-                    $month_for = $existing['month_for']; // We'll keep the existing month string
-                    $bill_month_date = $existing['billing_date'];
-                    $proration_factor = 1.0;
-                    $is_prorated = false;
-                    $proration_msg = "";
-                    $new_last_billed_date = $student['last_billed_date']; // don't advance
-                } else {
-                    // If there's no existing bill, do nothing on update unless due
-                    $today = new DateTime();
-                    $today->setTime(0,0,0);
-                    if ($today < $target_month) {
-                        continue;
-                    }
-                    // Otherwise it's due, so proceed as normal
-                    $proration_factor = 1.0;
-                    $bill_month_date = $target_month->format('Y-m-01');
-                    $month_for = $target_month->format('F Y');
-                    $end_of_target_month = clone $target_month;
-                    $end_of_target_month->modify('last day of this month');
-                    $new_last_billed_date = $end_of_target_month->format('Y-m-d');
-                    $is_prorated = false;
-                    $proration_msg = "";
+                    continue; // Safeguard: Not due yet for next month
                 }
             }
             
-            if (!isset($new_last_billed_date)) {
-                // For normal auto-generation when due
-                $proration_factor = 1.0;
-                $bill_month_date = $target_month->format('Y-m-01');
-                $month_for = $target_month->format('F Y');
-                
-                $end_of_target_month = clone $target_month;
-                $end_of_target_month->modify('last day of this month');
-                $new_last_billed_date = $end_of_target_month->format('Y-m-d');
-                $is_prorated = false;
-                $proration_msg = "";
-            }
+            $proration_factor = 1.0;
+            $bill_month_date = $target_month->format('Y-m-01');
+            $month_for = $target_month->format('F Y');
+            
+            $end_of_target_month = clone $target_month;
+            $end_of_target_month->modify('last day of this month');
+            $new_last_billed_date = $end_of_target_month->format('Y-m-d');
+            $is_prorated = false;
+            $proration_msg = "";
         }
 
-        $already_billed_this_month = false;
-        if ($existing) {
-            if (strpos($existing['month_for'], $month_for) !== false || (isset($force_student_id) && !isset($target_month))) {
-                // If we are just rebuilding and we overrode month_for, consider it billed
-                $already_billed_this_month = true;
-            }
+        // Check if an invoice for THIS exact month string already exists for this student (Prevent Duplicate)
+        $month_check = $conn->prepare("SELECT id FROM fees_generated WHERE student_id = ? AND month_for LIKE ? LIMIT 1");
+        $like_month = "%" . $month_for . "%";
+        $month_check->bind_param("is", $sid, $like_month);
+        $month_check->execute();
+        $already_billed = $month_check->get_result()->fetch_assoc();
+
+        if ($already_billed && !isset($force_student_id)) {
+            // Already billed for this month string, advance last_billed_date to prevent loop
+            $conn->query("UPDATE students SET last_billed_date = '$new_last_billed_date' WHERE id = $sid");
+            continue;
         }
 
+        // Check for existing UNPAID invoice for this student
+        $existing_unpaid_res = $conn->query("SELECT id, amount, remark, month_for, billing_date FROM fees_generated WHERE student_id = $sid AND status = 'unpaid' ORDER BY id DESC LIMIT 1");
+        $existing_unpaid = ($existing_unpaid_res && $existing_unpaid_res->num_rows > 0) ? $existing_unpaid_res->fetch_assoc() : null;
+
+        // Calculate line items for this new month
         $total_amount = 0;
         $remark_parts = [];
 
-        if (isset($force_student_id) && $existing) {
-            // Rebuild logic (when updating student profile)
-            // Use prorated factor for this month recalculation
-            $monthly_recurring = 0;
-            $recurring_parts = [];
-            
-            $calc_base = round($base_fee * $proration_factor, 2);
-            $recurring_parts[] = "Base Fee: ₹" . number_format($calc_base, 2) . $proration_msg;
-            
-            if ($discount > 0) {
-                $calc_disc = round($discount * $proration_factor, 2);
-                $recurring_parts[] = "Discount applied (-₹" . number_format($calc_disc, 2) . ")";
-                $monthly_recurring += max(0, $calc_base - $calc_disc);
-            } else {
-                $monthly_recurring += $calc_base;
-            }
+        $calc_net = round($net_base_fee * $proration_factor, 2);
+        $fee_title = !empty($scholar_mode) ? "$scholar_mode Fee" : "Tuition Fee";
+        $remark_parts[] = "$fee_title: ₹" . number_format($calc_net, 2) . " ($month_for)" . $proration_msg;
+        $total_amount += $calc_net;
 
-            $addons_query = $conn->query("SELECT addon_name, amount FROM student_addons WHERE student_id = $sid");
-            if ($addons_query && $addons_query->num_rows > 0) {
-                while($addon = $addons_query->fetch_assoc()) {
-                    $calc_addon = round($addon['amount'] * $proration_factor, 2);
-                    $monthly_recurring += $calc_addon;
-                    $recurring_parts[] = $addon['addon_name'] . ": ₹" . number_format($calc_addon, 2);
-                }
-            }
-
-            $months_list = explode(", ", $existing['month_for']);
-            $months_count = count($months_list);
-            if (!$already_billed_this_month) {
-                $months_count++;
-            }
-
-            for ($i = 0; $i < $months_count; $i++) {
-                $remark_parts = array_merge($remark_parts, $recurring_parts);
-            }
-            $total_amount += ($monthly_recurring * $months_count);
-
-            $old_parts = explode("|", str_replace("Auto-generated Bill. ", "", $existing['remark']));
-            foreach ($old_parts as $part) {
-                $part = trim($part);
-                if (strpos($part, '(Expense):') !== false) {
-                    $remark_parts[] = $part;
-                    $exp_parts = explode(': ₹', $part);
-                    if (count($exp_parts) == 2) {
-                        $total_amount += (float)str_replace(',', '', trim($exp_parts[1]));
-                    }
-                }
-            }
-        } else {
-            if (!$already_billed_this_month) {
-                $calc_base = round($base_fee * $proration_factor, 2);
-                $remark_parts[] = "Base Fee: ₹" . number_format($calc_base, 2) . $proration_msg;
-                
-                if ($discount > 0) {
-                    $calc_disc = round($discount * $proration_factor, 2);
-                    $remark_parts[] = "Discount applied (-₹" . number_format($calc_disc, 2) . ")";
-                    $calc_base = max(0, $calc_base - $calc_disc);
-                }
-                $total_amount += $calc_base;
-
-                $addons_query = $conn->query("SELECT addon_name, amount FROM student_addons WHERE student_id = $sid");
-                if ($addons_query && $addons_query->num_rows > 0) {
-                    while($addon = $addons_query->fetch_assoc()) {
-                        $calc_addon = round($addon['amount'] * $proration_factor, 2);
-                        $total_amount += $calc_addon;
-                        $remark_parts[] = $addon['addon_name'] . ": ₹" . number_format($calc_addon, 2);
-                    }
-                }
+        // Add monthly addons
+        $addons_query = $conn->query("SELECT addon_name, amount FROM student_addons WHERE student_id = $sid");
+        if ($addons_query && $addons_query->num_rows > 0) {
+            while($addon = $addons_query->fetch_assoc()) {
+                $calc_addon = round($addon['amount'] * $proration_factor, 2);
+                $total_amount += $calc_addon;
+                $remark_parts[] = $addon['addon_name'] . ": ₹" . number_format($calc_addon, 2);
             }
         }
 
+        // Add unbilled expenses
         $exp_query = $conn->query("SELECT id, item_name, amount FROM student_expenses WHERE student_id = $sid AND status = 'unbilled'");
         $exp_ids = [];
         if ($exp_query && $exp_query->num_rows > 0) {
@@ -231,32 +170,28 @@ if ($due_students && $due_students->num_rows > 0) {
             continue;
         }
 
-        $final_remark = "Auto-generated Bill. " . implode(" | ", $remark_parts);
+        $new_month_remark = implode(" | ", $remark_parts);
 
         $conn->begin_transaction();
         try {
-            if ($existing) {
-                if (isset($force_student_id)) {
-                    $new_amount = $total_amount;
-                    $new_remark = "Auto-generated Bill. " . implode(" | ", $remark_parts);
-                    $new_month = $existing['month_for'];
-                    if (!$already_billed_this_month) {
-                        $new_month .= ", " . $month_for;
-                    }
-                } else {
-                    $new_amount = $existing['amount'] + $total_amount;
-                    $new_remark = $existing['remark'] . (empty($remark_parts) ? "" : " | " . implode(" | ", $remark_parts));
-                    $new_month = $existing['month_for'];
-                    if (strpos($new_month, $month_for) === false) {
-                        $new_month .= ", " . $month_for;
-                    }
-                }
+            if ($existing_unpaid) {
+                // Rule B: Append new month into existing unpaid invoice
+                $updated_amount = (float)$existing_unpaid['amount'] + $total_amount;
                 
-                $update_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, remark = ?, month_for = ? WHERE id = ?");
-                $update_stmt->bind_param("dssi", $new_amount, $new_remark, $new_month, $existing['id']);
+                $month_parts = array_map('trim', explode(',', $existing_unpaid['month_for']));
+                if (!in_array($month_for, $month_parts)) {
+                    $month_parts[] = $month_for;
+                }
+                $updated_month_for = implode(', ', $month_parts);
+                $updated_remark = $existing_unpaid['remark'] . " | " . $new_month_remark;
+
+                $update_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, month_for = ?, remark = ? WHERE id = ?");
+                $update_stmt->bind_param("dssi", $updated_amount, $updated_month_for, $updated_remark, $existing_unpaid['id']);
                 $update_stmt->execute();
-                $invoice_id = $existing['id'];
+                $invoice_id = $existing_unpaid['id'];
             } else {
+                // Rule A: Student has no unpaid invoices (paid previous months) -> Create NEW standalone invoice
+                $final_remark = "Auto-generated Bill. " . $new_month_remark;
                 $stmt = $conn->prepare("INSERT INTO fees_generated (student_id, amount, month_for, billing_date, remark, status) VALUES (?, ?, ?, ?, ?, 'unpaid')");
                 $stmt->bind_param("idsss", $sid, $total_amount, $month_for, $bill_month_date, $final_remark);
                 $stmt->execute();
@@ -272,7 +207,7 @@ if ($due_students && $due_students->num_rows > 0) {
             $conn->commit();
 
             if (function_exists('log_activity')) {
-                log_activity('auto_bill_generated', "Automated bill of ₹" . number_format($total_amount, 2) . " generated for student " . $student['name'] . " ($month_for)");
+                log_activity('auto_bill_generated', "Automated bill of ₹" . number_format($total_amount, 2) . " processed for student " . $student['name'] . " ($month_for)");
             }
 
             if (!empty($student['parent_id']) && (!isset($skip_email) || !$skip_email)) {
@@ -285,7 +220,7 @@ if ($due_students && $due_students->num_rows > 0) {
                             $total_amount, 
                             $month_for, 
                             $bill_month_date, 
-                            $final_remark, 
+                            $new_month_remark, 
                             $portal_url
                         );
                         send_smtp_email(

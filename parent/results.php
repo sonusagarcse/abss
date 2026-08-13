@@ -116,7 +116,7 @@ while ($c = $children_res->fetch_assoc()) {
                     
                     <!-- Results Table -->
                     <h3 style="font-size:1.1rem; margin-bottom:15px; color:var(--portal-indigo);"><i class="fas fa-history" style="margin-right:8px; opacity:0.7;"></i> Test Performance Log</h3>
-                    <div class="portal-table-container">
+                    <div class="table-responsive portal-table-container">
                         <table>
                             <thead>
                                 <tr>

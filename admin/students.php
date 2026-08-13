@@ -200,10 +200,10 @@ $tuition_modes = [];
 if (!empty($site_settings['tuition_modes'])) {
     $tuition_modes = json_decode($site_settings['tuition_modes'], true);
 } else {
-    // Fallback if settings haven't been updated yet
     $fee_day_scholar = $site_settings['fee_day_scholar'] ?? '3000';
     $fee_hostler = $site_settings['fee_hostler'] ?? '5000';
-    $tuition_modes = ['Day Scholar' => $fee_day_scholar, 'Hostler' => $fee_hostler];
+    $fee_tuition = $site_settings['fee_tuition'] ?? '1500';
+    $tuition_modes = ['Day Scholar' => $fee_day_scholar, 'Hostler' => $fee_hostler, 'Tuition' => $fee_tuition];
 }
 ?>
 
