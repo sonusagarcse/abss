@@ -1,7 +1,7 @@
 /**
  * ABSS FCM Token Register & Device Connection Engine
  * Configured with Firebase Project: abss-notification
- * Compatible with Web Push, Shiaho WebToApp v2.4.3, and Android WebViews.
+ * Optimized specifically for Shiaho WebToApp v2.4.3, Android WebViews, and Web Push.
  */
 (function() {
     'use strict';
@@ -33,12 +33,12 @@
 
     // Register FCM Token to MySQL Database (`fcm_tokens`)
     window.registerFcmDeviceToken = function(fcmToken, deviceType, appVersion) {
-        if (!fcmToken) return;
+        if (!fcmToken || fcmToken.length < 10) return;
 
         const payload = {
             token: fcmToken,
-            device_type: deviceType || 'android',
-            app_version: appVersion || '1.0.0'
+            device_type: deviceType || 'android_app',
+            app_version: appVersion || '2.4.3'
         };
 
         fetch(getApiUrl(), {
@@ -51,7 +51,7 @@
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (data && data.status) {
-                console.log('[ABSS FCM] Device connected successfully (ID: ' + data.token_id + ')');
+                console.log('[ABSS FCM] Android App Device connected (ID: ' + data.token_id + ')');
             }
         })
         .catch(function(err) {
@@ -59,24 +59,73 @@
         });
     };
 
-    // Shiaho WebToApp v2.4.3 & Native Android App Callback Listener
+    // 1. Capture FCM Token from URL Parameters (Shiaho WebToApp URL Injection)
+    function captureTokenFromUrl() {
+        const urlParams = new URLSearchParams(window.location.search);
+        let token = urlParams.get('fcm_token') || urlParams.get('fcmToken') || urlParams.get('device_token') || urlParams.get('push_token');
+        
+        if (!token && window.location.hash) {
+            const hashMatch = window.location.hash.match(/fcm_token=([^&]+)/);
+            if (hashMatch) token = hashMatch[1];
+        }
+
+        if (token) {
+            console.log('[ABSS FCM] Captured Android token from URL parameters.');
+            window.registerFcmDeviceToken(token, 'android_app', '2.4.3');
+        }
+    }
+
+    // 2. Shiaho WebToApp v2.4.3 Native Callback Hooks
     window.onFcmTokenReceived = function(token) {
         if (token) {
+            console.log('[ABSS FCM] Received token via onFcmTokenReceived');
             window.registerFcmDeviceToken(token, 'android_app', '2.4.3');
         }
     };
 
-    if (window.Android && typeof window.Android.getFcmToken === 'function') {
+    window.setFcmToken = function(token) {
+        if (token) {
+            console.log('[ABSS FCM] Received token via setFcmToken');
+            window.registerFcmDeviceToken(token, 'android_app', '2.4.3');
+        }
+    };
+
+    window.onTokenReceived = function(token) {
+        if (token) {
+            console.log('[ABSS FCM] Received token via onTokenReceived');
+            window.registerFcmDeviceToken(token, 'android_app', '2.4.3');
+        }
+    };
+
+    // 3. Shiaho WebToApp & Android JavascriptInterface Detection
+    function checkAndroidBridge() {
         try {
-            const token = window.Android.getFcmToken();
-            if (token) {
-                window.registerFcmDeviceToken(token, 'android_app', '2.4.3');
+            if (window.Android && typeof window.Android.getFcmToken === 'function') {
+                const t = window.Android.getFcmToken();
+                if (t) window.registerFcmDeviceToken(t, 'android_app', '2.4.3');
+            }
+            if (window.WebToApp && typeof window.WebToApp.getFcmToken === 'function') {
+                const t = window.WebToApp.getFcmToken();
+                if (t) window.registerFcmDeviceToken(t, 'android_app', '2.4.3');
+            }
+            if (window.ShiahoApp && typeof window.ShiahoApp.getFcmToken === 'function') {
+                const t = window.ShiahoApp.getFcmToken();
+                if (t) window.registerFcmDeviceToken(t, 'android_app', '2.4.3');
             }
         } catch(e) {}
     }
 
-    // Ensure Unique Browser Device ID is connected even before FCM permission granted
+    // 4. Web Browser Fallback Registration
     function ensureWebDeviceConnection() {
+        const isAndroidApp = window.navigator.userAgent.indexOf('WebToApp') !== -1 || 
+                             window.navigator.userAgent.indexOf('Shiaho') !== -1 ||
+                             window.Android !== undefined ||
+                             window.WebToApp !== undefined;
+
+        if (isAndroidApp) {
+            return; // Skip fallback for native Android APK
+        }
+
         let webId = localStorage.getItem('abss_web_device_id');
         if (!webId) {
             webId = 'web_device_' + Math.random().toString(36).substring(2, 12) + '_' + Date.now().toString(36);
@@ -85,9 +134,10 @@
         window.registerFcmDeviceToken(webId, 'web_browser', '1.0.0');
     }
 
-    // Initialize Web Push FCM with Service Worker Scope
-    function initWebFcm() {
-        // Register Web Device ID
+    // Initialize FCM Detection Engine
+    function initFcmClient() {
+        captureTokenFromUrl();
+        checkAndroidBridge();
         ensureWebDeviceConnection();
 
         if (!('serviceWorker' in navigator) || !('Notification' in window)) {
@@ -112,9 +162,7 @@
                 .then(function() {
                     setupFirebaseMessaging();
                 })
-                .catch(function(e) {
-                    console.warn('[ABSS FCM] Firebase SDK load notice:', e);
-                });
+                .catch(function(e) {});
         } else {
             setupFirebaseMessaging();
         }
@@ -137,29 +185,22 @@
                         if (currentToken) {
                             window.registerFcmDeviceToken(currentToken, 'web_browser', '1.0.0');
                         }
-                    }).catch(function(err) {
-                        console.warn('[ABSS FCM] Token retrieval notice:', err);
-                    });
+                    }).catch(function(err) {});
                 }
-            }).catch(function(swErr) {
-                console.warn('[ABSS FCM] Service Worker registration notice:', swErr);
-            });
+            }).catch(function(swErr) {});
 
             messaging.onMessage(function(payload) {
-                console.log('[ABSS FCM] Foreground push message received:', payload);
                 if (window.ABSSNotificationApp && typeof window.ABSSNotificationApp.checkNow === 'function') {
                     window.ABSSNotificationApp.checkNow();
                 }
             });
 
-        } catch (err) {
-            console.warn('[ABSS FCM] Setup notice:', err);
-        }
+        } catch (err) {}
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initWebFcm);
+        document.addEventListener('DOMContentLoaded', initFcmClient);
     } else {
-        initWebFcm();
+        initFcmClient();
     }
 })();

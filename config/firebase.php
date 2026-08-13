@@ -123,6 +123,7 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
     $projectId = getFirebaseProjectId();
     $endpoint = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
 
+    // Optimized FCM HTTP v1 payload specifically structured for Shiaho WebToApp v2.4.3 & Android Native Push Receivers
     $messagePayload = [
         "message" => [
             "token" => $targetToken,
@@ -132,19 +133,26 @@ function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $
             ],
             "android" => [
                 "priority" => "HIGH",
+                "direct_boot_ok" => true,
                 "notification" => [
                     "title" => $title,
                     "body" => $body,
                     "sound" => "default",
-                    "click_action" => "FLUTTER_NOTIFICATION_CLICK"
+                    "color" => "#2563eb",
+                    "channel_id" => "high_importance_channel",
+                    "click_action" => "FLUTTER_NOTIFICATION_CLICK",
+                    "notification_priority" => "PRIORITY_MAX"
                 ]
             ],
             "data" => [
                 "title" => $title,
                 "message" => $body,
+                "body" => $body,
                 "category" => $category,
                 "click_url" => $url ?: '',
-                "image_url" => $image ?: ''
+                "url" => $url ?: '',
+                "image_url" => $image ?: '',
+                "image" => $image ?: ''
             ],
             "webpush" => [
                 "fcm_options" => [
