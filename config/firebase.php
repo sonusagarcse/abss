@@ -3,6 +3,28 @@
 require_once __DIR__ . '/db.php';
 
 /**
+ * FCM Centralized Activity & Error Logger
+ */
+function logFcmEvent($action, $details = [], $status = 'INFO', $httpCode = null, $error = null) {
+    try {
+        $logDir = __DIR__ . '/../logs';
+        if (!is_dir($logDir)) {
+            @mkdir($logDir, 0755, true);
+        }
+        $logFile = $logDir . '/fcm.log';
+        $timestamp = date('Y-m-d H:i:s');
+        $codeStr = $httpCode !== null ? " [HTTP $httpCode]" : "";
+        $errStr  = $error ? " | Error: " . (is_string($error) ? $error : json_encode($error)) : "";
+        $detailStr = !empty($details) ? " | Data: " . (is_string($details) ? $details : json_encode($details, JSON_UNESCAPED_SLASHES)) : "";
+
+        $line = "[$timestamp] [$status] [$action]$codeStr$detailStr$errStr" . PHP_EOL;
+        @file_put_contents($logFile, $line, FILE_APPEND | LOCK_EX);
+    } catch (Exception $e) {
+        error_log("FCM Logging Error: " . $e->getMessage());
+    }
+}
+
+/**
  * Returns Firebase Service Account Configuration File Path
  */
 function getFirebaseServiceAccountPath() {
@@ -27,12 +49,16 @@ function getFirebaseAccessToken() {
 
     $saPath = getFirebaseServiceAccountPath();
     if (!$saPath) {
-        throw new Exception("Firebase Service Account JSON file (config/service-account.json) is missing. Upload service-account.json to config/ directory.");
+        $errMsg = "Firebase Service Account JSON file (config/service-account.json) is missing.";
+        logFcmEvent('oauth_token_generation', ['path' => $saPath], 'ERROR', 500, $errMsg);
+        throw new Exception($errMsg);
     }
 
     $saData = json_decode(file_get_contents($saPath), true);
     if (!$saData || empty($saData['private_key']) || empty($saData['client_email']) || empty($saData['project_id'])) {
-        throw new Exception("Invalid Firebase Service Account JSON format in config/service-account.json.");
+        $errMsg = "Invalid Firebase Service Account JSON format in config/service-account.json.";
+        logFcmEvent('oauth_token_generation', ['client_email' => $saData['client_email'] ?? ''], 'ERROR', 500, $errMsg);
+        throw new Exception($errMsg);
     }
 
     $header = json_encode(['alg' => 'RS256', 'typ' => 'JWT']);
@@ -54,7 +80,9 @@ function getFirebaseAccessToken() {
     
     $success = openssl_sign($signatureInput, $signature, $saData['private_key'], 'SHA256');
     if (!$success) {
-        throw new Exception("OpenSSL JWT signature generation failed. Check PHP OpenSSL extension.");
+        $errMsg = "OpenSSL JWT signature generation failed. Check PHP OpenSSL extension.";
+        logFcmEvent('oauth_token_generation', [], 'ERROR', 500, $errMsg);
+        throw new Exception($errMsg);
     }
 
     $base64UrlSignature = str_replace(['+', '/', '='], ['-', '_', ''], base64_encode($signature));
@@ -76,16 +104,22 @@ function getFirebaseAccessToken() {
     curl_close($ch);
 
     if ($httpCode !== 200) {
-        throw new Exception("OAuth 2.0 Token Exchange failed (HTTP $httpCode): " . $response);
+        $errMsg = "OAuth 2.0 Token Exchange failed (HTTP $httpCode): " . $response;
+        logFcmEvent('oauth_token_generation', ['response' => $response], 'ERROR', $httpCode, $errMsg);
+        throw new Exception($errMsg);
     }
 
     $tokenData = json_decode($response, true);
     if (!isset($tokenData['access_token'])) {
-        throw new Exception("Invalid OAuth token response from Google APIs: " . $response);
+        $errMsg = "Invalid OAuth token response from Google APIs: " . $response;
+        logFcmEvent('oauth_token_generation', ['response' => $response], 'ERROR', $httpCode, $errMsg);
+        throw new Exception($errMsg);
     }
 
     $_SESSION['fcm_access_token'] = $tokenData['access_token'];
     $_SESSION['fcm_access_token_expires'] = time() + 3300;
+
+    logFcmEvent('oauth_token_generation', ['expires_in' => $tokenData['expires_in'] ?? 3600], 'SUCCESS', 200);
 
     return $tokenData['access_token'];
 }
@@ -140,6 +174,8 @@ function buildFcmMessagePayload($target, $title, $body, $image = null, $url = nu
             "open_url" => $strUrl,
             "image" => $strImage,
             "image_url" => $strImage,
+            "imageUrl" => $strImage,
+            "clickUrl" => $strUrl,
             "picture" => $strImage,
             "sound" => "default",
             "timestamp" => (string)time()
@@ -158,8 +194,7 @@ function buildFcmMessagePayload($target, $title, $body, $image = null, $url = nu
                 "default_light_settings" => true,
                 "notification_priority" => "PRIORITY_MAX",
                 "visibility" => "PUBLIC",
-                "channel_id" => "default",
-                "click_action" => "OPEN_ACTIVITY"
+                "channel_id" => "fcm_notification_channel"
             ],
             "data" => [
                 "title" => $strTitle,
@@ -167,7 +202,9 @@ function buildFcmMessagePayload($target, $title, $body, $image = null, $url = nu
                 "message" => $strBody,
                 "url" => $strUrl,
                 "click_url" => $strUrl,
-                "image" => $strImage
+                "clickUrl" => $strUrl,
+                "image" => $strImage,
+                "imageUrl" => $strImage
             ]
         ],
         "webpush" => [
@@ -213,12 +250,13 @@ function buildFcmMessagePayload($target, $title, $body, $image = null, $url = nu
 }
 
 /**
- * Dispatch single FCM HTTP v1 Message to target token or FCM Topic (identical to Firebase Console Compose)
+ * Dispatch single FCM HTTP v1 Message to target token or FCM Topic
  */
 function sendFcmNotificationCore($target, $title, $body, $image = null, $url = null, $category = 'General', $isTopic = false) {
     try {
         $accessToken = getFirebaseAccessToken();
     } catch (Exception $e) {
+        logFcmEvent('fcm_dispatch_error', ['target' => $target, 'is_topic' => $isTopic], 'ERROR', 500, $e->getMessage());
         return [
             'success' => false,
             'http_code' => 500,
@@ -249,7 +287,12 @@ function sendFcmNotificationCore($target, $title, $body, $image = null, $url = n
     $resData = json_decode($response, true);
 
     if ($httpCode === 200 && isset($resData['name'])) {
-        return ['success' => true, 'name' => $resData['name'], 'response' => $resData];
+        logFcmEvent('fcm_dispatch_success', [
+            'target' => $isTopic ? "topic/$target" : substr($target, 0, 20) . "...",
+            'message_id' => $resData['name']
+        ], 'SUCCESS', 200);
+
+        return ['success' => true, 'name' => $resData['name'], 'http_code' => 200, 'response' => $resData];
     }
 
     $isUnregistered = false;
@@ -267,11 +310,17 @@ function sendFcmNotificationCore($target, $title, $body, $image = null, $url = n
         }
     }
 
+    $errMessage = $resData['error']['message'] ?? ('FCM HTTP ' . $httpCode . ' Dispatch Failure: ' . $response);
+    logFcmEvent('fcm_dispatch_failure', [
+        'target' => $isTopic ? "topic/$target" : substr($target, 0, 20) . "...",
+        'response' => $resData ?? $response
+    ], 'ERROR', $httpCode, $errMessage);
+
     return [
         'success' => false,
         'http_code' => $httpCode,
         'unregistered' => $isUnregistered,
-        'error' => $resData['error']['message'] ?? ('FCM HTTP ' . $httpCode . ' Dispatch Failure: ' . $response),
+        'error' => $errMessage,
         'raw' => $response
     ];
 }
@@ -285,6 +334,7 @@ function sendFcmMultiTargets(array $targets, $title, $body, $image = null, $url 
     try {
         $accessToken = getFirebaseAccessToken();
     } catch (Exception $e) {
+        logFcmEvent('fcm_multi_dispatch_error', ['total_targets' => count($targets)], 'ERROR', 500, $e->getMessage());
         return ['success_count' => 0, 'failed_count' => count($targets), 'error' => $e->getMessage()];
     }
 
@@ -341,19 +391,26 @@ function sendFcmMultiTargets(array $targets, $title, $body, $image = null, $url 
         $data = json_decode($resp, true);
         if ($code === 200 && isset($data['name'])) {
             $successCount++;
-            $results[$item['target']] = ['success' => true, 'name' => $data['name']];
+            $results[$item['target']] = ['success' => true, 'name' => $data['name'], 'http_code' => 200];
         } else {
             $failedCount++;
-            $results[$item['target']] = ['success' => false, 'error' => $data['error']['message'] ?? $resp];
+            $results[$item['target']] = ['success' => false, 'error' => $data['error']['message'] ?? $resp, 'http_code' => $code];
         }
     }
 
     curl_multi_close($mh);
+
+    logFcmEvent('fcm_multi_dispatch_complete', [
+        'total' => count($targets),
+        'success' => $successCount,
+        'failed' => $failedCount
+    ], $failedCount === 0 ? 'SUCCESS' : 'WARN', 200);
+
     return ['success_count' => $successCount, 'failed_count' => $failedCount, 'results' => $results];
 }
 
 /**
- * Subscribe one or multiple FCM Tokens to a Topic using Google IID API
+ * Subscribe one or multiple FCM Tokens to a Topic using Google IID / Firebase Topic Management API
  */
 function subscribeFcmTokensToTopic($tokens, $topic = 'all') {
     if (is_string($tokens)) {
@@ -365,6 +422,7 @@ function subscribeFcmTokensToTopic($tokens, $topic = 'all') {
     try {
         $accessToken = getFirebaseAccessToken();
     } catch (Exception $e) {
+        logFcmEvent('topic_subscription_error', ['tokens_count' => count($tokens), 'topic' => $topic], 'ERROR', 500, $e->getMessage());
         return false;
     }
 
@@ -385,14 +443,23 @@ function subscribeFcmTokensToTopic($tokens, $topic = 'all') {
         'access_token_auth: true',
         'Content-Type: application/json'
     ]);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 12);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 
     $resp = curl_exec($ch);
     $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
 
-    return ($code === 200);
+    $respData = json_decode($resp, true);
+    $isSuccess = ($code === 200);
+
+    logFcmEvent('topic_subscription_result', [
+        'topic' => $cleanTopic,
+        'tokens_count' => count($tokens),
+        'results' => $respData['results'] ?? $resp
+    ], $isSuccess ? 'SUCCESS' : 'ERROR', $code, $isSuccess ? null : $resp);
+
+    return $isSuccess;
 }
 
 /**
@@ -410,7 +477,7 @@ function sendTopicFcmNotification($topicName, $title, $body, $image = null, $url
 }
 
 /**
- * Broadcast FCM Campaign across all standard Shiaho WebToApp Android APK topics concurrently
+ * Broadcast FCM Campaign across all standard Android APK topics concurrently
  */
 function broadcastFcmCampaignToAllTopics($title, $body, $image = null, $url = null, $category = 'General') {
     $topics = [
@@ -430,5 +497,5 @@ function broadcastFcmCampaignToAllTopics($title, $body, $image = null, $url = nu
         'users'
     ];
     $result = sendFcmMultiTargets($topics, $title, $body, $image, $url, $category, true);
-    return ($result['success_count'] ?? 0) > 0;
+    return $result;
 }

@@ -11,6 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 require_once __DIR__ . '/../config/db.php';
+require_once __DIR__ . '/../config/firebase.php';
 
 // Accept JSON payload, form POST, or GET parameters (for Shiaho WebToApp v2.4.3 compatibility)
 $inputRaw = file_get_contents('php://input');
@@ -18,10 +19,11 @@ $inputData = json_decode($inputRaw, true) ?? [];
 
 $token       = trim($inputData['token'] ?? $_POST['token'] ?? $_GET['token'] ?? '');
 $device_type = trim($inputData['device_type'] ?? $_POST['device_type'] ?? $_GET['device_type'] ?? 'android');
-$app_version = trim($inputData['app_version'] ?? $_POST['app_version'] ?? $_GET['app_version'] ?? '1.0.0');
+$app_version = trim($inputData['app_version'] ?? $_POST['app_version'] ?? $_GET['app_version'] ?? '1.2.0');
 
 if (empty($token) || strlen($token) < 20 || strpos($token, 'web_device_') === 0) {
     http_response_code(400);
+    logFcmEvent('token_registration_invalid', ['token' => substr($token, 0, 15) . '...'], 'WARN', 400, 'Invalid or placeholder token.');
     echo json_encode([
         'status' => false,
         'error' => 'Invalid or placeholder FCM registration token.'
@@ -59,18 +61,26 @@ try {
             $getIdStmt->close();
         }
 
-        // Automatically link this token to Firebase global topic 'all' via Google IID API
-        require_once __DIR__ . '/../config/firebase.php';
-        @subscribeFcmTokensToTopic($token, 'all');
+        // Automatically link and subscribe this token to Firebase global topic 'all'
+        $subSuccess = subscribeFcmTokensToTopic($token, 'all');
+
+        logFcmEvent('token_registered', [
+            'token_id' => $tokenId,
+            'device_type' => $device_type,
+            'app_version' => $app_version,
+            'topic_subscribed' => $subSuccess
+        ], 'SUCCESS', 200);
 
         echo json_encode([
             'status' => true,
-            'message' => 'FCM Token registered successfully',
+            'message' => 'FCM Token registered and subscribed to topic successfully',
             'token_id' => (int)$tokenId,
             'device_type' => $device_type,
-            'app_version' => $app_version
+            'app_version' => $app_version,
+            'topic_subscribed' => $subSuccess
         ], JSON_UNESCAPED_SLASHES);
     } else {
+        logFcmEvent('token_registration_error', [], 'ERROR', 500, $stmt->error);
         http_response_code(500);
         echo json_encode([
             'status' => false,
@@ -80,6 +90,7 @@ try {
     $stmt->close();
 
 } catch (Exception $e) {
+    logFcmEvent('token_registration_exception', [], 'ERROR', 500, $e->getMessage());
     http_response_code(500);
     echo json_encode([
         'status' => false,
