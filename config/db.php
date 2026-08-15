@@ -420,6 +420,19 @@ function runAutoMigrator($conn) {
         if ($checkGalCat && $checkGalCat->num_rows == 0) {
             $conn->query("ALTER TABLE gallery ADD COLUMN category VARCHAR(100) DEFAULT 'General' AFTER caption");
         }
+
+        // Auto-seed Firebase Service Account into settings table if file exists
+        $saFile = __DIR__ . '/service-account.json';
+        if (file_exists($saFile)) {
+            $checkSaSetting = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'firebase_service_account_json'");
+            if (!$checkSaSetting || $checkSaSetting->num_rows == 0 || empty($checkSaSetting->fetch_assoc()['setting_value'])) {
+                $rawSa = file_get_contents($saFile);
+                if (!empty($rawSa)) {
+                    $escSa = $conn->real_escape_string($rawSa);
+                    $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('firebase_service_account_json', '$escSa') ON DUPLICATE KEY UPDATE setting_value = '$escSa'");
+                }
+            }
+        }
         
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;

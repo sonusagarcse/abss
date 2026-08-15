@@ -2177,8 +2177,55 @@ ALTER TABLE `teacher_expenses`
 --
 ALTER TABLE `teacher_invoices`
   ADD CONSTRAINT `teacher_invoices_ibfk_1` FOREIGN KEY (`teacher_id`) REFERENCES `teachers` (`id`) ON DELETE CASCADE;
+
+--
+-- Table structure for table `youtube_videos`
+--
+CREATE TABLE IF NOT EXISTS `youtube_videos` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `title` VARCHAR(255) NOT NULL,
+  `video_url` VARCHAR(500) NOT NULL,
+  `youtube_id` VARCHAR(100) NOT NULL,
+  `thumbnail_url` VARCHAR(500) DEFAULT NULL,
+  `category` VARCHAR(100) DEFAULT 'Campus Life',
+  `description` TEXT DEFAULT NULL,
+  `status` TINYINT(1) DEFAULT 1,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  INDEX `idx_status_category` (`status`, `category`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Table structure for table `fcm_tokens`
+--
+CREATE TABLE IF NOT EXISTS `fcm_tokens` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `token` VARCHAR(255) NOT NULL UNIQUE,
+  `device_type` VARCHAR(50) DEFAULT 'android',
+  `app_version` VARCHAR(20) DEFAULT '1.2.0',
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX `idx_token` (`token`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+--
+-- Table structure for table `notification_history`
+--
+CREATE TABLE IF NOT EXISTS `notification_history` (
+  `id` INT AUTO_INCREMENT PRIMARY KEY,
+  `title` VARCHAR(255) NOT NULL,
+  `message` TEXT NOT NULL,
+  `image` VARCHAR(500) DEFAULT NULL,
+  `url` VARCHAR(500) DEFAULT NULL,
+  `category` VARCHAR(50) DEFAULT 'General',
+  `target_audience` VARCHAR(100) DEFAULT 'All Users',
+  `sent_count` INT DEFAULT 0,
+  `failed_count` INT DEFAULT 0,
+  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+

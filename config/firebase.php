@@ -25,7 +25,7 @@ function logFcmEvent($action, $details = [], $status = 'INFO', $httpCode = null,
 }
 
 /**
- * Returns Firebase Service Account Configuration File Path
+ * Returns Firebase Service Account Configuration File Path or false
  */
 function getFirebaseServiceAccountPath() {
     $path = __DIR__ . '/service-account.json';
@@ -40,6 +40,36 @@ function getFirebaseServiceAccountPath() {
 }
 
 /**
+ * Fetch Firebase Service Account JSON credentials from Disk or Database Settings
+ */
+function getFirebaseServiceAccountData() {
+    // 1. Try reading from config/service-account.json
+    $saPath = getFirebaseServiceAccountPath();
+    if ($saPath && file_exists($saPath)) {
+        $content = @file_get_contents($saPath);
+        if ($content) {
+            $parsed = json_decode($content, true);
+            if ($parsed && !empty($parsed['private_key']) && !empty($parsed['client_email'])) {
+                return $parsed;
+            }
+        }
+    }
+
+    // 2. Try reading from database settings table (for cloud hosting / live servers)
+    if (function_exists('getAllSettings')) {
+        $st = getAllSettings();
+        if (!empty($st['firebase_service_account_json'])) {
+            $parsed = json_decode($st['firebase_service_account_json'], true);
+            if ($parsed && !empty($parsed['private_key']) && !empty($parsed['client_email'])) {
+                return $parsed;
+            }
+        }
+    }
+
+    return null;
+}
+
+/**
  * Generate OAuth 2.0 Access Token for Firebase HTTP v1 API using Pure PHP JWT Signing
  */
 function getFirebaseAccessToken() {
@@ -47,16 +77,9 @@ function getFirebaseAccessToken() {
         return $_SESSION['fcm_access_token'];
     }
 
-    $saPath = getFirebaseServiceAccountPath();
-    if (!$saPath) {
-        $errMsg = "Firebase Service Account JSON file (config/service-account.json) is missing.";
-        logFcmEvent('oauth_token_generation', ['path' => $saPath], 'ERROR', 500, $errMsg);
-        throw new Exception($errMsg);
-    }
-
-    $saData = json_decode(file_get_contents($saPath), true);
+    $saData = getFirebaseServiceAccountData();
     if (!$saData || empty($saData['private_key']) || empty($saData['client_email']) || empty($saData['project_id'])) {
-        $errMsg = "Invalid Firebase Service Account JSON format in config/service-account.json.";
+        $errMsg = "Firebase Service Account JSON credentials missing. Upload service-account.json to config/ directory or save in Web Settings.";
         logFcmEvent('oauth_token_generation', ['client_email' => $saData['client_email'] ?? ''], 'ERROR', 500, $errMsg);
         throw new Exception($errMsg);
     }
