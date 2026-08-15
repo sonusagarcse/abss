@@ -353,6 +353,49 @@ function sendFcmMultiTargets(array $targets, $title, $body, $image = null, $url 
 }
 
 /**
+ * Subscribe one or multiple FCM Tokens to a Topic using Google IID API
+ */
+function subscribeFcmTokensToTopic($tokens, $topic = 'all') {
+    if (is_string($tokens)) {
+        $tokens = [$tokens];
+    }
+    $tokens = array_filter(array_map('trim', $tokens));
+    if (empty($tokens)) return false;
+
+    try {
+        $accessToken = getFirebaseAccessToken();
+    } catch (Exception $e) {
+        return false;
+    }
+
+    $cleanTopic = strpos($topic, '/topics/') === 0 ? $topic : '/topics/' . $topic;
+    $endpoint = 'https://iid.googleapis.com/iid/v1:batchAdd';
+
+    $payload = json_encode([
+        'to' => $cleanTopic,
+        'registration_tokens' => array_values($tokens)
+    ]);
+
+    $ch = curl_init($endpoint);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+    curl_setopt($ch, CURLOPT_HTTPHEADER, [
+        'Authorization: Bearer ' . $accessToken,
+        'access_token_auth: true',
+        'Content-Type: application/json'
+    ]);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+    $resp = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    return ($code === 200);
+}
+
+/**
  * Dispatch FCM Notification to Single Device Token
  */
 function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $url = null, $category = 'General') {

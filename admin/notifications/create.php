@@ -25,7 +25,6 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
             $cleaned_tokens = 0;
 
             // 1. BROADCAST TO ALL FIREBASE TOPICS (all, global, news, notice, android)
-            // Matches Firebase Console Broadcast to ALL installed Android APKs 100%!
             if ($target === 'all') {
                 broadcastFcmCampaignToAllTopics($title, $message, $image, $url, $category);
                 $sent_count++;
@@ -33,7 +32,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
 
             // 2. DISPATCH TO SPECIFIC OR STORED DEVICE TOKENS IN DATABASE
             $tokens = [];
-            if ($target === 'selected' && !empty($selected_tokens)) {
+            $custom_token = trim($_POST['custom_token'] ?? '');
+
+            if ($target === 'custom' && !empty($custom_token)) {
+                $tokens[] = ['id' => 0, 'token' => $custom_token];
+            } elseif ($target === 'selected' && !empty($selected_tokens)) {
                 if (is_string($selected_tokens)) {
                     $selected_tokens = explode(',', $selected_tokens);
                 }
@@ -43,17 +46,23 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
                 
                 $tokenListStr = implode(',', $cleanTokens);
                 $res = $conn->query("SELECT id, token FROM fcm_tokens WHERE token IN ($tokenListStr)");
-            } else {
+                if ($res) {
+                    while ($row = $res->fetch_assoc()) {
+                        $tokens[] = $row;
+                    }
+                }
+            } elseif ($target === 'all') {
                 $res = $conn->query("SELECT id, token FROM fcm_tokens ORDER BY id DESC");
-            }
-
-            if ($res) {
-                while ($row = $res->fetch_assoc()) {
-                    $tokens[] = $row;
+                if ($res) {
+                    while ($row = $res->fetch_assoc()) {
+                        $tokens[] = $row;
+                    }
                 }
             }
 
             $expired_ids = [];
+            $direct_result_msg = '';
+
             foreach ($tokens as $item) {
                 $fcmToken = $item['token'];
                 $tokenId  = (int)$item['id'];
@@ -62,9 +71,11 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
 
                 if ($result['success']) {
                     $sent_count++;
+                    $direct_result_msg = "Delivery successful (ID: " . ($result['name'] ?? 'OK') . ")";
                 } else {
                     $failed_count++;
-                    if (!empty($result['unregistered'])) {
+                    $direct_result_msg = "Delivery failed: " . ($result['error'] ?? 'Unknown');
+                    if (!empty($result['unregistered']) && $tokenId > 0) {
                         $expired_ids[] = $tokenId;
                     }
                 }
@@ -78,7 +89,7 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
             }
 
             // RECORD CAMPAIGN LOG IN NOTIFICATION_HISTORY
-            $targetAudience = ($target === 'selected' && !empty($selected_tokens)) ? 'Selected Tokens (' . count($tokens) . ')' : 'All App Users (FCM Broadcast Topic)';
+            $targetAudience = $target === 'custom' ? 'Direct Custom Token' : (($target === 'selected' && !empty($selected_tokens)) ? 'Selected Tokens (' . count($tokens) . ')' : 'All App Users (FCM Broadcast Topic)');
             $totalSentLog = max(1, $sent_count);
             $histStmt = $conn->prepare("
                 INSERT INTO notification_history (title, message, image, url, category, target_audience, sent_count, failed_count) 
@@ -88,7 +99,10 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
             $histStmt->execute();
             $histStmt->close();
 
-            $successMsg = "Push Notification broadcasted successfully to all Android App users via Firebase Cloud Messaging.";
+            $successMsg = "Push Notification dispatched successfully.";
+            if ($direct_result_msg) {
+                $successMsg .= " [" . $direct_result_msg . "]";
+            }
             if ($cleaned_tokens > 0) {
                 $successMsg .= " ($cleaned_tokens invalid token(s) cleaned)";
             }
@@ -183,8 +197,9 @@ $categories = [
                     <div class="form-group" style="margin-bottom: 0;">
                         <label class="form-label">Send Target <span style="color:#ef4444;">*</span></label>
                         <select name="target" id="targetSelect" class="form-input" onchange="toggleTokenSelect(this.value)">
-                            <option value="all">All Installed App Devices (FCM Broadcast Topic)</option>
-                            <option value="selected">Select Specific Tokens</option>
+                            <option value="all">Broadcast: All Devices &amp; Topics</option>
+                            <option value="selected">Select Registered App Devices</option>
+                            <option value="custom">🎯 Direct Custom FCM Token (Instant Test)</option>
                         </select>
                     </div>
                 </div>
@@ -203,6 +218,12 @@ $categories = [
                         <?php endif; ?>
                     </select>
                     <small style="color: #64748b; font-weight: 600; margin-top: 4px;">Hold Ctrl (Cmd on Mac) to select multiple device tokens.</small>
+                </div>
+
+                <div id="customTokenBox" class="form-group" style="display: none; margin-bottom: 20px; background: #fdf2f8; padding: 15px; border-radius: 14px; border: 1px solid #fbcfe8;">
+                    <label class="form-label" style="color: #be185d;"><i class="fas fa-crosshairs"></i> Enter Specific FCM Device Token</label>
+                    <textarea name="custom_token" class="form-input" rows="2" placeholder="Paste your phone's FCM registration token (from App / Firebase console test / logcat)..."></textarea>
+                    <small style="color: #9d174d; font-weight: 600; margin-top: 4px; display:block;">Directly target this specific device token via Firebase HTTP v1 API.</small>
                 </div>
 
                 <div class="form-group">
@@ -226,11 +247,9 @@ $categories = [
     <script>
         function toggleTokenSelect(val) {
             var box = document.getElementById('tokenSelectBox');
-            if (val === 'selected') {
-                box.style.display = 'block';
-            } else {
-                box.style.display = 'none';
-            }
+            var customBox = document.getElementById('customTokenBox');
+            if (box) box.style.display = (val === 'selected') ? 'block' : 'none';
+            if (customBox) customBox.style.display = (val === 'custom') ? 'block' : 'none';
         }
     </script>
 </body>

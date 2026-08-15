@@ -59,6 +59,10 @@ try {
             $getIdStmt->close();
         }
 
+        // Automatically link this token to Firebase global topic 'all' via Google IID API
+        require_once __DIR__ . '/../config/firebase.php';
+        @subscribeFcmTokensToTopic($token, 'all');
+
         echo json_encode([
             'status' => true,
             'message' => 'FCM Token registered successfully',

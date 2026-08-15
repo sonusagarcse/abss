@@ -6,6 +6,70 @@ require_once '../../config/firebase.php';
 $msg = $_GET['msg'] ?? '';
 $err = $_GET['err'] ?? '';
 
+// Handle Manual Token Addition
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['manual_register_token'])) {
+    $manToken = trim($_POST['token'] ?? '');
+    $manType  = trim($_POST['device_type'] ?? 'android');
+    $manVer   = trim($_POST['app_version'] ?? '1.2.0');
+
+    if (empty($manToken) || strlen($manToken) < 20) {
+        $err = "Please provide a valid FCM Device Token.";
+    } else {
+        $stmt = $conn->prepare("INSERT INTO fcm_tokens (token, device_type, app_version) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE device_type = VALUES(device_type), app_version = VALUES(app_version), updated_at = NOW()");
+        $stmt->bind_param("sss", $manToken, $manType, $manVer);
+        if ($stmt->execute()) {
+            // Automatically subscribe to topic all
+            @subscribeFcmTokensToTopic($manToken, 'all');
+            $msg = "Device token registered & auto-subscribed to Firebase topic 'all' successfully!";
+        } else {
+            $err = "Database error: " . $stmt->error;
+        }
+        $stmt->close();
+    }
+}
+
+// Handle Sync from Live Server (https://abss.lkvmbihar.in)
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['sync_live_tokens'])) {
+    $liveUrl = "https://abss.lkvmbihar.in/api/get-tokens.php?api_key=abss_fcm_secret_key_2026";
+    $ch = curl_init($liveUrl);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+    $resp = curl_exec($ch);
+    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    if ($httpCode === 200 && $resp) {
+        $data = json_decode($resp, true);
+        if ($data && !empty($data['tokens'])) {
+            $syncedCount = 0;
+            $tokensToSub = [];
+            foreach ($data['tokens'] as $tRow) {
+                $tVal = trim($tRow['token'] ?? '');
+                if (strlen($tVal) >= 20) {
+                    $tType = $tRow['device_type'] ?? 'android';
+                    $tVer  = $tRow['app_version'] ?? '1.2.0';
+                    $stmt = $conn->prepare("INSERT INTO fcm_tokens (token, device_type, app_version) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE device_type = VALUES(device_type), app_version = VALUES(app_version), updated_at = NOW()");
+                    $stmt->bind_param("sss", $tVal, $tType, $tVer);
+                    if ($stmt->execute()) {
+                        $syncedCount++;
+                        $tokensToSub[] = $tVal;
+                    }
+                    $stmt->close();
+                }
+            }
+            if (!empty($tokensToSub)) {
+                @subscribeFcmTokensToTopic($tokensToSub, 'all');
+            }
+            $msg = "Synced $syncedCount device token(s) from live server and subscribed to topic 'all'!";
+        } else {
+            $err = "No device tokens found on live server.";
+        }
+    } else {
+        $err = "Failed to connect to live server (HTTP $httpCode). Ensure https://abss.lkvmbihar.in is accessible.";
+    }
+}
+
 // Fetch Stats
 $total_tokens_res = $conn->query("SELECT COUNT(*) AS total FROM fcm_tokens");
 $total_tokens = $total_tokens_res ? (int)$total_tokens_res->fetch_assoc()['total'] : 0;
@@ -121,9 +185,39 @@ $tokens_query = $conn->query("SELECT * FROM fcm_tokens ORDER BY updated_at DESC 
             
             <!-- LEFT COL: REGISTERED APP DEVICES -->
             <div class="panel-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
                     <h3 style="margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a;"><i class="fas fa-mobile" style="color: #2563eb;"></i> App Device Tokens</h3>
                     <span style="background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 50px; font-weight: 800; font-size: 0.75rem;"><?php echo $total_tokens; ?> Devices</span>
+                </div>
+
+                <!-- Quick Actions: Add Token & Sync Live -->
+                <div style="display: flex; gap: 8px; margin-bottom: 15px;">
+                    <button type="button" onclick="document.getElementById('manualTokenForm').style.display = (document.getElementById('manualTokenForm').style.display === 'none' ? 'block' : 'none')" class="btn-portal" style="padding: 6px 12px; font-size: 0.75rem; width: 50%; background: #2563eb;">
+                        <i class="fas fa-plus"></i> Add Token
+                    </button>
+                    <form method="POST" style="width: 50%;">
+                        <button type="submit" name="sync_live_tokens" class="btn-portal" style="padding: 6px 12px; font-size: 0.75rem; width: 100%; background: #475569;" title="Fetch device tokens from live abss.lkvmbihar.in domain">
+                            <i class="fas fa-sync"></i> Sync Live
+                        </button>
+                    </form>
+                </div>
+
+                <!-- Inline Manual Token Form -->
+                <div id="manualTokenForm" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; margin-bottom: 15px;">
+                    <form method="POST">
+                        <label style="font-size: 0.75rem; font-weight: 800; color: #334155; display: block; margin-bottom: 4px;">Paste Android Device FCM Token</label>
+                        <textarea name="token" class="portal-input" rows="2" placeholder="e.g. fStbptCDA4icD0JulIQGx3:APA91b..." required style="font-size: 0.75rem; padding: 8px; margin-bottom: 8px; width: 100%; border-radius: 8px; border: 1px solid #cbd5e1;"></textarea>
+                        <div style="display: flex; gap: 8px;">
+                            <select name="device_type" style="padding: 6px; font-size: 0.75rem; border-radius: 8px; border: 1px solid #cbd5e1; width: 50%;">
+                                <option value="android">Android Phone</option>
+                                <option value="tablet">Android Tablet</option>
+                                <option value="web_browser">Web Browser</option>
+                            </select>
+                            <button type="submit" name="manual_register_token" class="btn-portal" style="padding: 6px 12px; font-size: 0.75rem; width: 50%; background: #16a34a;">
+                                <i class="fas fa-save"></i> Save &amp; Subscribe
+                            </button>
+                        </div>
+                    </form>
                 </div>
 
                 <div style="max-height: 520px; overflow-y: auto;">
@@ -143,7 +237,7 @@ $tokens_query = $conn->query("SELECT * FROM fcm_tokens ORDER BY updated_at DESC 
                     <?php else: ?>
                         <div style="text-align: center; padding: 40px 10px; color: #94a3b8; font-weight: 600; font-size: 0.9rem;">
                             <i class="fas fa-mobile-alt" style="font-size: 2rem; margin-bottom: 10px; display: block; opacity: 0.5;"></i>
-                            No FCM app tokens registered yet.<br>Install Mobile App or visit website to connect devices.
+                            No FCM app tokens registered yet.<br>Install Mobile App or use "+ Add Token" above to register devices.
                         </div>
                     <?php endif; ?>
                 </div>
