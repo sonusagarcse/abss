@@ -394,6 +394,32 @@ function runAutoMigrator($conn) {
         if ($checkPaidAmt && $checkPaidAmt->num_rows == 0) {
             $conn->query("ALTER TABLE teacher_invoices ADD COLUMN paid_amount DECIMAL(10,2) DEFAULT 0.00 AFTER amount");
         }
+
+        // 10. YouTube Videos & Gallery Tables
+        $conn->query("CREATE TABLE IF NOT EXISTS youtube_videos (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            title VARCHAR(255) NOT NULL,
+            video_url VARCHAR(500) NOT NULL,
+            youtube_id VARCHAR(100) NOT NULL,
+            thumbnail_url VARCHAR(500) DEFAULT NULL,
+            category VARCHAR(100) DEFAULT 'Campus Life',
+            description TEXT DEFAULT NULL,
+            status TINYINT(1) DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $conn->query("CREATE TABLE IF NOT EXISTS gallery (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            image_path VARCHAR(255) NOT NULL,
+            caption VARCHAR(255) NOT NULL,
+            category VARCHAR(100) DEFAULT 'General',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $checkGalCat = $conn->query("SHOW COLUMNS FROM gallery LIKE 'category'");
+        if ($checkGalCat && $checkGalCat->num_rows == 0) {
+            $conn->query("ALTER TABLE gallery ADD COLUMN category VARCHAR(100) DEFAULT 'General' AFTER caption");
+        }
         
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;

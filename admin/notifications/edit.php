@@ -84,7 +84,7 @@ $categories = [
     <main class="main-content">
         <header style="margin-bottom: 30px;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
-                <a href="admin/notifications/index.php" style="color: #64748b; font-weight: 800; text-decoration: none; font-size: 0.9rem;">
+                <a href="index.php" style="color: #64748b; font-weight: 800; text-decoration: none; font-size: 0.9rem;">
                     <i class="fas fa-arrow-left"></i> Back to Notifications
                 </a>
             </div>

@@ -1,11 +1,15 @@
 <?php
 // admin/includes/sidebar.php - Frosted Glass Admin Navigation Drawer
 $current_page = basename($_SERVER['PHP_SELF']);
+$base_app_url = defined('APP_URL') ? rtrim(APP_URL, '/') : '/abss';
+$admin_url = $base_app_url . '/admin/';
+$assets_url = $base_app_url . '/assets/';
+$is_notif_page = (strpos($_SERVER['PHP_SELF'], 'notifications') !== false || $current_page == 'notifications.php');
 ?>
 <!-- Mobile Sticky Glass Header -->
 <div class="mobile-header">
     <div class="mobile-brand">
-        <img src="../assets/logo.png" alt="Logo">
+        <img src="<?php echo $assets_url; ?>logo.png" alt="Logo">
         <span>ABSS Command Center</span>
     </div>
     <button class="hamburger-btn" onclick="toggleSidebar()" aria-label="Open Navigation">
@@ -23,7 +27,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </button>
     
     <div class="sidebar-brand">
-        <img src="../assets/logo.png" alt="Logo">
+        <img src="<?php echo $assets_url; ?>logo.png" alt="Logo">
         <div>
             <span>ABSS Admin</span>
             <small>Management Portal</small>
@@ -40,17 +44,17 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     <ul class="nav-menu">
         <li class="nav-item">
-            <a href="dashboard.php" class="nav-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>dashboard.php" class="nav-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
                 <i class="fas fa-th-large"></i> Dashboard
             </a>
         </li>
         <li class="nav-item">
-            <a href="attendance.php" class="nav-link <?php echo $current_page == 'attendance.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>attendance.php" class="nav-link <?php echo $current_page == 'attendance.php' ? 'active' : ''; ?>">
                 <i class="fas fa-calendar-check"></i> Attendance
             </a>
         </li>
         <li class="nav-item">
-            <a href="students.php" class="nav-link <?php echo $current_page == 'students.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>students.php" class="nav-link <?php echo $current_page == 'students.php' ? 'active' : ''; ?>">
                 <i class="fas fa-user-graduate"></i> Students
             </a>
         </li>
@@ -61,105 +65,105 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </a>
             <ul class="submenu" id="teacherMenu" style="display: <?php echo in_array($current_page, ['teachers.php', 'teacher_expenses.php', 'teacher_invoices.php']) ? 'block' : 'none'; ?>; padding-left: 15px; list-style: none; margin-top: 4px;">
                 <li style="margin-bottom: 4px;">
-                    <a href="teachers.php" class="nav-link <?php echo $current_page == 'teachers.php' ? 'active' : ''; ?>" style="padding: 10px 14px; font-size: 0.88em;">
+                    <a href="<?php echo $admin_url; ?>teachers.php" class="nav-link <?php echo $current_page == 'teachers.php' ? 'active' : ''; ?>" style="padding: 10px 14px; font-size: 0.88em;">
                         <i class="fas fa-user-tie"></i> Teachers Directory
                     </a>
                 </li>
                 <li style="margin-bottom: 4px;">
-                    <a href="teacher_expenses.php" class="nav-link <?php echo $current_page == 'teacher_expenses.php' ? 'active' : ''; ?>" style="padding: 10px 14px; font-size: 0.88em;">
+                    <a href="<?php echo $admin_url; ?>teacher_expenses.php" class="nav-link <?php echo $current_page == 'teacher_expenses.php' ? 'active' : ''; ?>" style="padding: 10px 14px; font-size: 0.88em;">
                         <i class="fas fa-receipt"></i> Expense Approvals
                     </a>
                 </li>
                 <li>
-                    <a href="teacher_invoices.php" class="nav-link <?php echo $current_page == 'teacher_invoices.php' ? 'active' : ''; ?>" style="padding: 10px 14px; font-size: 0.88em;">
+                    <a href="<?php echo $admin_url; ?>teacher_invoices.php" class="nav-link <?php echo $current_page == 'teacher_invoices.php' ? 'active' : ''; ?>" style="padding: 10px 14px; font-size: 0.88em;">
                         <i class="fas fa-file-invoice-dollar"></i> Salary Invoices
                     </a>
                 </li>
             </ul>
         </li>
         <li class="nav-item">
-            <a href="documents.php" class="nav-link <?php echo $current_page == 'documents.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>documents.php" class="nav-link <?php echo $current_page == 'documents.php' ? 'active' : ''; ?>">
                 <i class="fas fa-file-alt"></i> Required Documents
             </a>
         </li>
         <li class="nav-item">
-            <a href="document_approvals.php" class="nav-link <?php echo $current_page == 'document_approvals.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>document_approvals.php" class="nav-link <?php echo $current_page == 'document_approvals.php' ? 'active' : ''; ?>">
                 <i class="fas fa-check-double"></i> Document Verification
             </a>
         </li>
         <li class="nav-item">
-            <a href="parents.php" class="nav-link <?php echo $current_page == 'parents.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>parents.php" class="nav-link <?php echo $current_page == 'parents.php' ? 'active' : ''; ?>">
                 <i class="fas fa-user-friends"></i> Parent Registry
             </a>
         </li>
         <li class="nav-item">
-            <a href="fees.php" class="nav-link <?php echo $current_page == 'fees.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>fees.php" class="nav-link <?php echo $current_page == 'fees.php' ? 'active' : ''; ?>">
                 <i class="fas fa-history"></i> Fee Ledger
             </a>
         </li>
         <li class="nav-item">
-            <a href="expenses.php" class="nav-link <?php echo $current_page == 'expenses.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>expenses.php" class="nav-link <?php echo $current_page == 'expenses.php' ? 'active' : ''; ?>">
                 <i class="fas fa-cart-plus"></i> Daily Expenses
             </a>
         </li>
         <li class="nav-item">
-            <a href="results.php" class="nav-link <?php echo $current_page == 'results.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>results.php" class="nav-link <?php echo $current_page == 'results.php' ? 'active' : ''; ?>">
                 <i class="fas fa-award"></i> Test Results
             </a>
         </li>
         <li class="nav-item">
-            <a href="inquiries.php" class="nav-link <?php echo $current_page == 'inquiries.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>inquiries.php" class="nav-link <?php echo $current_page == 'inquiries.php' ? 'active' : ''; ?>">
                 <i class="fas fa-envelope-open-text"></i> Inquiries
             </a>
         </li>
         <li class="nav-item">
-            <a href="tickets.php" class="nav-link <?php echo $current_page == 'tickets.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>tickets.php" class="nav-link <?php echo $current_page == 'tickets.php' ? 'active' : ''; ?>">
                 <i class="fas fa-ticket-alt"></i> Helpdesk Tickets
             </a>
         </li>
         <li class="nav-item">
-            <a href="admissions.php" class="nav-link <?php echo $current_page == 'admissions.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>admissions.php" class="nav-link <?php echo $current_page == 'admissions.php' ? 'active' : ''; ?>">
                 <i class="fas fa-user-plus"></i> Online Admissions
             </a>
         </li>
         <li class="nav-item">
-            <a href="schools.php" class="nav-link <?php echo $current_page == 'schools.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>schools.php" class="nav-link <?php echo $current_page == 'schools.php' ? 'active' : ''; ?>">
                 <i class="fas fa-school"></i> Target Schools
             </a>
         </li>
         <li class="nav-item">
-            <a href="notices.php" class="nav-link <?php echo $current_page == 'notices.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>notices.php" class="nav-link <?php echo $current_page == 'notices.php' ? 'active' : ''; ?>">
                 <i class="fas fa-bullhorn"></i> Notice Board
             </a>
         </li>
         <li class="nav-item">
-            <a href="notifications/index.php" class="nav-link <?php echo strpos($_SERVER['PHP_SELF'], 'notifications/') !== false ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>notifications/index.php" class="nav-link <?php echo $is_notif_page ? 'active' : ''; ?>">
                 <i class="fas fa-bell"></i> Push Notifications (FCM)
             </a>
         </li>
         <li class="nav-item">
-            <a href="achievers.php" class="nav-link <?php echo $current_page == 'achievers.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>achievers.php" class="nav-link <?php echo $current_page == 'achievers.php' ? 'active' : ''; ?>">
                 <i class="fas fa-trophy"></i> Hall of Excellence
             </a>
         </li>
         <li class="nav-item">
-            <a href="gallery.php" class="nav-link <?php echo $current_page == 'gallery.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>gallery.php" class="nav-link <?php echo $current_page == 'gallery.php' ? 'active' : ''; ?>">
                 <i class="fas fa-images"></i> Gallery
             </a>
         </li>
         <li class="nav-item">
-            <a href="visitors.php" class="nav-link <?php echo $current_page == 'visitors.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>visitors.php" class="nav-link <?php echo $current_page == 'visitors.php' ? 'active' : ''; ?>">
                 <i class="fas fa-chart-line"></i> Visitor Analytics
             </a>
         </li>
         <li class="nav-item">
-            <a href="settings.php" class="nav-link <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>settings.php" class="nav-link <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>">
                 <i class="fas fa-sliders-h"></i> Web Settings
             </a>
         </li>
     </ul>
 
-    <a href="logout.php" class="nav-link logout-link">
+    <a href="<?php echo $admin_url; ?>logout.php" class="nav-link logout-link">
         <i class="fas fa-sign-out-alt"></i> Logout Admin
     </a>
 </div>

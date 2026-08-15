@@ -115,30 +115,10 @@
         } catch(e) {}
     }
 
-    // 4. Web Browser Fallback Registration
-    function ensureWebDeviceConnection() {
-        const isAndroidApp = window.navigator.userAgent.indexOf('WebToApp') !== -1 || 
-                             window.navigator.userAgent.indexOf('Shiaho') !== -1 ||
-                             window.Android !== undefined ||
-                             window.WebToApp !== undefined;
-
-        if (isAndroidApp) {
-            return; // Skip fallback for native Android APK
-        }
-
-        let webId = localStorage.getItem('abss_web_device_id');
-        if (!webId) {
-            webId = 'web_device_' + Math.random().toString(36).substring(2, 12) + '_' + Date.now().toString(36);
-            localStorage.setItem('abss_web_device_id', webId);
-        }
-        window.registerFcmDeviceToken(webId, 'web_browser', '1.0.0');
-    }
-
     // Initialize FCM Detection Engine
     function initFcmClient() {
         captureTokenFromUrl();
         checkAndroidBridge();
-        ensureWebDeviceConnection();
 
         if (!('serviceWorker' in navigator) || !('Notification' in window)) {
             return;

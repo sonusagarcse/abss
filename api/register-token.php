@@ -20,11 +20,11 @@ $token       = trim($inputData['token'] ?? $_POST['token'] ?? $_GET['token'] ?? 
 $device_type = trim($inputData['device_type'] ?? $_POST['device_type'] ?? $_GET['device_type'] ?? 'android');
 $app_version = trim($inputData['app_version'] ?? $_POST['app_version'] ?? $_GET['app_version'] ?? '1.0.0');
 
-if (empty($token)) {
+if (empty($token) || strlen($token) < 20 || strpos($token, 'web_device_') === 0) {
     http_response_code(400);
     echo json_encode([
         'status' => false,
-        'error' => 'Missing required parameter: token'
+        'error' => 'Invalid or placeholder FCM registration token.'
     ], JSON_UNESCAPED_SLASHES);
     exit;
 }

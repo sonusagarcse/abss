@@ -183,6 +183,9 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
                 <a href="results.php" class="shortcut-card">
                     <i class="fas fa-chart-line"></i> View Exam Marks
                 </a>
+                <a href="gallery.php" class="shortcut-card">
+                    <i class="fas fa-photo-video"></i> Gallery & Videos
+                </a>
                 <a href="documents.php" class="shortcut-card">
                     <i class="fas fa-file-upload"></i> Upload Documents
                 </a>

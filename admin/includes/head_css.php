@@ -1,6 +1,6 @@
 <!-- admin/includes/head_css.php - Glassmorphic Admin Design Engine -->
-<link rel="icon" type="image/png" href="../assets/logo.png">
-<link rel="manifest" href="/abss/app/manifest.json">
+<link rel="icon" type="image/png" href="<?php echo (defined('APP_URL') ? rtrim(APP_URL, '/') : '/abss'); ?>/assets/logo.png">
+<link rel="manifest" href="<?php echo (defined('APP_URL') ? rtrim(APP_URL, '/') : '/abss'); ?>/app/manifest.json">
 <script>
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {

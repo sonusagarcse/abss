@@ -96,7 +96,120 @@ function getFirebaseProjectId() {
         $saData = json_decode(file_get_contents($saPath), true);
         if (!empty($saData['project_id'])) return $saData['project_id'];
     }
+    if (function_exists('getAllSettings')) {
+        $st = getAllSettings();
+        if (!empty($st['firebase_project_id'])) return $st['firebase_project_id'];
+    }
     return 'abss-notification';
+}
+
+/**
+ * Build Full Platform FCM HTTP v1 JSON Payload
+ */
+function buildFcmMessagePayload($target, $title, $body, $image = null, $url = null, $category = 'General', $isTopic = false) {
+    $targetKey = $isTopic ? "topic" : "token";
+    $cleanTarget = $target;
+    if ($isTopic && strpos($cleanTarget, '/topics/') === 0) {
+        $cleanTarget = str_replace('/topics/', '', $cleanTarget);
+    }
+
+    $strTitle = (string)$title;
+    $strBody  = (string)$body;
+    $strImage = !empty($image) ? (string)$image : '';
+    $strUrl   = !empty($url) ? (string)$url : '';
+    $strCat   = !empty($category) ? (string)$category : 'General';
+    $baseUrl  = defined('APP_URL') ? rtrim(APP_URL, '/') : '/abss';
+    $iconUrl  = $baseUrl . '/assets/logo.png';
+
+    $message = [
+        $targetKey => $cleanTarget,
+        "notification" => [
+            "title" => $strTitle,
+            "body" => $strBody
+        ],
+        "data" => [
+            "title" => $strTitle,
+            "body" => $strBody,
+            "message" => $strBody,
+            "notification_title" => $strTitle,
+            "notification_body" => $strBody,
+            "category" => $strCat,
+            "click_url" => $strUrl,
+            "url" => $strUrl,
+            "link" => $strUrl,
+            "open_url" => $strUrl,
+            "image" => $strImage,
+            "image_url" => $strImage,
+            "picture" => $strImage,
+            "sound" => "default",
+            "timestamp" => (string)time()
+        ],
+        "android" => [
+            "priority" => "HIGH",
+            "direct_boot_ok" => true,
+            "notification" => [
+                "title" => $strTitle,
+                "body" => $strBody,
+                "icon" => "ic_notification",
+                "color" => "#2563eb",
+                "sound" => "default",
+                "default_sound" => true,
+                "default_vibrate_timings" => true,
+                "default_light_settings" => true,
+                "notification_priority" => "PRIORITY_MAX",
+                "visibility" => "PUBLIC",
+                "channel_id" => "default",
+                "click_action" => "OPEN_ACTIVITY"
+            ],
+            "data" => [
+                "title" => $strTitle,
+                "body" => $strBody,
+                "message" => $strBody,
+                "url" => $strUrl,
+                "click_url" => $strUrl,
+                "image" => $strImage
+            ]
+        ],
+        "webpush" => [
+            "headers" => [
+                "Urgency" => "high"
+            ],
+            "notification" => [
+                "title" => $strTitle,
+                "body" => $strBody,
+                "icon" => $iconUrl,
+                "badge" => $iconUrl,
+                "requireInteraction" => true
+            ],
+            "fcm_options" => [
+                "link" => $strUrl ?: $baseUrl . '/'
+            ]
+        ],
+        "apns" => [
+            "headers" => [
+                "apns-priority" => "10"
+            ],
+            "payload" => [
+                "aps" => [
+                    "alert" => [
+                        "title" => $strTitle,
+                        "body" => $strBody
+                    ],
+                    "sound" => "default",
+                    "badge" => 1,
+                    "content-available" => 1
+                ]
+            ]
+        ]
+    ];
+
+    if (!empty($strImage)) {
+        $message['notification']['image'] = $strImage;
+        $message['android']['notification']['image'] = $strImage;
+        $message['webpush']['notification']['image'] = $strImage;
+    }
+
+    return json_encode(["message" => $message], JSON_UNESCAPED_SLASHES);
 }
 
 /**
@@ -116,39 +229,7 @@ function sendFcmNotificationCore($target, $title, $body, $image = null, $url = n
 
     $projectId = getFirebaseProjectId();
     $endpoint = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
-
-    // Clean topic format: if topic string starts with /topics/, strip prefix for HTTP v1 topic key
-    $targetKey = $isTopic ? "topic" : "token";
-    $cleanTarget = $target;
-    if ($isTopic && strpos($cleanTarget, '/topics/') === 0) {
-        $cleanTarget = str_replace('/topics/', '', $cleanTarget);
-    }
-
-    // Standard FCM HTTP v1 message structure matching Firebase Console Compose Campaign
-    $messagePayload = [
-        "message" => [
-            $targetKey => $cleanTarget,
-            "notification" => [
-                "title" => $title,
-                "body" => $body
-            ],
-            "data" => [
-                "title" => $title,
-                "message" => $body,
-                "body" => $body,
-                "category" => $category,
-                "click_url" => $url ?: '',
-                "url" => $url ?: '',
-                "image" => $image ?: ''
-            ]
-        ]
-    ];
-
-    if (!empty($image)) {
-        $messagePayload['message']['notification']['image'] = $image;
-    }
-
-    $jsonPayload = json_encode($messagePayload, JSON_UNESCAPED_SLASHES);
+    $jsonPayload = buildFcmMessagePayload($target, $title, $body, $image, $url, $category, $isTopic);
 
     $ch = curl_init($endpoint);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -196,6 +277,82 @@ function sendFcmNotificationCore($target, $title, $body, $image = null, $url = n
 }
 
 /**
+ * Dispatch FCM messages to multiple targets concurrently via curl_multi (Ultra-Fast)
+ */
+function sendFcmMultiTargets(array $targets, $title, $body, $image = null, $url = null, $category = 'General', $isTopic = false) {
+    if (empty($targets)) return ['success_count' => 0, 'failed_count' => 0, 'results' => []];
+
+    try {
+        $accessToken = getFirebaseAccessToken();
+    } catch (Exception $e) {
+        return ['success_count' => 0, 'failed_count' => count($targets), 'error' => $e->getMessage()];
+    }
+
+    $projectId = getFirebaseProjectId();
+    $endpoint = "https://fcm.googleapis.com/v1/projects/{$projectId}/messages:send";
+    
+    $mh = curl_multi_init();
+    $curlHandles = [];
+
+    foreach ($targets as $idx => $t) {
+        $cleanTarget = trim($t);
+        if (empty($cleanTarget)) continue;
+
+        $jsonPayload = buildFcmMessagePayload($cleanTarget, $title, $body, $image, $url, $category, $isTopic);
+        $ch = curl_init($endpoint);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $jsonPayload);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, [
+            'Authorization: Bearer ' . $accessToken,
+            'Content-Type: application/json; UTF-8'
+        ]);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+        curl_multi_add_handle($mh, $ch);
+        $curlHandles[$idx] = ['ch' => $ch, 'target' => $cleanTarget];
+    }
+
+    $active = null;
+    do {
+        $mrc = curl_multi_exec($mh, $active);
+    } while ($mrc == CURLM_CALL_MULTI_PERFORM);
+
+    while ($active && $mrc == CURLM_OK) {
+        if (curl_multi_select($mh) != -1) {
+            do {
+                $mrc = curl_multi_exec($mh, $active);
+            } while ($mrc == CURLM_CALL_MULTI_PERFORM);
+        }
+    }
+
+    $successCount = 0;
+    $failedCount = 0;
+    $results = [];
+
+    foreach ($curlHandles as $idx => $item) {
+        $ch = $item['ch'];
+        $resp = curl_multi_getcontent($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_multi_remove_handle($mh, $ch);
+        curl_close($ch);
+
+        $data = json_decode($resp, true);
+        if ($code === 200 && isset($data['name'])) {
+            $successCount++;
+            $results[$item['target']] = ['success' => true, 'name' => $data['name']];
+        } else {
+            $failedCount++;
+            $results[$item['target']] = ['success' => false, 'error' => $data['error']['message'] ?? $resp];
+        }
+    }
+
+    curl_multi_close($mh);
+    return ['success_count' => $successCount, 'failed_count' => $failedCount, 'results' => $results];
+}
+
+/**
  * Dispatch FCM Notification to Single Device Token
  */
 function sendSingleFcmNotification($targetToken, $title, $body, $image = null, $url = null, $category = 'General') {
@@ -210,16 +367,25 @@ function sendTopicFcmNotification($topicName, $title, $body, $image = null, $url
 }
 
 /**
- * Broadcast FCM Campaign across all standard Shiaho WebToApp Android APK topics
+ * Broadcast FCM Campaign across all standard Shiaho WebToApp Android APK topics concurrently
  */
 function broadcastFcmCampaignToAllTopics($title, $body, $image = null, $url = null, $category = 'General') {
-    $topics = ['all', 'global', 'news', 'notice', 'android'];
-    $successes = 0;
-    foreach ($topics as $t) {
-        $res = sendTopicFcmNotification($t, $title, $body, $image, $url, $category);
-        if (!empty($res['success'])) {
-            $successes++;
-        }
-    }
-    return $successes > 0;
+    $topics = [
+        'all',
+        'global',
+        'news',
+        'notice',
+        'android',
+        'all_users',
+        'general',
+        'broadcast',
+        'fcm_broadcast',
+        'abss',
+        'abss_notification',
+        'abss_all',
+        'app',
+        'users'
+    ];
+    $result = sendFcmMultiTargets($topics, $title, $body, $image, $url, $category, true);
+    return ($result['success_count'] ?? 0) > 0;
 }

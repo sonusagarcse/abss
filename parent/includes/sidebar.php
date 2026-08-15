@@ -102,6 +102,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </a>
         </li>
         <li class="nav-item">
+            <a href="gallery.php" class="nav-link <?php echo $current_page == 'gallery.php' ? 'active' : ''; ?>">
+                <i class="fas fa-photo-video"></i> Gallery & Videos
+            </a>
+        </li>
+        <li class="nav-item">
             <a href="tickets.php" class="nav-link <?php echo $current_page == 'tickets.php' ? 'active' : ''; ?>">
                 <i class="fas fa-headset"></i> Helpdesk Support
             </a>

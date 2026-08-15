@@ -86,8 +86,33 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_settings'])) {
         }
     }
 
+    // Handle Firebase Service Account JSON Upload
+    if (!empty($_FILES['service_account_json']['name'])) {
+        $ext = strtolower(pathinfo($_FILES['service_account_json']['name'], PATHINFO_EXTENSION));
+        if ($ext === 'json' && $_FILES['service_account_json']['size'] < 2 * 1024 * 1024) {
+            $jsonContent = file_get_contents($_FILES['service_account_json']['tmp_name']);
+            $parsed = json_decode($jsonContent, true);
+            if ($parsed && !empty($parsed['private_key']) && !empty($parsed['client_email'])) {
+                $targetSaPath = __DIR__ . '/../config/service-account.json';
+                if (file_put_contents($targetSaPath, $jsonContent)) {
+                    if (!empty($parsed['project_id'])) {
+                        $pId = $conn->real_escape_string($parsed['project_id']);
+                        $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('firebase_project_id', '$pId') ON DUPLICATE KEY UPDATE setting_value = '$pId'");
+                    }
+                    $msg .= " Firebase Service Account JSON uploaded & verified successfully.";
+                } else {
+                    $err = "Failed to save service-account.json to config directory.";
+                }
+            } else {
+                $err = "Invalid Firebase Service Account JSON. Missing private_key or client_email.";
+            }
+        } else {
+            $err = "Service Account file must be a valid JSON file under 2MB.";
+        }
+    }
+
     if (!$err) {
-        $msg = "Settings saved successfully.";
+        $msg = "Settings saved successfully." . (isset($msg) ? ' ' . $msg : '');
         log_activity('settings_update', "Updated global web settings.");
     }
 }
@@ -139,6 +164,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_admin_password'
 
 // Fetch Settings
 $settings = getAllSettings();
+require_once __DIR__ . '/../config/firebase.php';
+
+$saPath = getFirebaseServiceAccountPath();
+$saData = ($saPath && file_exists($saPath)) ? json_decode(file_get_contents($saPath), true) : null;
+$hasValidSa = ($saData && !empty($saData['private_key']) && !empty($saData['client_email']));
+
+$firebase_project_id = $settings['firebase_project_id'] ?? ($saData['project_id'] ?? 'abss-notification');
+$firebase_sender_id  = $settings['firebase_sender_id'] ?? '343001874555';
+$firebase_api_key    = $settings['firebase_api_key'] ?? 'AIzaSyCWHzgexBb-ogRJ6ypTTMjbGUT0768wmE8';
+$firebase_app_id     = $settings['firebase_app_id'] ?? '1:343001874555:web:7d97e7f76603009b0962de';
+$firebase_vapid_key  = $settings['firebase_vapid_key'] ?? 'BLBC9JquNYYaHFTiJuzrH50jyTBweuMdgSDkNZpHlyf_JhPgiPUa1l1bokgWdho1xo4YPpnk33-adM7qX1KcM3M';
+$fcm_api_secret      = $settings['fcm_api_secret'] ?? 'abss_fcm_secret_key_2026';
 
 // Ensure default tuition modes exist
 $tuition_modes = [];
@@ -289,6 +326,79 @@ if (isset($settings['plan_features'])) {
                                 <label>Razorpay Key Secret</label>
                                 <input type="password" name="settings[razorpay_key_secret]" value="<?php echo htmlspecialchars($razorpay_key_secret); ?>" placeholder="Secret Key">
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Firebase FCM Push Notification Settings -->
+                    <div class="settings-card">
+                        <h3 class="section-title">
+                            <span><i class="fas fa-fire" style="color:#ea580c;"></i> Firebase Push Notifications (FCM HTTP v1)</span>
+                            <div style="display: flex; gap: 8px;">
+                                <a href="notifications/create.php" class="btn-portal" style="padding: 5px 12px; font-size: 0.75rem; width: auto; background: #ea580c; text-decoration: none;">
+                                    <i class="fas fa-paper-plane"></i> Send Push
+                                </a>
+                                <a href="notifications/index.php" class="btn-portal" style="padding: 5px 12px; font-size: 0.75rem; width: auto; background: #475569; text-decoration: none;">
+                                    <i class="fas fa-history"></i> History
+                                </a>
+                            </div>
+                        </h3>
+                        
+                        <!-- Service Account Health Indicator -->
+                        <div style="background: <?php echo $hasValidSa ? '#f0fdf4' : '#fff7ed'; ?>; border: 1px solid <?php echo $hasValidSa ? '#bbf7d0' : '#fed7aa'; ?>; border-radius: 12px; padding: 12px 16px; margin-bottom: 20px;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                                <div>
+                                    <span style="font-size: 0.72rem; font-weight: 800; text-transform: uppercase; color: <?php echo $hasValidSa ? '#166534' : '#c2410c'; ?>; display: block;">
+                                        <i class="fas <?php echo $hasValidSa ? 'fa-check-circle' : 'fa-exclamation-triangle'; ?>"></i> 
+                                        Service Account (OAuth 2.0 HTTP v1): <?php echo $hasValidSa ? 'Connected & Verified' : 'Missing or Incomplete'; ?>
+                                    </span>
+                                    <small style="color: #475569; font-weight: 600; font-family: monospace; font-size: 0.75rem; display: block; margin-top: 3px;">
+                                        <?php echo $hasValidSa ? htmlspecialchars($saData['client_email'] ?? 'service-account.json') : 'Upload your Firebase Service Account JSON file below'; ?>
+                                    </small>
+                                </div>
+                                <span style="background: <?php echo $hasValidSa ? '#22c55e' : '#f97316'; ?>; color: #fff; padding: 3px 10px; border-radius: 50px; font-size: 0.72rem; font-weight: 800;">
+                                    <?php echo $hasValidSa ? 'HTTP v1 Active' : 'Action Required'; ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="portal-form-row">
+                            <div class="portal-input-group">
+                                <label>Firebase Project ID</label>
+                                <input type="text" name="settings[firebase_project_id]" value="<?php echo htmlspecialchars($firebase_project_id); ?>" placeholder="abss-notification">
+                            </div>
+                            <div class="portal-input-group">
+                                <label>Messaging Sender ID (Project Number)</label>
+                                <input type="text" name="settings[firebase_sender_id]" value="<?php echo htmlspecialchars($firebase_sender_id); ?>" placeholder="343001874555">
+                            </div>
+                        </div>
+
+                        <div class="portal-form-row">
+                            <div class="portal-input-group">
+                                <label>Web API Key</label>
+                                <input type="text" name="settings[firebase_api_key]" value="<?php echo htmlspecialchars($firebase_api_key); ?>" placeholder="AIzaSy...">
+                            </div>
+                            <div class="portal-input-group">
+                                <label>Firebase App ID</label>
+                                <input type="text" name="settings[firebase_app_id]" value="<?php echo htmlspecialchars($firebase_app_id); ?>" placeholder="1:343001874555:web:...">
+                            </div>
+                        </div>
+
+                        <div class="portal-input-group">
+                            <label>Web Push VAPID Public Key</label>
+                            <input type="text" name="settings[firebase_vapid_key]" value="<?php echo htmlspecialchars($firebase_vapid_key); ?>" placeholder="BLBC9JquNYYa...">
+                            <small style="color: #64748b; font-size: 0.78rem; margin-top: 4px; display: block;">Generated from Firebase Console &gt; Project Settings &gt; Cloud Messaging &gt; Web configuration.</small>
+                        </div>
+
+                        <div class="portal-input-group">
+                            <label>Internal Backend API Secret Key (X-API-KEY)</label>
+                            <input type="text" name="settings[fcm_api_secret]" value="<?php echo htmlspecialchars($fcm_api_secret); ?>" placeholder="abss_fcm_secret_key_2026">
+                            <small style="color: #64748b; font-size: 0.78rem; margin-top: 4px; display: block;">Used for authenticating external POST requests to <code>/api/send-notification.php</code>.</small>
+                        </div>
+
+                        <div class="portal-input-group" style="margin-bottom: 0;">
+                            <label>Update Service Account JSON File</label>
+                            <input type="file" name="service_account_json" accept=".json,application/json" class="portal-input">
+                            <small style="color: #64748b; font-size: 0.78rem; margin-top: 4px; display: block;">Upload the <code>service-account.json</code> file generated from Google Cloud Console / Firebase Project Settings &gt; Service Accounts.</small>
                         </div>
                     </div>
 

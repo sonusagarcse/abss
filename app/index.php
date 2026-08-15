@@ -33,7 +33,7 @@ include '../includes/header.php';
                     <button id="install-pwa-btn" class="btn-app-install">
                         <i class="fas fa-download"></i> Install Web App
                     </button>
-                    <a href="app/ABSS_v1.0.0.APK" class="btn-app-apk" download>
+                    <a href="app/ABSS_v1.2.0.APK" class="btn-app-apk" download>
                         <i class="fab fa-android"></i> Download APK File
                     </a>
                 </div>
