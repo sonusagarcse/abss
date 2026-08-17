@@ -30,8 +30,28 @@ messaging.onBackgroundMessage(function (payload) {
 
 self.addEventListener('notificationclick', function(event) {
     event.notification.close();
-    const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/abss/';
+    let targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/abss/';
+    
+    // Normalize relative paths
+    if (!targetUrl.startsWith('http')) {
+        targetUrl = self.location.origin + (targetUrl.startsWith('/') ? targetUrl : '/' + targetUrl);
+    }
+    
     event.waitUntil(
-        clients.openWindow(targetUrl)
+        clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function(clientList) {
+            for (let i = 0; i < clientList.length; i++) {
+                const client = clientList[i];
+                if ('focus' in client) {
+                    client.focus();
+                    if ('navigate' in client && client.url !== targetUrl) {
+                        return client.navigate(targetUrl);
+                    }
+                    return;
+                }
+            }
+            if (clients.openWindow) {
+                return clients.openWindow(targetUrl);
+            }
+        })
     );
 });

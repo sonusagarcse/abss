@@ -102,6 +102,16 @@ $is_notif_page = (strpos($_SERVER['PHP_SELF'], 'notifications') !== false || $cu
             </a>
         </li>
         <li class="nav-item">
+            <a href="<?php echo $admin_url; ?>student_dues.php" class="nav-link <?php echo $current_page == 'student_dues.php' ? 'active' : ''; ?>">
+                <i class="fas fa-file-invoice-dollar" style="color: #dc2626;"></i> Student Dues
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="<?php echo $admin_url; ?>whatsapp.php" class="nav-link <?php echo $current_page == 'whatsapp.php' ? 'active' : ''; ?>">
+                <i class="fab fa-whatsapp" style="color: #22c55e;"></i> WhatsApp Hub
+            </a>
+        </li>
+        <li class="nav-item">
             <a href="<?php echo $admin_url; ?>expenses.php" class="nav-link <?php echo $current_page == 'expenses.php' ? 'active' : ''; ?>">
                 <i class="fas fa-cart-plus"></i> Daily Expenses
             </a>

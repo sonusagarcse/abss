@@ -9,15 +9,7 @@ $err = '';
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_settings'])) {
     if (isset($_POST['settings']) && is_array($_POST['settings'])) {
         foreach ($_POST['settings'] as $key => $val) {
-            $key = $conn->real_escape_string($key);
-            $val = $conn->real_escape_string(trim($val));
-            
-            $check = $conn->query("SELECT id FROM settings WHERE setting_key = '$key'");
-            if ($check && $check->num_rows > 0) {
-                $conn->query("UPDATE settings SET setting_value = '$val' WHERE setting_key = '$key'");
-            } else {
-                $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('$key', '$val')");
-            }
+            saveSetting($key, $val);
         }
     }
     
@@ -29,10 +21,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_settings'])) {
             $amt = (float)$_POST['mode_amounts'][$i];
             if (!empty($name) && $amt >= 0) {
                 $modes[$name] = $amt;
+                if ($name === 'Day Scholar') saveSetting('fee_day_scholar', $amt);
+                if ($name === 'Hostler') saveSetting('fee_hostler', $amt);
+                if ($name === 'Tuition') saveSetting('fee_tuition', $amt);
             }
         }
-        $modes_json = $conn->real_escape_string(json_encode($modes));
-        $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('tuition_modes', '$modes_json') ON DUPLICATE KEY UPDATE setting_value = '$modes_json'");
+        $modes_json = json_encode($modes);
+        saveSetting('tuition_modes', $modes_json);
     }
 
     // Save Extra Fees
@@ -45,8 +40,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_settings'])) {
                 $extra_fees[$name] = $amt;
             }
         }
-        $extra_json = $conn->real_escape_string(json_encode($extra_fees));
-        $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('extra_fees', '$extra_json') ON DUPLICATE KEY UPDATE setting_value = '$extra_json'");
+        $extra_json = json_encode($extra_fees);
+        saveSetting('extra_fees', $extra_json);
     }
 
     // Save Plan Features
@@ -62,8 +57,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_settings'])) {
                 ];
             }
         }
-        $features_json = $conn->real_escape_string(json_encode($features));
-        $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('plan_features', '$features_json') ON DUPLICATE KEY UPDATE setting_value = '$features_json'");
+        $features_json = json_encode($features);
+        saveSetting('plan_features', $features_json);
     }
 
     // Handle Director Image Upload
@@ -77,7 +72,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_settings'])) {
             $filename = 'director_' . time() . '.' . $ext;
             if (move_uploaded_file($_FILES['director_image']['tmp_name'], $upload_dir . $filename)) {
                 $path = 'uploads/site/' . $filename;
-                $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('director_image_path', '$path') ON DUPLICATE KEY UPDATE setting_value = '$path'");
+                saveSetting('director_image_path', $path);
             } else {
                 $err = "Failed to upload director image.";
             }
@@ -96,8 +91,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_settings'])) {
                 $targetSaPath = __DIR__ . '/../config/service-account.json';
                 if (file_put_contents($targetSaPath, $jsonContent)) {
                     if (!empty($parsed['project_id'])) {
-                        $pId = $conn->real_escape_string($parsed['project_id']);
-                        $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('firebase_project_id', '$pId') ON DUPLICATE KEY UPDATE setting_value = '$pId'");
+                        saveSetting('firebase_project_id', $parsed['project_id']);
                     }
                     $msg .= " Firebase Service Account JSON uploaded & verified successfully.";
                 } else {
@@ -113,7 +107,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_settings'])) {
 
     if (!$err) {
         $msg = "Settings saved successfully." . (isset($msg) ? ' ' . $msg : '');
-        log_activity('settings_update', "Updated global web settings.");
+        if (function_exists('log_activity')) {
+            log_activity('settings_update', "Updated global web settings.");
+        }
     }
 }
 
@@ -319,12 +315,14 @@ if (isset($settings['plan_features'])) {
                         </h3>
                         <div class="portal-form-row">
                             <div class="portal-input-group">
-                                <label>Razorpay Key ID</label>
-                                <input type="text" name="settings[razorpay_key_id]" value="<?php echo htmlspecialchars($razorpay_key_id); ?>" placeholder="rzp_test_...">
+                                <label><i class="fas fa-key" style="color: var(--portal-blue);"></i> Razorpay Key ID</label>
+                                <input type="text" name="settings[razorpay_key_id]" id="razorpay_key_id" value="<?php echo htmlspecialchars($razorpay_key_id); ?>" placeholder="rzp_test_... or rzp_live_...">
                             </div>
                             <div class="portal-input-group">
-                                <label>Razorpay Key Secret</label>
-                                <input type="password" name="settings[razorpay_key_secret]" value="<?php echo htmlspecialchars($razorpay_key_secret); ?>" placeholder="Secret Key">
+                                <label><i class="fas fa-lock" style="color: var(--portal-blue);"></i> Razorpay Key Secret</label>
+                                <div style="position: relative;">
+                                    <input type="text" name="settings[razorpay_key_secret]" id="razorpay_key_secret" value="<?php echo htmlspecialchars($razorpay_key_secret); ?>" placeholder="Enter Razorpay Secret Key">
+                                </div>
                             </div>
                         </div>
                     </div>

@@ -26,6 +26,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_notice'])) {
             $msg = "Notice published successfully.";
             log_activity('notice_created', "Published school notice: $title");
             
+            // Create in-built portal notification for all parents
+            if (function_exists('create_portal_notification')) {
+                create_portal_notification(
+                    'notice',
+                    "School Notice: " . $title,
+                    substr(strip_tags($content), 0, 120) . (strlen(strip_tags($content)) > 120 ? '...' : ''),
+                    "notices.php",
+                    null,
+                    null,
+                    'fa-bullhorn',
+                    '#16a34a'
+                );
+            }
+
             // Broadcast notice to all parents & admin
             require_once __DIR__ . '/../includes/mail_helper.php';
             $notice_date = date('Y-m-d');

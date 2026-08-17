@@ -12,16 +12,20 @@ header("X-Content-Type-Options: nosniff");
 if (session_status() === PHP_SESSION_NONE) {
     // 1 Year Session Lifetime (31536000 seconds)
     $oneYear = 31536000;
-    @ini_set('session.gc_maxlifetime', $oneYear);
-    @ini_set('session.cookie_lifetime', $oneYear);
+    @ini_set('session.gc_maxlifetime', (string)$oneYear);
+    @ini_set('session.cookie_lifetime', (string)$oneYear);
 
-    // Determine if HTTPS is used
-    $isSecure = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on';
+    // Robust HTTPS detection (handles reverse proxies, Cloudflare, cPanel, Nginx)
+    $isSecure = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
+        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+        || (isset($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower($_SERVER['HTTP_X_FORWARDED_SSL']) === 'on')
+        || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
     
+    // Cookie params: empty domain allows browser to automatically bind to the exact host (works on localhost, subdomains, ports)
     session_set_cookie_params([
         'lifetime' => $oneYear,
         'path' => '/',
-        'domain' => $_SERVER['HTTP_HOST'],
+        'domain' => '',
         'secure' => $isSecure,
         'httponly' => true,
         'samesite' => 'Lax'

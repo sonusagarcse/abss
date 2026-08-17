@@ -31,10 +31,17 @@ if (!empty($children_ids)) {
         $total_paid = (float)$row['total_paid'];
     }
     
-    // Outstanding dues total
+    // Outstanding dues total & latest unpaid bill ID
+    $latest_unpaid_bill_id = 0;
     $dues_query = $conn->query("SELECT SUM(amount) AS total_dues FROM fees_generated WHERE student_id IN ($ids_str) AND status = 'unpaid'");
     if ($dues_query && $row = $dues_query->fetch_assoc()) {
         $outstanding_dues = (float)$row['total_dues'];
+    }
+    if ($outstanding_dues > 0) {
+        $latest_bill_q = $conn->query("SELECT id FROM fees_generated WHERE student_id IN ($ids_str) AND status = 'unpaid' ORDER BY billing_date DESC, id DESC LIMIT 1");
+        if ($latest_bill_q && $bRow = $latest_bill_q->fetch_assoc()) {
+            $latest_unpaid_bill_id = (int)$bRow['id'];
+        }
     }
     
     // Recent results
@@ -112,6 +119,119 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
         }
         .notice-item:hover { transform: translateX(4px); }
 
+        /* Avatar Click-to-Zoom Hover Cue */
+        .child-avatar {
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .child-avatar:hover {
+            transform: scale(1.08);
+            box-shadow: 0 4px 14px rgba(124, 58, 237, 0.35);
+        }
+        .child-avatar:hover::after {
+            content: "\f00e";
+            font-family: "Font Awesome 5 Free";
+            font-weight: 900;
+            position: absolute;
+            inset: 0;
+            background: rgba(124, 58, 237, 0.55);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            border-radius: 50%;
+        }
+
+        /* Large Scale Photo Lightbox Modal */
+        .photo-lightbox-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.78);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            animation: fadeInLightbox 0.2s ease-out;
+        }
+        @keyframes fadeInLightbox {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .photo-lightbox-card {
+            background: #ffffff;
+            border-radius: 24px;
+            max-width: 440px;
+            width: 100%;
+            overflow: hidden;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.35);
+            position: relative;
+            text-align: center;
+            animation: zoomInLightbox 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes zoomInLightbox {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .photo-lightbox-close {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            width: 38px;
+            height: 38px;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.55);
+            color: #ffffff;
+            border: none;
+            font-size: 1.4rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            transition: background 0.2s, transform 0.2s;
+        }
+        .photo-lightbox-close:hover {
+            background: #dc2626;
+            transform: rotate(90deg);
+        }
+        .photo-lightbox-img-wrap {
+            width: 100%;
+            height: 380px;
+            background: #0f172a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .photo-lightbox-img-wrap img {
+            max-width: 100%;
+            max-height: 100%;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+        .lightbox-placeholder {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 5.5rem;
+            font-weight: 900;
+        }
+        .photo-lightbox-details {
+            padding: 22px 24px;
+            background: #ffffff;
+        }
+
         .dashboard-grid {
             display: grid;
             grid-template-columns: 2fr 1fr;
@@ -133,9 +253,15 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
                 <p><i class="fas fa-child"></i> Parent space monitoring <?= count($children) ?> registered ward(s) academic progress and billing ledger.</p>
             </div>
             <div>
-                <a href="fees.php" style="background: rgba(255,255,255,0.2); color: white; padding: 12px 22px; border-radius: 14px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; backdrop-filter: blur(10px);">
-                    <i class="fas fa-wallet"></i> Pay Dues & Ledger
-                </a>
+                <?php if ($outstanding_dues > 0 && $latest_unpaid_bill_id > 0): ?>
+                    <a href="view_bill.php?id=<?= $latest_unpaid_bill_id ?>" style="background: #dc2626; color: white; padding: 12px 22px; border-radius: 14px; font-weight: 800; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 4px 16px rgba(220, 38, 38, 0.4);">
+                        <i class="fas fa-credit-card"></i> Pay Due Bill (₹ <?= number_format($outstanding_dues, 2) ?>)
+                    </a>
+                <?php else: ?>
+                    <a href="fees.php" style="background: rgba(255,255,255,0.2); color: white; padding: 12px 22px; border-radius: 14px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; backdrop-filter: blur(10px);">
+                        <i class="fas fa-wallet"></i> Pay Dues & Ledger
+                    </a>
+                <?php endif; ?>
             </div>
         </div>
 
@@ -166,11 +292,28 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
                     </div>
                 </div>
 
-                <div class="stat-card">
+                <div class="stat-card" style="border-left: 4px solid #dc2626;">
                     <div class="stat-icon" style="background:#fee2e2; color:#b91c1c;"><i class="fas fa-exclamation-circle"></i></div>
-                    <div class="stat-info">
+                    <div class="stat-info" style="width: 100%;">
                         <h3 style="color:#b91c1c;">₹ <?= number_format($outstanding_dues, 2) ?></h3>
-                        <span>Outstanding Dues</span>
+                        <span style="font-weight:700;">Outstanding Dues</span>
+                        <?php if ($outstanding_dues > 0 && $latest_unpaid_bill_id > 0): ?>
+                            <div style="margin-top: 10px;">
+                                <a href="view_bill.php?id=<?= $latest_unpaid_bill_id ?>" 
+                                   style="display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%); color: #ffffff; padding: 7px 16px; border-radius: 50px; font-size: 0.82rem; font-weight: 800; text-decoration: none; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35); transition: transform 0.2s;">
+                                    <i class="fas fa-credit-card"></i> Pay Now →
+                                </a>
+                            </div>
+                        <?php elseif ($outstanding_dues > 0): ?>
+                            <div style="margin-top: 10px;">
+                                <a href="fees.php" 
+                                   style="display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%); color: #ffffff; padding: 7px 16px; border-radius: 50px; font-size: 0.82rem; font-weight: 800; text-decoration: none; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);">
+                                    <i class="fas fa-credit-card"></i> Pay Now →
+                                </a>
+                            </div>
+                        <?php else: ?>
+                            <small style="color: #166534; font-weight: 700; display: block; margin-top: 4px;"><i class="fas fa-check-circle"></i> All Cleared</small>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>
@@ -197,22 +340,37 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
             <!-- Child Registry Cards -->
             <h3 style="font-size: 1.2rem; margin-bottom: 16px;"><i class="fas fa-children" style="color:var(--portal-purple); margin-right:8px;"></i> Registered Ward Profiles</h3>
             <div class="children-grid">
-                <?php foreach ($children as $c): ?>
+                <?php foreach ($children as $c): 
+                    $raw_photo = !empty($c['photo']) ? $c['photo'] : (!empty($c['student_photo']) ? $c['student_photo'] : '');
+                    $photo_url = '';
+                    if (!empty($raw_photo)) {
+                        $photo_url = (strpos($raw_photo, 'http') === 0 || strpos($raw_photo, '../') === 0) ? $raw_photo : '../' . ltrim($raw_photo, '/');
+                    }
+                    $c_name = htmlspecialchars($c['name']);
+                    $c_reg = htmlspecialchars($c['reg_no'] ?: 'ABSS-' . str_pad($c['id'], 4, '0', STR_PAD_LEFT));
+                    $c_class = htmlspecialchars($c['class_admitted'] ?: 'Class 5');
+                    $c_mode = htmlspecialchars($c['scholar_mode'] ?? 'Day Scholar');
+                    $c_target = htmlspecialchars($c['target_school'] ?: 'Netarhat Preparation');
+                ?>
                     <div class="child-card">
-                        <div class="child-avatar">
-                            <?php if (!empty($c['student_photo'])): ?>
-                                <img src="../<?= htmlspecialchars($c['student_photo']) ?>" 
-                                     alt="<?= htmlspecialchars($c['name']) ?>"
-                                     style="width:52px; height:52px; object-fit:cover; border-radius:50%;">
+                        <div class="child-avatar" 
+                             title="Click to view large photo"
+                             onclick="openPhotoModal('<?= addslashes($c_name) ?>', '<?= addslashes($photo_url) ?>', '<?= addslashes($c_reg) ?>', '<?= addslashes($c_class) ?>', '<?= addslashes($c_mode) ?>', '<?= addslashes($c_target) ?>')">
+                            <?php if (!empty($photo_url)): ?>
+                                <img src="<?= $photo_url ?>" 
+                                     alt="<?= $c_name ?>"
+                                     style="width:52px; height:52px; object-fit:cover; border-radius:50%;"
+                                     onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <span style="display:none;"><?= htmlspecialchars(substr($c['name'], 0, 1)) ?></span>
                             <?php else: ?>
                                 <?= htmlspecialchars(substr($c['name'], 0, 1)) ?>
                             <?php endif; ?>
                         </div>
                         <div class="child-details">
-                            <h4><?= htmlspecialchars($c['name']) ?></h4>
-                            <span>Class: <strong><?= htmlspecialchars($c['class_admitted']) ?></strong></span><br>
-                            <span>Target: <?= htmlspecialchars($c['target_school'] ?: 'Netarhat Preparation') ?></span><br>
-                            <span class="badge badge-purple" style="margin-top:6px;"><i class="fas fa-hotel"></i> <?= htmlspecialchars($c['scholar_mode'] ?? 'Day Scholar') ?></span>
+                            <h4><?= $c_name ?></h4>
+                            <span>Class: <strong><?= $c_class ?></strong></span><br>
+                            <span>Target: <?= $c_target ?></span><br>
+                            <span class="badge badge-purple" style="margin-top:6px;"><i class="fas fa-hotel"></i> <?= $c_mode ?></span>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -302,5 +460,65 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
 
         <?php endif; ?>
     </main>
+
+    <!-- Student Large Photo Lightbox Modal -->
+    <div id="studentPhotoModal" class="photo-lightbox-modal" style="display:none;" onclick="closePhotoModal(event)">
+        <div class="photo-lightbox-card" onclick="event.stopPropagation();">
+            <button type="button" class="photo-lightbox-close" onclick="closePhotoModal()" title="Close">&times;</button>
+            <div class="photo-lightbox-img-wrap">
+                <img id="lightboxImg" src="" alt="Student High-Res Photo" style="display:none;">
+                <div id="lightboxPlaceholder" class="lightbox-placeholder" style="display:none;"></div>
+            </div>
+            <div class="photo-lightbox-details">
+                <h3 id="lightboxName" style="margin: 0 0 6px; font-size: 1.35rem; color: #0f172a; font-weight: 800;"></h3>
+                <div style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 10px;">
+                    <span id="lightboxReg" class="badge badge-purple" style="font-family: monospace; font-size: 0.8rem; font-weight: 800;"></span>
+                    <span id="lightboxClass" class="badge badge-success" style="font-size: 0.8rem; font-weight: 700;"></span>
+                    <span id="lightboxMode" class="badge badge-purple" style="font-size: 0.8rem; font-weight: 700;"></span>
+                </div>
+                <p id="lightboxTarget" style="margin: 0; color: #64748b; font-size: 0.88rem; font-weight: 600;"></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openPhotoModal(name, photoUrl, regNo, className, scholarMode, targetSchool) {
+            document.getElementById('lightboxName').textContent = name;
+            document.getElementById('lightboxReg').textContent = regNo || 'ABSS Student';
+            document.getElementById('lightboxClass').textContent = className || 'Class 5';
+            document.getElementById('lightboxMode').textContent = scholarMode || 'Day Scholar';
+            document.getElementById('lightboxTarget').textContent = targetSchool ? '🎯 Target: ' + targetSchool : '';
+            
+            const img = document.getElementById('lightboxImg');
+            const placeholder = document.getElementById('lightboxPlaceholder');
+            
+            if (photoUrl && photoUrl.trim() !== '') {
+                img.src = photoUrl;
+                img.style.display = 'block';
+                placeholder.style.display = 'none';
+            } else {
+                img.style.display = 'none';
+                placeholder.textContent = name ? name.charAt(0).toUpperCase() : 'S';
+                placeholder.style.display = 'flex';
+            }
+            
+            document.getElementById('studentPhotoModal').style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closePhotoModal(e) {
+            if (!e || e.target === document.getElementById('studentPhotoModal') || e.target.classList.contains('photo-lightbox-close')) {
+                document.getElementById('studentPhotoModal').style.display = 'none';
+                document.body.style.overflow = '';
+            }
+        }
+
+        // Close modal on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && document.getElementById('studentPhotoModal').style.display === 'flex') {
+                closePhotoModal();
+            }
+        });
+    </script>
 </body>
 </html>

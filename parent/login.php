@@ -3,30 +3,10 @@ require_once __DIR__ . '/../includes/security.php';
 require_once __DIR__ . '/../includes/auth_helper.php';
 
 // Check if persistent cookie can auto-authenticate parent
-if (!isset($_SESSION['parent_id']) && isset($_COOKIE['abss_parent_remember'])) {
-    $cookie_data = explode(':', $_COOKIE['abss_parent_remember'], 2);
-    if (count($cookie_data) === 2) {
-        $pid = (int)$cookie_data[0];
-        $token_hash = $cookie_data[1];
-        $conn = getDB();
-        $stmt = $conn->prepare("SELECT id, parent_name, email FROM parents WHERE id = ? LIMIT 1");
-        $stmt->bind_param("i", $pid);
-        $stmt->execute();
-        $res = $stmt->get_result();
-        if ($parent = $res->fetch_assoc()) {
-            $secret_key = defined('DB_PASS') ? DB_PASS . '_ABSS_AUTH_SECRET' : 'ABSS_AUTH_SECRET';
-            $expected_hash = hash_hmac('sha256', $parent['id'] . '|' . $parent['email'], $secret_key);
-            if (hash_equals($expected_hash, $token_hash)) {
-                $_SESSION['parent_id'] = $parent['id'];
-                $_SESSION['parent_name'] = $parent['parent_name'];
-                $_SESSION['parent_email'] = $parent['email'];
-            }
-        }
-    }
-}
+verify_and_restore_parent_session();
 
 // Redirect if already logged in
-if (isset($_SESSION['parent_id'])) {
+if (isset($_SESSION['parent_id']) && (int)$_SESSION['parent_id'] > 0) {
     header("Location: dashboard.php");
     exit();
 }

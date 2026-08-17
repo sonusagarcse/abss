@@ -43,29 +43,40 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
     $admission_date     = trim($_POST['admission_date']);
     $monthly_discount   = isset($_POST['monthly_discount']) ? (float)$_POST['monthly_discount'] : 0.00;
     $base_fee           = isset($_POST['base_fee']) ? (float)$_POST['base_fee'] : 0.00;
+    $security_amount    = isset($_POST['security_amount']) ? (float)$_POST['security_amount'] : 0.00;
+    $registration_fee   = isset($_POST['registration_fee']) ? (float)$_POST['registration_fee'] : 0.00;
+    $admission_fee      = isset($_POST['admission_fee']) ? (float)$_POST['admission_fee'] : 0.00;
     $id                 = isset($_POST['id']) ? (int)$_POST['id'] : 0;
     $parent_id          = isset($_POST['parent_id']) && $_POST['parent_id'] !== '' ? (int)$_POST['parent_id'] : null;
 
-    // Auto-create parent registry if no parent_id is linked
+    // Auto-create parent registry account if no parent_id is linked
     if (!$parent_id && !empty($parent_name)) {
-        $p_email = !empty($guardian_email) ? $guardian_email : "parent_" . preg_replace('/[^0-9]/', '', $phone) . "@abss.local";
+        $clean_phone = preg_replace('/[^0-9]/', '', $phone);
+        $p_email = !empty($guardian_email) ? $guardian_email : ($clean_phone ? "parent_{$clean_phone}@abss.in" : "parent_" . time() . "@abss.in");
         
-        // Check if a parent with this email already exists
-        $p_check = $conn->prepare("SELECT id FROM parents WHERE email = ?");
-        $p_check->bind_param("s", $p_email);
+        // Check if a parent with this email or phone already exists
+        $p_check = $conn->prepare("SELECT id FROM parents WHERE email = ? OR (phone = ? AND phone != '') LIMIT 1");
+        $p_check->bind_param("ss", $p_email, $phone);
         $p_check->execute();
         $p_res = $p_check->get_result();
         
         if ($p_res->num_rows > 0) {
             $parent_id = $p_res->fetch_assoc()['id'];
+            // Ensure phone is attached to parent account
+            $u_stmt = $conn->prepare("UPDATE parents SET phone = ? WHERE id = ? AND (phone IS NULL OR phone = '')");
+            $u_stmt->bind_param("si", $phone, $parent_id);
+            $u_stmt->execute();
         } else {
-            // Create a new parent account (default password is the phone number)
+            // Create a new parent account: BOTH ID & PASSWORD are the Mobile Number (phone)
             $default_password = !empty($phone) ? $phone : '123456';
             $p_pass = password_hash($default_password, PASSWORD_DEFAULT);
             $p_insert = $conn->prepare("INSERT INTO parents (parent_name, email, password, phone) VALUES (?, ?, ?, ?)");
             $p_insert->bind_param("ssss", $parent_name, $p_email, $p_pass, $phone);
             if ($p_insert->execute()) {
                 $parent_id = $conn->insert_id;
+                if (function_exists('log_activity')) {
+                    log_activity('parent_auto_created', "Auto-provisioned parent portal login for $parent_name (Mobile ID/Pass: $phone)");
+                }
             }
         }
     }
@@ -100,16 +111,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             emergency_contact_name=?, emergency_relationship=?, emergency_phone=?,
             has_allergies=?, allergies_detail=?, has_medical_condition=?, medical_condition_detail=?,
             physician_name=?, physician_phone=?, insurance_provider=?, insurance_policy=?,
-            target_school=?, class_admitted=?, scholar_mode=?, monthly_discount=?, base_fee=?, admission_date=?, parent_id=?, photo=?, student_photo=?
+            target_school=?, class_admitted=?, scholar_mode=?, monthly_discount=?, base_fee=?, security_amount=?, registration_fee=?, admission_fee=?, admission_date=?, parent_id=?, photo=?, student_photo=?
             WHERE id=?");
-        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'ddsissi';
+        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'dddddsissi';
         $params = [
             $name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
             $parent_name, $guardian_relationship, $phone, $guardian_email, $guardian_address,
             $emergency_contact_name, $emergency_relationship, $emergency_phone,
             $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
             $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
-            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $admission_date, $parent_id, $photo_path, $student_photo_path,
+            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $admission_date, $parent_id, $photo_path, $student_photo_path,
             $id
         ];
         $stmt->bind_param($types, ...$params);
@@ -120,16 +131,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             emergency_contact_name, emergency_relationship, emergency_phone,
             has_allergies, allergies_detail, has_medical_condition, medical_condition_detail,
             physician_name, physician_phone, insurance_provider, insurance_policy,
-            target_school, class_admitted, scholar_mode, monthly_discount, base_fee, admission_date, parent_id, photo, student_photo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'ddsiss';
+            target_school, class_admitted, scholar_mode, monthly_discount, base_fee, security_amount, registration_fee, admission_fee, admission_date, parent_id, photo, student_photo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'dddddsiss';
         $params = [
             $name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
             $parent_name, $guardian_relationship, $phone, $guardian_email, $guardian_address,
             $emergency_contact_name, $emergency_relationship, $emergency_phone,
             $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
             $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
-            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $admission_date, $parent_id, $photo_path, $student_photo_path
+            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $admission_date, $parent_id, $photo_path, $student_photo_path
         ];
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
@@ -210,12 +221,35 @@ if (isset($_GET['delete'])) {
     exit();
 }
 
-$students = $conn->query("
+$students_query = $conn->query("
     SELECT s.*, p.parent_name AS account_parent_name, p.email AS parent_email 
     FROM students s 
     LEFT JOIN parents p ON s.parent_id = p.id 
     ORDER BY s.created_at DESC
 ");
+
+$students_data = [];
+$total_count = 0;
+$day_scholars_count = 0;
+$hostlers_count = 0;
+$tuition_count = 0;
+$unique_classes = [];
+$unique_schools = [];
+
+if ($students_query) {
+    while($row = $students_query->fetch_assoc()) {
+        $students_data[] = $row;
+        $total_count++;
+        $mode = $row['scholar_mode'] ?? 'Day Scholar';
+        if (strcasecmp($mode, 'Hostler') === 0) $hostlers_count++;
+        elseif (strcasecmp($mode, 'Tuition') === 0) $tuition_count++;
+        else $day_scholars_count++;
+
+        if (!empty($row['class_admitted'])) $unique_classes[$row['class_admitted']] = true;
+        if (!empty($row['target_school'])) $unique_schools[$row['target_school']] = true;
+    }
+}
+
 $parents_list = $conn->query("SELECT id, parent_name, email FROM parents ORDER BY parent_name ASC");
 $parents_array = [];
 while($p = $parents_list->fetch_assoc()) {
@@ -239,45 +273,332 @@ if (!empty($site_settings['tuition_modes'])) {
     $tuition_modes = ['Day Scholar' => $fee_day_scholar, 'Hostler' => $fee_hostler, 'Tuition' => $fee_tuition];
 }
 ?>
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Management | ABSS Portal</title>
+    <title>Student Registry & Profiles | ABSS Admin Portal</title>
     <?php include 'includes/head_css.php'; ?>
     <style>
-        .action-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
-        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,21,113,0.3); backdrop-filter: blur(8px); z-index: 4000; align-items: flex-start; justify-content: center; overflow-y: auto; padding: 20px 0; }
-        .modal-content { background: #fff; padding: 50px; border-radius: 40px; width: 100%; max-width: 800px; box-shadow: 0 40px 100px rgba(0,21,113,0.2); border: 1px solid rgba(13,71,161,0.1); margin: auto; }
-        table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
-        th { text-align: left; padding: 15px 25px; color: var(--portal-blue); font-weight: 800; font-size: 0.85rem; text-transform: uppercase; }
-        td { padding: 15px 25px; background: #fff; border-top: 1px solid #f0f4f8; border-bottom: 1px solid #f0f4f8; color: #5c6bc0; font-weight: 600; }
-        td:first-child { border-left: 1px solid #f0f4f8; border-radius: 20px 0 0 20px; }
-        td:last-child { border-right: 1px solid #f0f4f8; border-radius: 0 20px 20px 0; }
-        .btn-glass { background: #f8faff; color: var(--portal-blue); border: 2px solid #eef2ff; padding: 15px 25px; border-radius: 16px; font-weight: 700; cursor: pointer; }
+        /* Modern Action & Stats Header */
+        .students-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 25px;
+            flex-wrap: wrap;
+        }
 
-        /* Form section headers */
+        .stats-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+        }
+
+        /* Filter Controls Glass Box */
+        .search-filter-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: var(--radius-lg);
+            padding: 22px 26px;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            margin-bottom: 30px;
+        }
+
+        .filter-controls-row {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr auto;
+            gap: 14px;
+            align-items: center;
+        }
+
+        .search-field-wrapper {
+            position: relative;
+            width: 100%;
+        }
+        .search-field-wrapper i {
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            font-size: 1rem;
+        }
+        .search-field-wrapper input {
+            width: 100%;
+            padding: 12px 16px 12px 44px;
+            border-radius: var(--radius-md);
+            border: 2px solid #cbd5e1;
+            background: #ffffff;
+            font-size: 0.95rem;
+            font-weight: 600;
+            outline: none;
+            transition: 0.25s;
+            box-sizing: border-box;
+        }
+        .search-field-wrapper input:focus {
+            border-color: var(--portal-blue);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+
+        .filter-select {
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: var(--radius-md);
+            border: 2px solid #cbd5e1;
+            background: #ffffff;
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: #334155;
+            outline: none;
+            box-sizing: border-box;
+            transition: 0.25s;
+        }
+        .filter-select:focus {
+            border-color: var(--portal-blue);
+        }
+
+        /* View Mode Switcher */
+        .view-mode-toggle {
+            display: inline-flex;
+            background: #f1f5f9;
+            padding: 4px;
+            border-radius: 12px;
+            gap: 4px;
+        }
+        .view-mode-btn {
+            background: transparent;
+            border: none;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: #64748b;
+            cursor: pointer;
+            transition: 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .view-mode-btn.active {
+            background: #ffffff;
+            color: var(--portal-blue);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
+        /* Student Card Grid */
+        .students-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: 22px;
+            margin-bottom: 40px;
+        }
+
+        .student-profile-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            padding: 24px;
+            transition: transform 0.25s, box-shadow 0.25s;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+        .student-profile-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 35px rgba(37, 99, 235, 0.08);
+        }
+
+        .student-card-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 16px;
+        }
+        .student-avatar {
+            width: 58px;
+            height: 58px;
+            border-radius: 18px;
+            object-fit: cover;
+            border: 2px solid #e0e7ff;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.1);
+        }
+        .student-avatar-fallback {
+            width: 58px;
+            height: 58px;
+            border-radius: 18px;
+            background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: 800;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.15);
+        }
+
+        .student-name-text {
+            font-size: 1.12rem;
+            font-weight: 800;
+            color: var(--portal-dark);
+            line-height: 1.2;
+            margin-bottom: 4px;
+        }
+
+        .reg-badge-pill {
+            display: inline-block;
+            background: #eff6ff;
+            color: var(--portal-blue);
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-weight: 800;
+            font-size: 0.76rem;
+            font-family: monospace;
+            border: 1px solid #dbeafe;
+        }
+
+        .scholar-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.74rem;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+        .scholar-hostler { background: #f3e8ff; color: #7c3aed; }
+        .scholar-day { background: #dcfce7; color: #166534; }
+        .scholar-tuition { background: #dbeafe; color: #1e40af; }
+
+        .student-details-list {
+            background: rgba(248, 250, 252, 0.8);
+            border-radius: var(--radius-md);
+            padding: 12px 14px;
+            margin: 12px 0 16px;
+            border: 1px solid #f1f5f9;
+            font-size: 0.86rem;
+        }
+        .student-detail-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 4px 0;
+            color: #475569;
+        }
+        .student-detail-item b {
+            color: var(--portal-dark);
+        }
+
+        .student-contact-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+        .contact-btn {
+            flex: 1;
+            padding: 8px 10px;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            text-decoration: none;
+            transition: 0.2s;
+        }
+        .contact-btn-wa { background: #dcfce7; color: #15803d; }
+        .contact-btn-wa:hover { background: #22c55e; color: #fff; }
+        .contact-btn-call { background: #eff6ff; color: #1d4ed8; }
+        .contact-btn-call:hover { background: #2563eb; color: #fff; }
+
+        .student-card-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-top: 1px solid #f1f5f9;
+            padding-top: 14px;
+            margin-top: 5px;
+        }
+
+        .action-icon-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: none;
+            cursor: pointer;
+            transition: 0.2s;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .btn-edit-act { background: #eff6ff; color: var(--portal-blue); }
+        .btn-edit-act:hover { background: var(--portal-blue); color: #fff; }
+        .btn-addon-act { background: #f0fdf4; color: #16a34a; }
+        .btn-addon-act:hover { background: #16a34a; color: #fff; }
+        .btn-del-act { background: #fef2f2; color: #dc2626; }
+        .btn-del-act:hover { background: #dc2626; color: #fff; }
+
+        /* Modal Styles */
+        .modal { 
+            display: none; 
+            position: fixed; 
+            top: 0; left: 0; 
+            width: 100%; height: 100%; 
+            background: rgba(15, 23, 42, 0.5); 
+            backdrop-filter: blur(8px); 
+            z-index: 4000; 
+            align-items: flex-start; 
+            justify-content: center; 
+            overflow-y: auto; 
+            padding: 30px 15px; 
+            box-sizing: border-box;
+        }
+        .modal-content { 
+            background: #ffffff; 
+            padding: 40px; 
+            border-radius: 28px; 
+            width: 100%; 
+            max-width: 820px; 
+            box-shadow: 0 40px 100px rgba(15, 23, 42, 0.2); 
+            border: 1px solid #e2e8f0; 
+            margin: auto; 
+            box-sizing: border-box;
+        }
+
         .form-section-title {
             font-size: 0.85rem;
             font-weight: 800;
             text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: #fff;
-            background: var(--portal-blue);
-            padding: 8px 20px;
+            letter-spacing: 0.06em;
+            color: #ffffff;
+            background: linear-gradient(135deg, var(--portal-blue), var(--portal-blue-dark));
+            padding: 8px 18px;
             border-radius: 10px;
-            margin: 30px 0 18px;
+            margin: 25px 0 16px;
             display: block;
         }
         .form-section-title:first-of-type { margin-top: 0; }
 
-        /* Photo upload */
         .photo-upload-area {
             border: 2px dashed #c7d2fe;
-            border-radius: 18px;
-            padding: 28px;
+            border-radius: 16px;
+            padding: 24px;
             text-align: center;
             background: #f8faff;
             cursor: pointer;
@@ -286,20 +607,39 @@ if (!empty($site_settings['tuition_modes'])) {
         }
         .photo-upload-area:hover { border-color: var(--portal-blue); background: #eef2ff; }
         .photo-upload-area input[type="file"] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-        .photo-upload-area i { font-size: 2rem; color: var(--portal-blue); opacity: 0.5; }
-        .photo-upload-area p { margin: 8px 0 0; color: #5c6bc0; font-size: 0.85rem; font-weight: 600; }
 
-        /* Medical toggle */
         .yes-no-group { display: flex; gap: 15px; align-items: center; margin: 5px 0 12px; }
-        .yes-no-group label { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #5c6bc0; cursor: pointer; }
+        .yes-no-group label { display: flex; align-items: center; gap: 6px; font-weight: 700; color: #475569; cursor: pointer; }
         .yes-no-group input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--portal-blue); }
 
-        /* Reg number badge */
-        .reg-badge { display: inline-block; background: #eef2ff; color: var(--portal-blue); padding: 3px 10px; border-radius: 8px; font-weight: 800; font-size: 0.78rem; }
+        .portal-form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
 
-        /* Responsive grid */
+        @media (max-width: 900px) {
+            .filter-controls-row {
+                grid-template-columns: 1fr 1fr;
+            }
+            .search-field-wrapper {
+                grid-column: span 2;
+            }
+        }
+
         @media (max-width: 600px) {
-            .modal-content { padding: 25px; }
+            .filter-controls-row {
+                grid-template-columns: 1fr;
+            }
+            .search-field-wrapper {
+                grid-column: span 1;
+            }
+            .portal-form-row {
+                grid-template-columns: 1fr !important;
+            }
+            .modal-content {
+                padding: 20px;
+            }
         }
     </style>
 </head>
@@ -307,122 +647,376 @@ if (!empty($site_settings['tuition_modes'])) {
     <?php include 'includes/sidebar.php'; ?>
 
     <main class="main-content">
-        <div class="action-bar">
-            <h1>Student Registry</h1>
-            <button class="btn-portal" onclick="showModal()">
-                <i class="fas fa-plus"></i> New Enrollment
-            </button>
+        <!-- Top Action & Navigation Header -->
+        <div class="students-header-row">
+            <div>
+                <h1 style="font-size: 1.85rem; font-weight: 800; margin: 0; color: var(--portal-dark); display: flex; align-items: center; gap: 10px;">
+                    <i class="fas fa-user-graduate" style="color: var(--portal-blue);"></i> Student Registry & Profiles
+                </h1>
+                <p style="margin: 4px 0 0; color: #64748b; font-size: 0.95rem;">Manage academic enrollment records, medical profiles, and fee configurations.</p>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button class="btn-portal" onclick="showModal()">
+                    <i class="fas fa-user-plus"></i> New Enrollment
+                </button>
+            </div>
         </div>
 
-        <div class="portal-table-container">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Reg No.</th>
-                        <th>Student</th>
-                        <th>Parent / Guardian</th>
-                        <th>Class / Mode</th>
-                        <th>Target School</th>
-                        <th>Adm. Form</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php while($row = $students->fetch_assoc()): ?>
-                    <tr>
-                        <td>
-                            <?php if(!empty($row['reg_no'])): ?>
-                                <span class="reg-badge"><?php echo htmlspecialchars($row['reg_no']); ?></span>
-                            <?php else: ?>
-                                <span style="color:#ccc; font-size:0.8rem;">—</span>
-                            <?php endif; ?>
-                        </td>
-                        <td style="color:var(--portal-blue); font-weight:800;">
-                            <div style="display:flex; align-items:center; gap:12px;">
-                                <?php if(!empty($row['student_photo'])): ?>
-                                    <img src="../<?php echo htmlspecialchars($row['student_photo']); ?>" alt="<?php echo htmlspecialchars($row['name']); ?>" style="width:42px; height:42px; border-radius:50%; object-fit:cover; border:2px solid #c7d2fe; flex-shrink:0;">
+        <!-- KPI Metrics Grid -->
+        <div class="stats-kpi-grid">
+            <div class="stat-card">
+                <div class="stat-icon icon-blue"><i class="fas fa-user-graduate"></i></div>
+                <div class="stat-info">
+                    <h3><?php echo number_format($total_count); ?></h3>
+                    <span>Total Enrolled</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon icon-green"><i class="fas fa-sun"></i></div>
+                <div class="stat-info">
+                    <h3><?php echo number_format($day_scholars_count); ?></h3>
+                    <span>Day Scholars</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon icon-purple"><i class="fas fa-bed"></i></div>
+                <div class="stat-info">
+                    <h3><?php echo number_format($hostlers_count); ?></h3>
+                    <span>Hostlers (Boarders)</span>
+                </div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon icon-orange"><i class="fas fa-user-shield"></i></div>
+                <div class="stat-info">
+                    <h3><?php echo count($parents_array); ?></h3>
+                    <span>Linked Parents</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Interactive Search & Filtering Console -->
+        <div class="search-filter-card">
+            <div class="filter-controls-row">
+                <!-- Search Input -->
+                <div class="search-field-wrapper">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="studentSearchInput" placeholder="Search by student name, reg no, parent, phone..." onkeyup="filterStudents()">
+                </div>
+
+                <!-- Class Filter -->
+                <div>
+                    <select id="classFilterSelect" class="filter-select" onchange="filterStudents()">
+                        <option value="">-- All Classes --</option>
+                        <?php foreach(array_keys($unique_classes) as $c): ?>
+                            <option value="<?php echo htmlspecialchars($c); ?>"><?php echo htmlspecialchars($c); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- Mode Filter -->
+                <div>
+                    <select id="modeFilterSelect" class="filter-select" onchange="filterStudents()">
+                        <option value="">-- All Modes --</option>
+                        <option value="Day Scholar">Day Scholar</option>
+                        <option value="Hostler">Hostler</option>
+                        <option value="Tuition">Tuition</option>
+                    </select>
+                </div>
+
+                <!-- Target School Filter -->
+                <div>
+                    <select id="schoolFilterSelect" class="filter-select" onchange="filterStudents()">
+                        <option value="">-- All Target Schools --</option>
+                        <?php foreach(array_keys($unique_schools) as $s): ?>
+                            <option value="<?php echo htmlspecialchars($s); ?>"><?php echo htmlspecialchars($s); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+
+                <!-- View Mode Switcher -->
+                <div class="view-mode-toggle">
+                    <button class="view-mode-btn active" id="btnGridMode" onclick="toggleViewMode('grid')" title="Cards View">
+                        <i class="fas fa-th-large"></i> Cards
+                    </button>
+                    <button class="view-mode-btn" id="btnTableMode" onclick="toggleViewMode('table')" title="Dense Table View">
+                        <i class="fas fa-list"></i> Table
+                    </button>
+                </div>
+            </div>
+
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 1px solid #f1f5f9; font-size: 0.85rem; color: #64748b; font-weight: 700;">
+                <div>
+                    Showing <span id="visibleCount" style="color: var(--portal-blue); font-weight: 800;"><?php echo $total_count; ?></span> of <?php echo $total_count; ?> registered candidates
+                </div>
+                <div>
+                    <a href="javascript:void(0);" onclick="resetAllFilters()" style="color: var(--portal-blue); text-decoration: none;"><i class="fas fa-undo"></i> Reset Filters</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- VIEW 1: MODERN PROFILE CARDS (GRID VIEW)     -->
+        <!-- ============================================ -->
+        <div id="cardsViewContainer" class="students-cards-grid">
+            <?php if (empty($students_data)): ?>
+                <div style="grid-column: 1 / -1; text-align: center; padding: 50px; color: #94a3b8;">
+                    <i class="fas fa-user-graduate" style="font-size: 3rem; opacity: 0.5; margin-bottom: 12px; display: block;"></i>
+                    <p style="font-size: 1.1rem; font-weight: 700; margin: 0;">No enrolled students registered yet.</p>
+                </div>
+            <?php else: ?>
+                <?php foreach($students_data as $row): 
+                    $mode = $row['scholar_mode'] ?? 'Day Scholar';
+                    $scholar_class = 'scholar-day';
+                    if (strcasecmp($mode, 'Hostler') === 0) $scholar_class = 'scholar-hostler';
+                    elseif (strcasecmp($mode, 'Tuition') === 0) $scholar_class = 'scholar-tuition';
+
+                    $initials = '';
+                    $parts = explode(' ', trim($row['name']));
+                    if (!empty($parts[0])) $initials .= strtoupper(substr($parts[0], 0, 1));
+                    if (!empty($parts[1])) $initials .= strtoupper(substr($parts[1], 0, 1));
+                    if (empty($initials)) $initials = 'S';
+                    
+                    $phone_digits = preg_replace('/[^0-9]/', '', $row['phone'] ?? '');
+                ?>
+                    <div class="student-profile-card student-item-card"
+                         data-name="<?php echo strtolower(htmlspecialchars($row['name'])); ?>"
+                         data-reg="<?php echo strtolower(htmlspecialchars($row['reg_no'] ?? '')); ?>"
+                         data-parent="<?php echo strtolower(htmlspecialchars($row['parent_name'] ?? '')); ?>"
+                         data-phone="<?php echo strtolower(htmlspecialchars($row['phone'] ?? '')); ?>"
+                         data-email="<?php echo strtolower(htmlspecialchars($row['guardian_email'] ?? $row['parent_email'] ?? '')); ?>"
+                         data-class="<?php echo htmlspecialchars($row['class_admitted'] ?? ''); ?>"
+                         data-mode="<?php echo htmlspecialchars($row['scholar_mode'] ?? 'Day Scholar'); ?>"
+                         data-school="<?php echo htmlspecialchars($row['target_school'] ?? ''); ?>">
+
+                        <div>
+                            <div class="student-card-header">
+                                <?php if (!empty($row['student_photo'])): ?>
+                                    <img src="../<?php echo htmlspecialchars($row['student_photo']); ?>" alt="<?php echo htmlspecialchars($row['name']); ?>" class="student-avatar">
                                 <?php else: ?>
-                                    <div style="width:42px; height:42px; border-radius:50%; background:#eef2ff; color:var(--portal-blue); display:flex; align-items:center; justify-content:center; font-size:0.9rem; font-weight:800; flex-shrink:0;"><?php $ini = explode(' ', $row['name']); echo htmlspecialchars(substr($ini[0],0,1).(isset($ini[1])?substr($ini[1],0,1):'')); ?></div>
+                                    <div class="student-avatar-fallback"><?php echo $initials; ?></div>
                                 <?php endif; ?>
-                                <div>
-                                    <?php echo htmlspecialchars($row['name']); ?>
-                                    <?php if(!empty($row['dob'])): ?>
-                                        <br><small style="color:#9aa5ce; font-weight:600; font-size:0.75rem;">DOB: <?php echo date('d M Y', strtotime($row['dob'])); ?></small>
-                                    <?php endif; ?>
+
+                                <div style="flex: 1; min-width: 0;">
+                                    <div class="student-name-text"><?php echo htmlspecialchars($row['name']); ?></div>
+                                    <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                        <?php if(!empty($row['reg_no'])): ?>
+                                            <span class="reg-badge-pill"><?php echo htmlspecialchars($row['reg_no']); ?></span>
+                                        <?php endif; ?>
+                                        <span class="scholar-badge <?php echo $scholar_class; ?>">
+                                            <i class="fas fa-circle" style="font-size: 0.45rem;"></i> <?php echo htmlspecialchars($mode); ?>
+                                        </span>
+                                    </div>
                                 </div>
                             </div>
-                        </td>
-                        <td>
-                            <?php echo htmlspecialchars($row['parent_name']); ?>
-                            <?php if (!empty($row['parent_email'])): ?>
-                                <br><small style="color:var(--portal-blue); font-weight:700;"><i class="fas fa-link"></i> <?php echo htmlspecialchars($row['parent_email']); ?></small>
+
+                            <!-- Detail Snapshot -->
+                            <div class="student-details-list">
+                                <div class="student-detail-item">
+                                    <span>Class / Target:</span>
+                                    <b><?php echo htmlspecialchars($row['class_admitted'] ?: '—'); ?></b>
+                                </div>
+                                <div class="student-detail-item">
+                                    <span>Target School:</span>
+                                    <b><?php echo htmlspecialchars($row['target_school'] ?: 'Standard'); ?></b>
+                                </div>
+                                <div class="student-detail-item">
+                                    <span>Parent / Guardian:</span>
+                                    <b><?php echo htmlspecialchars($row['parent_name'] ?: '—'); ?></b>
+                                </div>
+                                <div class="student-detail-item">
+                                    <span>Base Monthly Fee:</span>
+                                    <b style="color: var(--portal-blue);">₹<?php echo number_format((float)($row['base_fee'] ?? 0), 2); ?></b>
+                                </div>
+                            </div>
+
+                            <!-- Quick Contact Actions -->
+                            <?php if(!empty($phone_digits)): ?>
+                                <div class="student-contact-actions">
+                                    <a href="whatsapp.php?student_id=<?php echo $row['id']; ?>" class="contact-btn contact-btn-wa" title="Open WhatsApp Template Messenger">
+                                        <i class="fab fa-whatsapp"></i> WhatsApp
+                                    </a>
+                                    <a href="tel:<?php echo htmlspecialchars($row['phone']); ?>" class="contact-btn contact-btn-call">
+                                        <i class="fas fa-phone-alt"></i> Call
+                                    </a>
+                                </div>
                             <?php endif; ?>
-                        </td>
-                        <td>
-                            <?php echo htmlspecialchars($row['class_admitted']); ?>
-                            <br><small style="color:#5c6bc0; font-weight:700;"><i class="fas fa-hotel"></i> <?php echo htmlspecialchars($row['scholar_mode'] ? $row['scholar_mode'] : 'Day Scholar'); ?></small>
-                        </td>
-                        <td><?php echo htmlspecialchars($row['target_school']); ?></td>
-                        <td>
-                            <?php if(!empty($row['photo'])): ?>
-                                <a href="../<?php echo htmlspecialchars($row['photo']); ?>" target="_blank" title="View Admission Form">
-                                    <i class="fas fa-file-image" style="color:var(--portal-blue); font-size:1.3rem;"></i>
+                        </div>
+
+                        <!-- Card Footer Toolbar -->
+                        <div class="student-card-footer">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <?php if(!empty($row['photo'])): ?>
+                                    <a href="../<?php echo htmlspecialchars($row['photo']); ?>" target="_blank" class="action-icon-btn btn-addon-act" title="View Offline Admission Form Scan">
+                                        <i class="fas fa-file-pdf"></i>
+                                    </a>
+                                <?php endif; ?>
+                                <a href="student_addons.php?id=<?php echo $row['id']; ?>" class="action-icon-btn btn-addon-act" title="Manage Addons & Expenses">
+                                    <i class="fas fa-plus-circle"></i>
                                 </a>
-                            <?php else: ?>
-                                <span style="color:#ccc; font-size:0.8rem;">—</span>
-                            <?php endif; ?>
-                        </td>
-                        <td>
-                            <a href="student_addons.php?id=<?php echo $row['id']; ?>" class="btn btn-sm btn-outline-success" style="border:none; color:#2e7d32;" title="Manage Addons">
-                                <i class="fas fa-plus-circle"></i>
-                            </a>
-                            <button class="btn btn-sm btn-outline-primary" style="border:none; color:var(--portal-blue);" onclick='editStudent(<?php echo json_encode($row); ?>)' title="Edit Student">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <a href="?delete=<?php echo $row['id']; ?>" class="btn btn-sm btn-outline-danger" style="border:none; color:#d32f2f;" onclick="return confirm('Are you sure you want to delete this student?')" title="Delete Student">
-                                <i class="fas fa-trash"></i>
-                            </a>
-                        </td>
-                    </tr>
-                    <?php endwhile; ?>
-                </tbody>
-            </table>
+                            </div>
+
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <button class="action-icon-btn btn-edit-act" onclick='editStudent(<?php echo json_encode($row); ?>)' title="Edit Profile">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <a href="?delete=<?php echo $row['id']; ?>" class="action-icon-btn btn-del-act" onclick="return confirm('Are you sure you want to delete <?php echo addslashes((string)($row['name'] ?? 'Student')); ?>?')" title="Delete Student">
+                                    <i class="fas fa-trash-alt"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
 
-        <!-- Add/Edit Modal -->
+        <!-- ============================================ -->
+        <!-- VIEW 2: DENSE DATA TABLE (TABLE VIEW)        -->
+        <!-- ============================================ -->
+        <div id="tableViewContainer" class="portal-card" style="display: none; padding: 20px;">
+            <div class="portal-table-container">
+                <table id="studentsMainTable" style="width: 100%; border-collapse: separate; border-spacing: 0 10px;">
+                    <thead>
+                        <tr>
+                            <th style="padding: 10px 16px; color: var(--portal-blue); font-weight: 800; font-size: 0.8rem; text-transform: uppercase;">Reg No.</th>
+                            <th style="padding: 10px 16px; color: var(--portal-blue); font-weight: 800; font-size: 0.8rem; text-transform: uppercase;">Student Profile</th>
+                            <th style="padding: 10px 16px; color: var(--portal-blue); font-weight: 800; font-size: 0.8rem; text-transform: uppercase;">Parent / Phone</th>
+                            <th style="padding: 10px 16px; color: var(--portal-blue); font-weight: 800; font-size: 0.8rem; text-transform: uppercase;">Class & Mode</th>
+                            <th style="padding: 10px 16px; color: var(--portal-blue); font-weight: 800; font-size: 0.8rem; text-transform: uppercase;">Target School</th>
+                            <th style="padding: 10px 16px; color: var(--portal-blue); font-weight: 800; font-size: 0.8rem; text-transform: uppercase; text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach($students_data as $row): 
+                            $mode = $row['scholar_mode'] ?? 'Day Scholar';
+                            $scholar_class = 'scholar-day';
+                            if (strcasecmp($mode, 'Hostler') === 0) $scholar_class = 'scholar-hostler';
+                            elseif (strcasecmp($mode, 'Tuition') === 0) $scholar_class = 'scholar-tuition';
+
+                            $initials = '';
+                            $parts = explode(' ', trim($row['name']));
+                            if (!empty($parts[0])) $initials .= strtoupper(substr($parts[0], 0, 1));
+                            if (!empty($parts[1])) $initials .= strtoupper(substr($parts[1], 0, 1));
+                            if (empty($initials)) $initials = 'S';
+                        ?>
+                            <tr class="student-item-row"
+                                data-name="<?php echo strtolower(htmlspecialchars($row['name'])); ?>"
+                                data-reg="<?php echo strtolower(htmlspecialchars($row['reg_no'] ?? '')); ?>"
+                                data-parent="<?php echo strtolower(htmlspecialchars($row['parent_name'] ?? '')); ?>"
+                                data-phone="<?php echo strtolower(htmlspecialchars($row['phone'] ?? '')); ?>"
+                                data-email="<?php echo strtolower(htmlspecialchars($row['guardian_email'] ?? $row['parent_email'] ?? '')); ?>"
+                                data-class="<?php echo htmlspecialchars($row['class_admitted'] ?? ''); ?>"
+                                data-mode="<?php echo htmlspecialchars($row['scholar_mode'] ?? 'Day Scholar'); ?>"
+                                data-school="<?php echo htmlspecialchars($row['target_school'] ?? ''); ?>">
+
+                                <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; border-left: 1px solid #f1f5f9; border-radius: 14px 0 0 14px;">
+                                    <?php if(!empty($row['reg_no'])): ?>
+                                        <span class="reg-badge-pill"><?php echo htmlspecialchars($row['reg_no']); ?></span>
+                                    <?php else: ?>
+                                        <span style="color:#94a3b8; font-size:0.8rem;">—</span>
+                                    <?php endif; ?>
+                                </td>
+
+                                <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
+                                    <div style="display: flex; align-items: center; gap: 12px;">
+                                        <?php if(!empty($row['student_photo'])): ?>
+                                            <img src="../<?php echo htmlspecialchars($row['student_photo']); ?>" alt="" style="width: 42px; height: 42px; border-radius: 12px; object-fit: cover; border: 2px solid #e0e7ff; flex-shrink: 0;">
+                                        <?php else: ?>
+                                            <div style="width: 42px; height: 42px; border-radius: 12px; background: #eff6ff; color: var(--portal-blue); font-weight: 800; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; flex-shrink: 0;">
+                                                <?php echo $initials; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                        <div>
+                                            <div style="font-weight: 800; color: var(--portal-dark);"><?php echo htmlspecialchars($row['name']); ?></div>
+                                            <?php if(!empty($row['dob'])): ?>
+                                                <small style="color: #64748b; font-weight: 600; font-size: 0.75rem;">DOB: <?php echo date('d M Y', strtotime($row['dob'])); ?></small>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                </td>
+
+                                <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; color: #475569; font-weight: 600;">
+                                    <div><b><?php echo htmlspecialchars($row['parent_name']); ?></b></div>
+                                    <small style="color: #64748b; font-weight: 700;"><?php echo htmlspecialchars($row['phone']); ?></small>
+                                </td>
+
+                                <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
+                                    <div style="font-weight: 700; color: var(--portal-dark);"><?php echo htmlspecialchars($row['class_admitted']); ?></div>
+                                    <span class="scholar-badge <?php echo $scholar_class; ?>" style="margin-top: 3px;">
+                                        <?php echo htmlspecialchars($mode); ?>
+                                    </span>
+                                </td>
+
+                                <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; color: #334155; font-weight: 700;">
+                                    <?php echo htmlspecialchars($row['target_school'] ?: 'Standard'); ?>
+                                </td>
+
+                                <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; border-radius: 0 14px 14px 0; text-align: right;">
+                                    <div style="display: inline-flex; align-items: center; gap: 6px;">
+                                        <a href="whatsapp.php?student_id=<?php echo $row['id']; ?>" class="action-icon-btn" style="background: #dcfce7; color: #15803d;" title="Send WhatsApp Message">
+                                            <i class="fab fa-whatsapp"></i>
+                                        </a>
+                                        <?php if(!empty($row['photo'])): ?>
+                                            <a href="../<?php echo htmlspecialchars($row['photo']); ?>" target="_blank" class="action-icon-btn btn-addon-act" title="View Form">
+                                                <i class="fas fa-file-image"></i>
+                                            </a>
+                                        <?php endif; ?>
+                                        <a href="student_addons.php?id=<?php echo $row['id']; ?>" class="action-icon-btn btn-addon-act" title="Addons">
+                                            <i class="fas fa-plus-circle"></i>
+                                        </a>
+                                        <button class="action-icon-btn btn-edit-act" onclick='editStudent(<?php echo json_encode($row); ?>)' title="Edit Profile">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <a href="?delete=<?php echo $row['id']; ?>" class="action-icon-btn btn-del-act" onclick="return confirm('Are you sure you want to delete <?php echo addslashes((string)($row['name'] ?? 'Student')); ?>?')" title="Delete">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ============================================ -->
+        <!-- ENROLLMENT & EDIT MODAL                      -->
+        <!-- ============================================ -->
         <div class="modal" id="studentModal">
             <div class="modal-content">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:30px;">
-                    <h2 style="color: var(--portal-blue); font-weight: 800; font-size: 1.8rem; margin:0;">Student Registration</h2>
-                    <button type="button" onclick="hideModal()" style="background:none;border:none;font-size:1.5rem;cursor:pointer;color:#9aa5ce;">✕</button>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+                    <div>
+                        <h2 style="color: var(--portal-dark); font-weight: 800; font-size: 1.6rem; margin: 0;">Student Registration</h2>
+                        <small style="color: #64748b; font-weight: 600;">Complete offline & online admission ledger</small>
+                    </div>
+                    <button type="button" onclick="hideModal()" style="background: #f1f5f9; border: none; font-size: 1.2rem; cursor: pointer; color: #475569; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;">✕</button>
                 </div>
 
                 <form action="" method="POST" enctype="multipart/form-data" id="studentForm">
                     <input type="hidden" name="id" id="student_id">
                     <input type="hidden" name="existing_photo" id="existing_photo">
-
                     <input type="hidden" name="existing_student_photo" id="existing_student_photo">
 
                     <!-- SECTION 1: STUDENT INFORMATION -->
-                    <span class="form-section-title"><i class="fas fa-user-graduate" style="margin-right:8px;"></i>1. Student Information</span>
+                    <span class="form-section-title"><i class="fas fa-user-graduate" style="margin-right: 8px;"></i>1. Student Information</span>
 
                     <!-- Student Passport Photo Upload -->
-                    <div style="display:flex; gap:30px; align-items:flex-start; margin-bottom:25px;">
-                        <div style="flex-shrink:0; text-align:center;">
-                            <div id="photoPreviewCircle" style="width:100px; height:100px; border-radius:50%; background:#eef2ff; border:3px dashed #c7d2fe; display:flex; align-items:center; justify-content:center; overflow:hidden; margin:0 auto 8px; cursor:pointer; position:relative;">
-                                <img id="photoPreviewImg" src="" alt="" style="width:100%; height:100%; object-fit:cover; display:none; border-radius:50%;">
-                                <i id="photoPreviewIcon" class="fas fa-camera" style="font-size:1.8rem; color:#a5b4fc;"></i>
-                                <input type="file" name="student_photo" id="student_photo_input" accept="image/*" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;" onchange="previewStudentPhoto(this)">
+                    <div style="display: flex; gap: 25px; align-items: center; margin-bottom: 22px;">
+                        <div style="flex-shrink: 0; text-align: center;">
+                            <div id="photoPreviewCircle" style="width: 90px; height: 90px; border-radius: 50%; background: #eef2ff; border: 3px dashed #c7d2fe; display: flex; align-items: center; justify-content: center; overflow: hidden; margin: 0 auto 6px; cursor: pointer; position: relative;">
+                                <img id="photoPreviewImg" src="" alt="" style="width: 100%; height: 100%; object-fit: cover; display: none; border-radius: 50%;">
+                                <i id="photoPreviewIcon" class="fas fa-camera" style="font-size: 1.6rem; color: #a5b4fc;"></i>
+                                <input type="file" name="student_photo" id="student_photo_input" accept="image/*" style="position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;" onchange="previewStudentPhoto(this)">
                             </div>
-                            <div style="font-size:0.75rem; color:#9aa5ce; font-weight:600;">Student Photo<br><span style="font-size:0.65rem;">(Max 3MB)</span></div>
-                            <div id="current_student_photo_display" style="display:none; margin-top:6px;">
-                                <a href="#" id="view_student_photo_link" target="_blank" style="font-size:0.75rem; color:var(--portal-blue); font-weight:700;"><i class="fas fa-eye"></i> View</a>
+                            <div style="font-size: 0.72rem; color: #64748b; font-weight: 700;">Student Picture<br><span style="font-size: 0.65rem;">(Max 3MB)</span></div>
+                            <div id="current_student_photo_display" style="display: none; margin-top: 4px;">
+                                <a href="#" id="view_student_photo_link" target="_blank" style="font-size: 0.75rem; color: var(--portal-blue); font-weight: 700;"><i class="fas fa-eye"></i> View Current</a>
                             </div>
                         </div>
-                        <div style="flex:1;">
-                            <div class="portal-input-group" style="margin-bottom:0;">
-                                <label>Candidate Full Name <span style="color:red">*</span></label>
-                                <input type="text" name="name" id="name" placeholder="Full legal name" required>
+                        <div style="flex: 1;">
+                            <div class="portal-input-group" style="margin-bottom: 0;">
+                                <label>Candidate Full Legal Name <span style="color: #ef4444;">*</span></label>
+                                <input type="text" name="name" id="name" placeholder="Candidate's full name" required>
                             </div>
                         </div>
                     </div>
@@ -444,7 +1038,7 @@ if (!empty($site_settings['tuition_modes'])) {
                     </div>
 
                     <div class="portal-input-group">
-                        <label>Home Address</label>
+                        <label>Home Street Address</label>
                         <input type="text" name="home_address" id="home_address" placeholder="Street address">
                     </div>
 
@@ -458,7 +1052,7 @@ if (!empty($site_settings['tuition_modes'])) {
                             <input type="text" name="state" id="state" placeholder="State">
                         </div>
                         <div class="portal-input-group">
-                            <label>ZIP Code</label>
+                            <label>ZIP / PIN Code</label>
                             <input type="text" name="zip_code" id="zip_code" placeholder="PIN / ZIP">
                         </div>
                     </div>
@@ -512,36 +1106,55 @@ if (!empty($site_settings['tuition_modes'])) {
                             <label>Admission Date</label>
                             <input type="date" name="admission_date" id="admission_date" value="<?php echo date('Y-m-d'); ?>">
                         </div>
+                    <div class="portal-form-row">
                         <div class="portal-input-group">
-                            <label>Base Monthly Fee (₹)</label>
-                            <input type="number" name="base_fee" id="base_fee" placeholder="Auto-calculated" step="0.01" required readonly style="background-color: #f8f9fa; cursor: not-allowed; border-color: #eef2ff; color: #5c6bc0; font-weight: 800;">
+                            <label>Base Monthly Tuition Fee (₹)</label>
+                            <input type="number" name="base_fee" id="base_fee" placeholder="Auto-calculated" step="0.01" required readonly style="background-color: #f8fafc; cursor: not-allowed; color: var(--portal-blue); font-weight: 800;">
+                        </div>
+                        <div class="portal-input-group">
+                            <label>Monthly Discount (₹)</label>
+                            <input type="number" name="monthly_discount" id="monthly_discount" placeholder="e.g. 500" step="0.01" value="0.00">
                         </div>
                     </div>
-                    <div class="portal-input-group">
-                        <label>Monthly Discount (₹)</label>
-                        <input type="number" name="monthly_discount" id="monthly_discount" placeholder="e.g. 500" step="0.01">
+
+                    <div class="portal-form-row" style="background: #f8fafc; padding: 14px 16px; border-radius: 14px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+                        <div class="portal-input-group" style="margin-bottom: 0;">
+                            <label><i class="fas fa-shield-alt" style="color: #7c3aed;"></i> Security Deposit (₹)</label>
+                            <input type="number" name="security_amount" id="security_amount" placeholder="0.00" step="0.01" value="0.00">
+                            <small style="color: #64748b; font-size: 0.72rem; font-weight: 600; display: block; margin-top: 3px;">Refundable caution money. (Not on fee receipt)</small>
+                        </div>
+                        <div class="portal-input-group" style="margin-bottom: 0;">
+                            <label><i class="fas fa-id-card" style="color: #2563eb;"></i> Registration Fee (₹)</label>
+                            <input type="number" name="registration_fee" id="registration_fee" placeholder="0.00" step="0.01" value="0.00">
+                            <small style="color: #64748b; font-size: 0.72rem; font-weight: 600; display: block; margin-top: 3px;">One-time registration charge</small>
+                        </div>
+                        <div class="portal-input-group" style="margin-bottom: 0;">
+                            <label><i class="fas fa-file-invoice-dollar" style="color: #16a34a;"></i> Admission Fee (₹)</label>
+                            <input type="number" name="admission_fee" id="admission_fee" placeholder="0.00" step="0.01" value="0.00">
+                            <small style="color: #64748b; font-size: 0.72rem; font-weight: 600; display: block; margin-top: 3px;">One-time admission charge</small>
+                        </div>
                     </div>
 
                     <!-- Upload Offline Admission Form -->
                     <div class="portal-input-group">
-                        <label>Upload Offline Admission Form (Photo / PDF)</label>
+                        <label>Upload Offline Admission Form Scan (Photo / PDF)</label>
                         <div class="photo-upload-area" id="uploadArea">
                             <input type="file" name="photo" id="photo_input" accept="image/*,.pdf" onchange="previewFile(this)">
-                            <i class="fas fa-cloud-upload-alt"></i>
-                            <p id="upload_label">Click or drag to upload admission form scan (JPG, PNG, PDF — max 5MB)</p>
+                            <i class="fas fa-cloud-upload-alt" style="font-size: 2rem; color: var(--portal-blue); opacity: 0.5;"></i>
+                            <p id="upload_label" style="margin: 8px 0 0; color: #64748b; font-size: 0.85rem; font-weight: 600;">Click or drag to upload admission form scan (JPG, PNG, PDF — max 5MB)</p>
                         </div>
-                        <div id="current_photo_display" style="display:none; margin-top:10px; font-size:0.85rem; color:var(--portal-blue);">
+                        <div id="current_photo_display" style="display: none; margin-top: 10px; font-size: 0.85rem; color: var(--portal-blue); font-weight: 700;">
                             <i class="fas fa-paperclip"></i> <span id="current_photo_name"></span>
-                            <a href="#" id="view_photo_link" target="_blank" style="margin-left:10px;">View</a>
+                            <a href="#" id="view_photo_link" target="_blank" style="margin-left: 10px; color: var(--portal-blue);">View Scan</a>
                         </div>
                     </div>
 
                     <!-- SECTION 2: GUARDIAN INFORMATION -->
-                    <span class="form-section-title"><i class="fas fa-user-shield" style="margin-right:8px;"></i>2. Guardian Information</span>
+                    <span class="form-section-title"><i class="fas fa-user-shield" style="margin-right: 8px;"></i>2. Guardian Information</span>
 
                     <div class="portal-form-row">
                         <div class="portal-input-group">
-                            <label>Parent / Guardian Name <span style="color:red">*</span></label>
+                            <label>Parent / Guardian Name <span style="color: #ef4444;">*</span></label>
                             <input type="text" name="parent_name" id="parent_name" required>
                         </div>
                         <div class="portal-input-group">
@@ -558,7 +1171,7 @@ if (!empty($site_settings['tuition_modes'])) {
 
                     <div class="portal-form-row">
                         <div class="portal-input-group">
-                            <label>Contact Number <span style="color:red">*</span></label>
+                            <label>Contact Number (Used for Login & WhatsApp) <span style="color: #ef4444;">*</span></label>
                             <input type="text" name="phone" id="phone" required>
                         </div>
                         <div class="portal-input-group">
@@ -575,7 +1188,7 @@ if (!empty($site_settings['tuition_modes'])) {
                     <div class="portal-input-group">
                         <label>Link Parent Portal Account (Optional)</label>
                         <select name="parent_id" id="parent_id">
-                            <option value="">-- No Account Linked --</option>
+                            <option value="">-- Auto-create / Link Parent Account --</option>
                             <?php foreach ($parents_array as $parent): ?>
                                 <option value="<?php echo $parent['id']; ?>"><?php echo htmlspecialchars($parent['parent_name'] . ' (' . $parent['email'] . ')'); ?></option>
                             <?php endforeach; ?>
@@ -583,7 +1196,7 @@ if (!empty($site_settings['tuition_modes'])) {
                     </div>
 
                     <!-- SECTION 3: EMERGENCY CONTACT -->
-                    <span class="form-section-title"><i class="fas fa-phone-alt" style="margin-right:8px;"></i>3. Emergency Contact Information</span>
+                    <span class="form-section-title"><i class="fas fa-phone-alt" style="margin-right: 8px;"></i>3. Emergency Contact Information</span>
 
                     <div class="portal-form-row">
                         <div class="portal-input-group">
@@ -602,14 +1215,14 @@ if (!empty($site_settings['tuition_modes'])) {
                     </div>
 
                     <!-- SECTION 4: MEDICAL INFORMATION (OPTIONAL) -->
-                    <span class="form-section-title"><i class="fas fa-heartbeat" style="margin-right:8px;"></i>4. Medical Information <small style="font-weight:400; font-size:0.75rem; opacity:0.8;">(Optional)</small></span>
+                    <span class="form-section-title"><i class="fas fa-heartbeat" style="margin-right: 8px;"></i>4. Medical Information <small style="font-weight: 400; font-size: 0.75rem; opacity: 0.8;">(Optional)</small></span>
 
                     <div class="portal-input-group">
                         <label>Does the student have any allergies?</label>
                         <div class="yes-no-group">
                             <label><input type="checkbox" name="has_allergies" id="has_allergies" onchange="toggleField('has_allergies','allergies_detail_row')"> Yes</label>
                         </div>
-                        <div id="allergies_detail_row" style="display:none;">
+                        <div id="allergies_detail_row" style="display: none;">
                             <input type="text" name="allergies_detail" id="allergies_detail" placeholder="Please list the allergies">
                         </div>
                     </div>
@@ -619,7 +1232,7 @@ if (!empty($site_settings['tuition_modes'])) {
                         <div class="yes-no-group">
                             <label><input type="checkbox" name="has_medical_condition" id="has_medical_condition" onchange="toggleField('has_medical_condition','medical_condition_detail_row')"> Yes</label>
                         </div>
-                        <div id="medical_condition_detail_row" style="display:none;">
+                        <div id="medical_condition_detail_row" style="display: none;">
                             <input type="text" name="medical_condition_detail" id="medical_condition_detail" placeholder="Please specify the medical condition">
                         </div>
                     </div>
@@ -646,9 +1259,13 @@ if (!empty($site_settings['tuition_modes'])) {
                         </div>
                     </div>
 
-                    <div class="portal-btn-row" style="margin-top:35px;">
-                        <button type="submit" name="save_student" class="btn-portal w-100" style="padding:18px;">Confirm Registration</button>
-                        <button type="button" class="btn-glass w-100" onclick="hideModal()">Discard</button>
+                    <div style="display: flex; gap: 15px; margin-top: 30px;">
+                        <button type="submit" name="save_student" class="btn-portal" style="flex: 1; padding: 16px;">
+                            <i class="fas fa-check-circle"></i> Save Student Record
+                        </button>
+                        <button type="button" class="btn-portal" onclick="hideModal()" style="background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; box-shadow: none; padding: 16px 24px;">
+                            Discard
+                        </button>
                     </div>
                 </form>
             </div>
@@ -656,6 +1273,7 @@ if (!empty($site_settings['tuition_modes'])) {
     </main>
 
     <script>
+        // Modal Handlers
         function showModal() {
             document.getElementById('studentModal').style.display = 'flex';
             document.getElementById('student_id').value = '';
@@ -664,18 +1282,18 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('current_photo_display').style.display = 'none';
             document.getElementById('current_student_photo_display').style.display = 'none';
             document.getElementById('upload_label').textContent = 'Click or drag to upload admission form scan (JPG, PNG, PDF — max 5MB)';
-            // Reset photo preview circle
             document.getElementById('photoPreviewImg').style.display = 'none';
             document.getElementById('photoPreviewImg').src = '';
             document.getElementById('photoPreviewIcon').style.display = 'flex';
-            // Reset allergy toggles
             document.getElementById('allergies_detail_row').style.display = 'none';
             document.getElementById('medical_condition_detail_row').style.display = 'none';
             document.querySelector('#studentModal form').reset();
-            // Default populate base fee for first mode on new form or clear
             document.getElementById('base_fee').value = '';
+            document.getElementById('security_amount').value = '0.00';
+            document.getElementById('registration_fee').value = '0.00';
+            document.getElementById('admission_fee').value = '0.00';
         }
-        
+
         const feeSettings = <?php echo json_encode($tuition_modes); ?>;
 
         document.getElementById('scholar_mode').addEventListener('change', function() {
@@ -688,15 +1306,18 @@ if (!empty($site_settings['tuition_modes'])) {
         function hideModal() {
             document.getElementById('studentModal').style.display = 'none';
         }
+
         function toggleField(checkboxId, rowId) {
             var cb = document.getElementById(checkboxId);
             document.getElementById(rowId).style.display = cb.checked ? 'block' : 'none';
         }
+
         function previewFile(input) {
             if (input.files && input.files[0]) {
                 document.getElementById('upload_label').textContent = '✅ ' + input.files[0].name + ' selected';
             }
         }
+
         function previewStudentPhoto(input) {
             if (input.files && input.files[0]) {
                 var reader = new FileReader();
@@ -710,6 +1331,7 @@ if (!empty($site_settings['tuition_modes'])) {
                 reader.readAsDataURL(input.files[0]);
             }
         }
+
         function editStudent(data) {
             document.getElementById('studentModal').style.display = 'flex';
             document.getElementById('student_id').value = data.id;
@@ -728,7 +1350,10 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('class_admitted').value = data.class_admitted || '';
             document.getElementById('scholar_mode').value = data.scholar_mode || 'Day Scholar';
             document.getElementById('base_fee').value = data.base_fee || '';
-            document.getElementById('monthly_discount').value = data.monthly_discount || '';
+            document.getElementById('monthly_discount').value = data.monthly_discount || '0.00';
+            document.getElementById('security_amount').value = data.security_amount || '0.00';
+            document.getElementById('registration_fee').value = data.registration_fee || '0.00';
+            document.getElementById('admission_fee').value = data.admission_fee || '0.00';
             document.getElementById('admission_date').value = data.admission_date || '';
 
             // Guardian info
@@ -783,7 +1408,85 @@ if (!empty($site_settings['tuition_modes'])) {
                 document.getElementById('current_student_photo_display').style.display = 'none';
             }
         }
-        // Modal will now only close via the cross button or cancel button.
+
+        // View Mode Switcher (Cards vs Table)
+        function toggleViewMode(mode) {
+            const cardsView = document.getElementById('cardsViewContainer');
+            const tableView = document.getElementById('tableViewContainer');
+            const btnGrid = document.getElementById('btnGridMode');
+            const btnTable = document.getElementById('btnTableMode');
+
+            if (mode === 'table') {
+                cardsView.style.display = 'none';
+                tableView.style.display = 'block';
+                btnTable.classList.add('active');
+                btnGrid.classList.remove('active');
+            } else {
+                cardsView.style.display = 'grid';
+                tableView.style.display = 'none';
+                btnGrid.classList.add('active');
+                btnTable.classList.remove('active');
+            }
+        }
+
+        // Dynamic Instant Search & Filtering
+        function filterStudents() {
+            const query = document.getElementById('studentSearchInput').value.toLowerCase().trim();
+            const classVal = document.getElementById('classFilterSelect').value.toLowerCase().trim();
+            const modeVal = document.getElementById('modeFilterSelect').value.toLowerCase().trim();
+            const schoolVal = document.getElementById('schoolFilterSelect').value.toLowerCase().trim();
+
+            const cards = document.querySelectorAll('.student-item-card');
+            const rows = document.querySelectorAll('.student-item-row');
+            let visibleCount = 0;
+
+            function matches(el) {
+                const name = el.getAttribute('data-name') || '';
+                const reg = el.getAttribute('data-reg') || '';
+                const parent = el.getAttribute('data-parent') || '';
+                const phone = el.getAttribute('data-phone') || '';
+                const email = el.getAttribute('data-email') || '';
+                const cls = (el.getAttribute('data-class') || '').toLowerCase();
+                const mode = (el.getAttribute('data-mode') || '').toLowerCase();
+                const school = (el.getAttribute('data-school') || '').toLowerCase();
+
+                const textSearchMatch = query === '' || 
+                    name.includes(query) || 
+                    reg.includes(query) || 
+                    parent.includes(query) || 
+                    phone.includes(query) || 
+                    email.includes(query);
+
+                const classMatch = classVal === '' || cls === classVal;
+                const modeMatch = modeVal === '' || mode === modeVal;
+                const schoolMatch = schoolVal === '' || school === schoolVal;
+
+                return textSearchMatch && classMatch && modeMatch && schoolMatch;
+            }
+
+            cards.forEach(card => {
+                if (matches(card)) {
+                    card.style.display = 'flex';
+                    visibleCount++;
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+
+            rows.forEach(row => {
+                row.style.display = matches(row) ? '' : 'none';
+            });
+
+            document.getElementById('visibleCount').textContent = visibleCount;
+        }
+
+        function resetAllFilters() {
+            document.getElementById('studentSearchInput').value = '';
+            document.getElementById('classFilterSelect').value = '';
+            document.getElementById('modeFilterSelect').value = '';
+            document.getElementById('schoolFilterSelect').value = '';
+            filterStudents();
+        }
     </script>
 </body>
 </html>

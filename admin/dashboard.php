@@ -43,6 +43,16 @@ $prev_month_billed_res = $conn->query("
 $prev_month_billed_data = $prev_month_billed_res ? $prev_month_billed_res->fetch_assoc() : ['count' => 0, 'total' => 0];
 $prev_month_billed_total = (float)$prev_month_billed_data['total'];
 $prev_month_billed_count = (int)$prev_month_billed_data['count'];
+
+// 3. Security Deposit, Registration & Admission Fee Collections
+$security_res = $conn->query("SELECT COALESCE(SUM(security_amount), 0) as total FROM students WHERE status = 'active'");
+$security_total = (float)($security_res ? $security_res->fetch_assoc()['total'] : 0);
+
+$reg_fee_res = $conn->query("SELECT COALESCE(SUM(registration_fee), 0) as total FROM students WHERE status = 'active'");
+$registration_fee_total = (float)($reg_fee_res ? $reg_fee_res->fetch_assoc()['total'] : 0);
+
+$adm_fee_res = $conn->query("SELECT COALESCE(SUM(admission_fee), 0) as total FROM students WHERE status = 'active'");
+$admission_fee_total = (float)($adm_fee_res ? $adm_fee_res->fetch_assoc()['total'] : 0);
 ?>
 
 <!DOCTYPE html>
@@ -146,29 +156,49 @@ $prev_month_billed_count = (int)$prev_month_billed_data['count'];
             </div>
         </header>
 
-        <!-- Glass Stat Cards Grid: 1st Row 3 Boxes, 2nd Row 3 Boxes -->
+        <!-- Glass Stat Cards Grid: 1 Row 3 Columns -->
         <div class="stats-grid-3x2">
-            <!-- Card 1: Unpaid Bills Box -->
-            <a href="fees.php?filter=unpaid" class="stat-card" style="text-decoration:none; color:inherit;">
+            <!-- Card 1: Unpaid Bills Box (Click to open Student Dues Statement) -->
+            <a href="student_dues.php" class="stat-card" style="text-decoration:none; color:inherit; border-left: 4px solid #dc2626;" title="Click to view all student dues & arrears statement">
                 <div class="stat-icon icon-red"><i class="fas fa-exclamation-circle"></i></div>
                 <div class="stat-info">
                     <h3 style="color:#dc2626;">₹ <?php echo number_format($unpaid_total); ?></h3>
                     <p style="font-weight:700;">Total Unpaid Dues</p>
-                    <small style="color:#94a3b8; font-weight:700; font-size:0.75rem;"><?php echo number_format($unpaid_count); ?> Invoices Pending →</small>
+                    <small style="color:#dc2626; font-weight:800; font-size:0.75rem;"><i class="fas fa-file-invoice-dollar"></i> <?php echo number_format($unpaid_count); ?> Invoices Due (Open Dues →)</small>
                 </div>
             </a>
 
-            <!-- Card 2: Previous Month Data Box -->
-            <div class="stat-card">
-                <div class="stat-icon icon-teal"><i class="fas fa-history"></i></div>
+            <!-- Card 2: Security Deposit (Caution Money - Non Receipt) -->
+            <div class="stat-card" style="border-left: 4px solid #7c3aed;">
+                <div class="stat-icon icon-purple"><i class="fas fa-shield-alt"></i></div>
                 <div class="stat-info">
-                    <h3>₹ <?php echo number_format($prev_month_collection); ?></h3>
-                    <p style="font-weight:700;"><?php echo $prev_month_name; ?> Collected</p>
-                    <small style="color:#0284c7; font-weight:700; font-size:0.75rem;">Billed: ₹ <?php echo number_format($prev_month_billed_total); ?></small>
+                    <h3 style="color:#7c3aed;">₹ <?php echo number_format($security_total); ?></h3>
+                    <p style="font-weight:700;">Total Security Deposit</p>
+                    <small style="color:#64748b; font-weight:700; font-size:0.75rem;">Caution Money (Non-Receipt)</small>
                 </div>
             </div>
 
-            <!-- Card 3: Current Month Collections -->
+            <!-- Card 3: Total Registration Fee -->
+            <div class="stat-card" style="border-left: 4px solid #2563eb;">
+                <div class="stat-icon icon-blue"><i class="fas fa-id-card"></i></div>
+                <div class="stat-info">
+                    <h3 style="color:#2563eb;">₹ <?php echo number_format($registration_fee_total); ?></h3>
+                    <p style="font-weight:700;">Total Registration Fee</p>
+                    <small style="color:#64748b; font-weight:700; font-size:0.75rem;">Candidate Reg Collections</small>
+                </div>
+            </div>
+
+            <!-- Card 4: Total Admission Fee -->
+            <div class="stat-card" style="border-left: 4px solid #16a34a;">
+                <div class="stat-icon icon-green"><i class="fas fa-file-invoice-dollar"></i></div>
+                <div class="stat-info">
+                    <h3 style="color:#16a34a;">₹ <?php echo number_format($admission_fee_total); ?></h3>
+                    <p style="font-weight:700;">Total Admission Fee</p>
+                    <small style="color:#64748b; font-weight:700; font-size:0.75rem;">One-time Admission Charges</small>
+                </div>
+            </div>
+
+            <!-- Card 5: Current Month Collections -->
             <div class="stat-card">
                 <div class="stat-icon icon-green"><i class="fas fa-wallet"></i></div>
                 <div class="stat-info">
@@ -178,7 +208,27 @@ $prev_month_billed_count = (int)$prev_month_billed_data['count'];
                 </div>
             </div>
 
-            <!-- Card 4: Present Today -->
+            <!-- Card 6: Previous Month Data Box -->
+            <div class="stat-card">
+                <div class="stat-icon icon-teal"><i class="fas fa-history"></i></div>
+                <div class="stat-info">
+                    <h3>₹ <?php echo number_format($prev_month_collection); ?></h3>
+                    <p style="font-weight:700;"><?php echo $prev_month_name; ?> Collected</p>
+                    <small style="color:#0284c7; font-weight:700; font-size:0.75rem;">Billed: ₹ <?php echo number_format($prev_month_billed_total); ?></small>
+                </div>
+            </div>
+
+            <!-- Card 7: Lifetime Revenue -->
+            <div class="stat-card">
+                <div class="stat-icon icon-purple"><i class="fas fa-coins"></i></div>
+                <div class="stat-info">
+                    <h3>₹ <?php echo number_format($fees_lifetime ?: 0); ?></h3>
+                    <p>Lifetime Tuition Revenue</p>
+                    <small style="color:#7c3aed; font-weight:700; font-size:0.75rem;">All Time Fee Payments</small>
+                </div>
+            </div>
+
+            <!-- Card 8: Present Today -->
             <div class="stat-card">
                 <div class="stat-icon icon-blue"><i class="fas fa-calendar-check"></i></div>
                 <div class="stat-info">
@@ -188,17 +238,7 @@ $prev_month_billed_count = (int)$prev_month_billed_data['count'];
                 </div>
             </div>
 
-            <!-- Card 5: Lifetime Revenue -->
-            <div class="stat-card">
-                <div class="stat-icon icon-purple"><i class="fas fa-coins"></i></div>
-                <div class="stat-info">
-                    <h3>₹ <?php echo number_format($fees_lifetime ?: 0); ?></h3>
-                    <p>Lifetime Revenue</p>
-                    <small style="color:#7c3aed; font-weight:700; font-size:0.75rem;">All Time Recorded</small>
-                </div>
-            </div>
-
-            <!-- Card 6: New Inquiries -->
+            <!-- Card 9: New Inquiries -->
             <div class="stat-card">
                 <div class="stat-icon icon-orange"><i class="fas fa-paper-plane"></i></div>
                 <div class="stat-info">

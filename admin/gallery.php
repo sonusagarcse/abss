@@ -40,6 +40,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['upload_photo']) && iss
             $stmt->bind_param("sss", $db_path, $caption, $category);
             $stmt->execute();
             $stmt->close();
+
+            // Create in-built portal notification for all parents
+            if (function_exists('create_portal_notification')) {
+                create_portal_notification(
+                    'photo',
+                    "New School Photo: " . ($category ?: 'Campus Gallery'),
+                    $caption ? "New photo: \"$caption\"" : "New campus activities & event photos uploaded to the gallery.",
+                    "gallery.php#photos",
+                    null,
+                    null,
+                    'fa-camera-retro',
+                    '#2563eb'
+                );
+            }
+
             $msg = "Photo uploaded and added to gallery successfully.";
             $active_tab = 'photos';
         } else {
@@ -71,6 +86,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_youtube_video'])) 
         $stmt = $conn->prepare("INSERT INTO youtube_videos (title, video_url, youtube_id, thumbnail_url, category, description, status) VALUES (?, ?, ?, ?, ?, ?, 1)");
         $stmt->bind_param("ssssss", $title, $clean_url, $yt_id, $thumb_url, $category, $description);
         if ($stmt->execute()) {
+            // Create in-built portal notification for all parents
+            if (function_exists('create_portal_notification')) {
+                create_portal_notification(
+                    'video',
+                    "New Activity Video: " . $title,
+                    $description ? (substr($description, 0, 100) . (strlen($description) > 100 ? '...' : '')) : "Watch new classroom & event video highlights on the parent portal.",
+                    "gallery.php?tab=videos&cat=all",
+                    null,
+                    null,
+                    'fa-play-circle',
+                    '#ea580c'
+                );
+            }
+
             $msg = "YouTube video added to portal successfully.";
             $active_tab = 'videos';
         } else {

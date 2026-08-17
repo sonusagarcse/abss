@@ -147,11 +147,9 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
             .item-table th, .item-table td { padding: 8px 10px; font-size: 0.82rem; }
             .total-strip { flex-direction: column; align-items: flex-start; gap: 6px; }
             .total-value { font-size: 1.2rem; }
-        }
-
         @media print {
             body { background: #fff; padding: 0; }
-            .control-bar { display: none; }
+            .control-bar, .receipt-paynow-highlight-box { display: none !important; }
             .receipt-container { box-shadow: none; border: none; padding: 10px; max-width: 100%; }
         }
     </style>
@@ -318,6 +316,25 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
         <div class="words-block">
             Amount due in words: <strong><?php echo $amount_in_words; ?></strong>
         </div>
+
+        <?php if ($bill['status'] === 'unpaid'): ?>
+            <!-- Highlighted Pay Now Action Block Below Total Amount -->
+            <div class="receipt-paynow-highlight-box" style="margin-top: 25px; padding: 22px 24px; background: linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%); border: 2px dashed #f87171; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; box-shadow: 0 8px 25px rgba(220, 38, 38, 0.08);">
+                <div>
+                    <div style="font-size: 1.18rem; font-weight: 900; color: #991b1b; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-exclamation-circle" style="color: #dc2626; font-size: 1.3rem;"></i> Immediate Fee Payment Due
+                    </div>
+                    <p style="margin: 4px 0 0; color: #475569; font-size: 0.88rem; font-weight: 600;">
+                        Payable Balance: <strong style="color: #dc2626; font-size: 1.05rem;">₹ <?php echo number_format($bill['amount'], 2); ?></strong> • Instant Receipt & Payment Verification via Razorpay.
+                    </p>
+                </div>
+                <div>
+                    <button type="button" onclick="payWithRazorpay()" class="btn-pay-highlight" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); color: #ffffff; padding: 15px 32px; border-radius: 50px; font-size: 1.1rem; font-weight: 900; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 8px 25px rgba(22, 163, 74, 0.45); transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'">
+                        <i class="fas fa-lock"></i> PAY NOW (₹ <?php echo number_format($bill['amount'], 2); ?>) <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </div>
+        <?php endif; ?>
 
     </div>
 

@@ -421,6 +421,51 @@ function runAutoMigrator($conn) {
             $conn->query("ALTER TABLE gallery ADD COLUMN category VARCHAR(100) DEFAULT 'General' AFTER caption");
         }
 
+        // 11. Security Amount, Registration Fee, Admission Fee columns for students
+        $checkSecurity = $conn->query("SHOW COLUMNS FROM students LIKE 'security_amount'");
+        if ($checkSecurity && $checkSecurity->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN security_amount DECIMAL(10,2) DEFAULT 0.00 AFTER base_fee");
+        }
+        $checkRegFee = $conn->query("SHOW COLUMNS FROM students LIKE 'registration_fee'");
+        if ($checkRegFee && $checkRegFee->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN registration_fee DECIMAL(10,2) DEFAULT 0.00 AFTER security_amount");
+        }
+        $checkAdmFee = $conn->query("SHOW COLUMNS FROM students LIKE 'admission_fee'");
+        if ($checkAdmFee && $checkAdmFee->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN admission_fee DECIMAL(10,2) DEFAULT 0.00 AFTER registration_fee");
+        }
+
+        // Create in-built portal notifications table
+        $conn->query("
+            CREATE TABLE IF NOT EXISTS portal_notifications (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                parent_id INT NULL,
+                student_id INT NULL,
+                type VARCHAR(50) NOT NULL DEFAULT 'notice',
+                title VARCHAR(255) NOT NULL,
+                message TEXT NOT NULL,
+                icon VARCHAR(50) DEFAULT 'fa-bell',
+                target_url VARCHAR(255) NOT NULL,
+                badge_color VARCHAR(30) DEFAULT '#4f46e5',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_parent (parent_id),
+                INDEX idx_type (type),
+                INDEX idx_created (created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+        ");
+
+        // Create notification read tracking table
+        $conn->query("
+            CREATE TABLE IF NOT EXISTS notification_reads (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                notification_id INT NOT NULL,
+                parent_id INT NOT NULL,
+                read_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_user_read (notification_id, parent_id),
+                INDEX idx_parent_read (parent_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+        ");
+
         // Auto-seed Firebase Service Account into settings table if file exists
         $saFile = __DIR__ . '/service-account.json';
         if (file_exists($saFile)) {
@@ -433,6 +478,16 @@ function runAutoMigrator($conn) {
                 }
             }
         }
+
+        // Keep settings and site_settings synchronized
+        $syncRes = $conn->query("SELECT setting_key, setting_value FROM settings");
+        if ($syncRes) {
+            while ($sRow = $syncRes->fetch_assoc()) {
+                $sKey = $conn->real_escape_string($sRow['setting_key']);
+                $sVal = $conn->real_escape_string($sRow['setting_value'] ?? '');
+                $conn->query("INSERT INTO site_settings (setting_key, setting_value) VALUES ('$sKey', '$sVal') ON DUPLICATE KEY UPDATE setting_value = '$sVal'");
+            }
+        }
         
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
@@ -443,23 +498,24 @@ function runAutoMigrator($conn) {
 }
 
 /**
- * Fetch all settings into an associative array
+ * Fetch all settings into an associative array (settings table takes precedence)
  */
 function getAllSettings() {
     $conn = getDB();
-    // Fetch from settings table
-    $result = $conn->query("SELECT setting_key, setting_value FROM settings");
     $settings = [];
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $settings[$row['setting_key']] = $row['setting_value'];
-        }
-    }
     
-    // Fetch from site_settings table
+    // 1. Fetch from site_settings table (legacy fallback)
     $result2 = $conn->query("SELECT setting_key, setting_value FROM site_settings");
     if ($result2) {
         while ($row = $result2->fetch_assoc()) {
+            $settings[$row['setting_key']] = $row['setting_value'];
+        }
+    }
+
+    // 2. Fetch from settings table (primary authority)
+    $result = $conn->query("SELECT setting_key, setting_value FROM settings");
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
             $settings[$row['setting_key']] = $row['setting_value'];
         }
     }
@@ -467,6 +523,24 @@ function getAllSettings() {
     return $settings;
 }
 
+/**
+ * Save or update a setting across both settings and site_settings tables
+ */
+function saveSetting($key, $val) {
+    $conn = getDB();
+    $esc_key = $conn->real_escape_string($key);
+    $esc_val = $conn->real_escape_string(is_string($val) ? trim($val) : (is_array($val) ? json_encode($val) : (string)$val));
+    
+    // Update/Insert in settings table
+    $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('$esc_key', '$esc_val') ON DUPLICATE KEY UPDATE setting_value = '$esc_val'");
+    
+    // Also sync in site_settings table
+    $conn->query("INSERT INTO site_settings (setting_key, setting_value) VALUES ('$esc_key', '$esc_val') ON DUPLICATE KEY UPDATE setting_value = '$esc_val'");
+}
+
 // Auto-load Visitor Tracking and Activity Logging System
 require_once __DIR__ . '/../includes/tracker_helper.php';
+
+// Auto-load In-Built Web Notifications System
+require_once __DIR__ . '/../includes/notification_helper.php';
 ?>

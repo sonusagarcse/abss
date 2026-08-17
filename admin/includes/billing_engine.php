@@ -210,6 +210,20 @@ if ($due_students && $due_students->num_rows > 0) {
                 log_activity('auto_bill_generated', "Automated bill of ₹" . number_format($total_amount, 2) . " processed for student " . $student['name'] . " ($month_for)");
             }
 
+            // Create In-Built Portal Notification for Parent
+            if (function_exists('create_portal_notification')) {
+                create_portal_notification(
+                    'bill',
+                    "New Fee Invoice Generated ($month_for)",
+                    "Academic fee invoice of ₹" . number_format($total_amount, 2) . " for " . $student['name'] . " is available for payment.",
+                    "view_bill.php?id=$invoice_id",
+                    !empty($student['parent_id']) ? (int)$student['parent_id'] : null,
+                    $sid,
+                    'fa-file-invoice-dollar',
+                    '#dc2626'
+                );
+            }
+
             if (!empty($student['parent_id'])) {
                 $parent_res = $conn->query("SELECT email, parent_name FROM parents WHERE id = " . (int)$student['parent_id']);
                 if ($parent_res && $parent_res->num_rows > 0) {
