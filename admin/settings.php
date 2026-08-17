@@ -485,6 +485,40 @@ if (isset($settings['plan_features'])) {
 
                 <!-- COLUMN 2: TUITION MODES, EXTRA FEES & PLAN FEATURES -->
                 <div>
+                    <!-- Late Fine System Management Settings -->
+                    <div class="settings-card" style="border-left: 4px solid #ea580c;">
+                        <h3 class="section-title">
+                            <span><i class="fas fa-receipt" style="color:#ea580c;"></i> Late Fine System (विलंब शुल्क)</span>
+                            <span style="font-size:0.75rem; background:<?php echo is_fine_system_enabled($settings) ? '#dcfce7' : '#fee2e2'; ?>; color:<?php echo is_fine_system_enabled($settings) ? '#166534' : '#991b1b'; ?>; padding:3px 10px; border-radius:50px; font-weight:800;">
+                                <?php echo is_fine_system_enabled($settings) ? '● ACTIVE' : '○ DISABLED'; ?>
+                            </span>
+                        </h3>
+                        <p style="font-size:0.82rem; color:#64748b; margin-top:-10px; margin-bottom:15px;">
+                            Automatic fine calculation on monthly tuition bills unpaid past the 5th of the month.
+                        </p>
+                        
+                        <div class="portal-form-row" style="margin-bottom: 15px;">
+                            <div class="portal-input-group" style="margin-bottom: 0;">
+                                <label><i class="fas fa-toggle-on" style="color:#ea580c;"></i> Fine System Status</label>
+                                <select name="settings[fine_system_enabled]">
+                                    <option value="1" <?php echo is_fine_system_enabled($settings) ? 'selected' : ''; ?>>Enabled (Active)</option>
+                                    <option value="0" <?php echo !is_fine_system_enabled($settings) ? 'selected' : ''; ?>>Disabled (Turn Off Fine)</option>
+                                </select>
+                            </div>
+                            <div class="portal-input-group" style="margin-bottom: 0;">
+                                <label><i class="fas fa-calendar-check" style="color:#2563eb;"></i> Grace Days (From 1st)</label>
+                                <input type="number" name="settings[fine_grace_days]" value="<?php echo htmlspecialchars($settings['fine_grace_days'] ?? '5'); ?>" min="1" max="28" placeholder="5" required>
+                                <small style="color:#64748b; font-size:0.72rem; display:block; margin-top:2px;">1st to 5th of month is fine-free</small>
+                            </div>
+                        </div>
+
+                        <div class="portal-input-group" style="margin-bottom: 0;">
+                            <label><i class="fas fa-coins" style="color:#16a34a;"></i> Late Fine Rate Per Day (₹)</label>
+                            <input type="number" name="settings[fine_rate_per_day]" value="<?php echo htmlspecialchars($settings['fine_rate_per_day'] ?? '5.00'); ?>" step="0.01" min="0" placeholder="5.00" required>
+                            <small style="color:#64748b; font-size:0.72rem; display:block; margin-top:2px;">Charged per overdue day starting 6th onwards (₹5/day)</small>
+                        </div>
+                    </div>
+
                     <!-- Dynamic Tuition Modes -->
                     <div class="settings-card">
                         <h3 class="section-title">

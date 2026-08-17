@@ -416,6 +416,60 @@ if (!empty($settings['tuition_modes'])) {
             <p style="margin: 0; color:#64748b;">Collect payments, generate manual fees, and view real-time billing logs in 2-column view.</p>
         </header>
 
+        <?php
+        $sec_totals_q = $conn->query("SELECT SUM(security_amount) AS total_sec, SUM(registration_fee) AS total_reg, SUM(admission_fee) AS total_adm, SUM(advance_amount) AS total_adv FROM students WHERE status = 'active'");
+        $sec_row = ($sec_totals_q && $sec_totals_q->num_rows > 0) ? $sec_totals_q->fetch_assoc() : [];
+        $total_sec_held = (float)($sec_row['total_sec'] ?? 0);
+        $total_reg_fee = (float)($sec_row['total_reg'] ?? 0);
+        $total_adm_fee = (float)($sec_row['total_adm'] ?? 0);
+        $total_adv_held = (float)($sec_row['total_adv'] ?? 0);
+        ?>
+
+        <!-- Admin Top Fee Structure & Deposit Metric Strip -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 25px;">
+            <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #7c3aed; background: #faf5ff;">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.3rem; color: #581c87; font-weight: 800;">₹ <?php echo number_format($total_sec_held, 2); ?></h3>
+                    <span style="font-size: 0.72rem; color: #7c3aed; font-weight: 800; text-transform: uppercase;">Total Security Deposit</span>
+                </div>
+            </div>
+
+            <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #2563eb; background: #f0fdf4;">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: #dbeafe; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    <i class="fas fa-id-card"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.3rem; color: #1e3a8a; font-weight: 800;">₹ <?php echo number_format($total_reg_fee, 2); ?></h3>
+                    <span style="font-size: 0.72rem; color: #2563eb; font-weight: 800; text-transform: uppercase;">Total Registration Fees</span>
+                </div>
+            </div>
+
+            <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #16a34a; background: #f0fdf4;">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: #dcfce7; color: #16a34a; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    <i class="fas fa-file-invoice-dollar"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.3rem; color: #14532d; font-weight: 800;">₹ <?php echo number_format($total_adm_fee, 2); ?></h3>
+                    <span style="font-size: 0.72rem; color: #16a34a; font-weight: 800; text-transform: uppercase;">Total Admission Fees</span>
+                </div>
+            </div>
+
+            <?php if ($total_adv_held > 0): ?>
+            <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #ea580c; background: #fff7ed;">
+                <div style="width: 44px; height: 44px; border-radius: 12px; background: #ffedd5; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                    <i class="fas fa-hand-holding-usd"></i>
+                </div>
+                <div>
+                    <h3 style="margin: 0; font-size: 1.3rem; color: #7c2d12; font-weight: 800;">₹ <?php echo number_format($total_adv_held, 2); ?></h3>
+                    <span style="font-size: 0.72rem; color: #ea580c; font-weight: 800; text-transform: uppercase;">Total Advance Credits</span>
+                </div>
+            </div>
+            <?php endif; ?>
+        </div>
+
         <?php if($msg): ?>
             <div style="background:#dcfce7; color:#15803d; padding:14px 20px; border-radius:var(--radius-md); margin-bottom:25px; font-weight:700; border: 1px solid #bbf7d0;">
                 <i class="fas fa-check-circle"></i> <?php echo $msg; ?>

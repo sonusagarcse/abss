@@ -70,7 +70,12 @@ function amountToWords($number) {
     return ($Rupees ? $Rupees . 'Rupees ' : '') . ($paise ? 'and ' . $paise : '') . 'Only';
 }
 
-$amount_in_words = amountToWords($bill['amount']);
+// Calculate dynamic late fine
+$fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0, 'rate_per_day' => 5.00];
+$fine_amount = ($bill['status'] === 'unpaid') ? $fine_calc['fine_amount'] : 0.00;
+$total_payable_amount = (float)$bill['amount'] + $fine_amount;
+
+$amount_in_words = amountToWords($total_payable_amount);
 $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . str_pad($bill['id'], 5, '0', STR_PAD_LEFT);
 ?>
 
@@ -299,6 +304,23 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                         <?php
                     }
                     ?>
+                    <?php if ($fine_amount > 0): ?>
+                        <tr style="background: #fff7ed;">
+                            <td class="text-center" style="font-weight: 700; color: #ea580c;"><?php echo $sno++; ?></td>
+                            <td style="font-weight: 700; color: #9a3412;">
+                                <i class="fas fa-coins" style="color:#ea580c;"></i> Late Fine (विलंब शुल्क)
+                                <span style="font-size:0.75rem; font-weight:600; color:#ea580c; background:#ffedd5; padding:2px 8px; border-radius:50px; margin-left:6px;">
+                                    <?php echo $fine_calc['overdue_days']; ?> Days Overdue @ ₹<?php echo number_format($fine_calc['rate_per_day'], 2); ?>/day
+                                </span>
+                            </td>
+                            <td style="font-weight: 700; color: #ea580c;">
+                                <?php echo htmlspecialchars($bill['month_for']); ?>
+                            </td>
+                            <td class="text-right" style="font-weight: 800; color:#ea580c;">
+                                ₹ <?php echo number_format($fine_amount, 2); ?>
+                            </td>
+                        </tr>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -309,7 +331,7 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                 <div class="total-label">Total Amount Due</div>
                 <small style="color:#64748b; font-weight:600;">Status: <span style="text-transform:uppercase; font-weight:800; color:<?php echo $bill['status']==='paid'?'#15803d':'#dc2626'; ?>;"><?php echo $bill['status']; ?></span></small>
             </div>
-            <div class="total-value">₹ <?php echo number_format($bill['amount'], 2); ?></div>
+            <div class="total-value">₹ <?php echo number_format($total_payable_amount, 2); ?></div>
         </div>
 
         <!-- Amount in Words -->
@@ -325,12 +347,16 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                         <i class="fas fa-exclamation-circle" style="color: #dc2626; font-size: 1.3rem;"></i> Immediate Fee Payment Due
                     </div>
                     <p style="margin: 4px 0 0; color: #475569; font-size: 0.88rem; font-weight: 600;">
-                        Payable Balance: <strong style="color: #dc2626; font-size: 1.05rem;">₹ <?php echo number_format($bill['amount'], 2); ?></strong> • Instant Receipt & Payment Verification via Razorpay.
+                        Payable Balance: <strong style="color: #dc2626; font-size: 1.05rem;">₹ <?php echo number_format($total_payable_amount, 2); ?></strong>
+                        <?php if ($fine_amount > 0): ?>
+                            (Includes ₹ <?php echo number_format($fine_amount, 2); ?> Late Fine)
+                        <?php endif; ?>
+                        • Instant Receipt & Verification.
                     </p>
                 </div>
                 <div>
                     <button type="button" onclick="payWithRazorpay()" class="btn-pay-highlight" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); color: #ffffff; padding: 15px 32px; border-radius: 50px; font-size: 1.1rem; font-weight: 900; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 8px 25px rgba(22, 163, 74, 0.45); transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'">
-                        <i class="fas fa-lock"></i> PAY NOW (₹ <?php echo number_format($bill['amount'], 2); ?>) <i class="fas fa-arrow-right"></i>
+                        <i class="fas fa-lock"></i> PAY NOW (₹ <?php echo number_format($total_payable_amount, 2); ?>) <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
             </div>
@@ -348,7 +374,7 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
         function payWithRazorpay() {
             var options = {
                 "key": "<?php echo htmlspecialchars($razorpay_key); ?>",
-                "amount": "<?php echo round($bill['amount'] * 100); ?>", // Amount in paise
+                "amount": "<?php echo round($total_payable_amount * 100); ?>", // Amount in paise
                 "currency": "INR",
                 "name": "<?php echo addslashes($school_name); ?>",
                 "description": "Fee Invoice #<?php echo $bill['id']; ?> (<?php echo addslashes($bill['month_for']); ?>)",

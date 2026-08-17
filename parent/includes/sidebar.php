@@ -42,10 +42,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </a>
         </li>
         <li>
-            <a href="javascript:void(0);" onclick="toggleNotificationDrawer()" style="position: relative;">
-                <i class="fas fa-bell"></i>
-                <span class="notification-badge" id="bottomNavNotificationBadge" style="display:none; position: absolute; top: 6px; right: calc(50% - 16px); background: #dc2626; color: #ffffff; font-size: 0.65rem; font-weight: 800; border-radius: 50px; padding: 1px 5px; min-width: 16px; text-align: center;">0</span>
-                <span>Alerts</span>
+            <a href="gallery.php" class="<?php echo $current_page == 'gallery.php' ? 'active' : ''; ?>">
+                <i class="fas fa-photo-video"></i>
+                <span>Gallery</span>
             </a>
         </li>
         <li>

@@ -434,6 +434,10 @@ function runAutoMigrator($conn) {
         if ($checkAdmFee && $checkAdmFee->num_rows == 0) {
             $conn->query("ALTER TABLE students ADD COLUMN admission_fee DECIMAL(10,2) DEFAULT 0.00 AFTER registration_fee");
         }
+        $checkAdvFee = $conn->query("SHOW COLUMNS FROM students LIKE 'advance_amount'");
+        if ($checkAdvFee && $checkAdvFee->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN advance_amount DECIMAL(10,2) DEFAULT 0.00 AFTER admission_fee");
+        }
 
         // Create in-built portal notifications table
         $conn->query("
@@ -543,4 +547,7 @@ require_once __DIR__ . '/../includes/tracker_helper.php';
 
 // Auto-load In-Built Web Notifications System
 require_once __DIR__ . '/../includes/notification_helper.php';
+
+// Auto-load Late Fine Management System
+require_once __DIR__ . '/../includes/fine_helper.php';
 ?>

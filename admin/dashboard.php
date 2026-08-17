@@ -53,6 +53,10 @@ $registration_fee_total = (float)($reg_fee_res ? $reg_fee_res->fetch_assoc()['to
 
 $adm_fee_res = $conn->query("SELECT COALESCE(SUM(admission_fee), 0) as total FROM students WHERE status = 'active'");
 $admission_fee_total = (float)($adm_fee_res ? $adm_fee_res->fetch_assoc()['total'] : 0);
+
+// 4. Calculate total dynamic late fine across all unpaid bills
+$settings = function_exists('getAllSettings') ? getAllSettings() : [];
+$total_fine_amount = function_exists('get_all_unpaid_total_fine') ? get_all_unpaid_total_fine($conn, $settings) : 0.00;
 ?>
 
 <!DOCTYPE html>
@@ -208,7 +212,19 @@ $admission_fee_total = (float)($adm_fee_res ? $adm_fee_res->fetch_assoc()['total
                 </div>
             </div>
 
-            <!-- Card 6: Previous Month Data Box -->
+            <!-- Card 6: Total Late Fine Amount (विलंब शुल्क) -->
+            <div class="stat-card" style="border-left: 4px solid #ea580c;">
+                <div class="stat-icon" style="background:#ffedd5; color:#ea580c;"><i class="fas fa-coins"></i></div>
+                <div class="stat-info">
+                    <h3 style="color:#ea580c;">₹ <?php echo number_format($total_fine_amount, 2); ?></h3>
+                    <p style="font-weight:700;">Total Late Fine</p>
+                    <small style="color:<?php echo is_fine_system_enabled($settings) ? '#ea580c' : '#64748b'; ?>; font-weight:700; font-size:0.75rem;">
+                        <?php echo is_fine_system_enabled($settings) ? '₹5/day after 5th of month' : 'Fine System Disabled'; ?>
+                    </small>
+                </div>
+            </div>
+
+            <!-- Card 7: Previous Month Data Box -->
             <div class="stat-card">
                 <div class="stat-icon icon-teal"><i class="fas fa-history"></i></div>
                 <div class="stat-info">

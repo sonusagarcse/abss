@@ -46,6 +46,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
     $security_amount    = isset($_POST['security_amount']) ? (float)$_POST['security_amount'] : 0.00;
     $registration_fee   = isset($_POST['registration_fee']) ? (float)$_POST['registration_fee'] : 0.00;
     $admission_fee      = isset($_POST['admission_fee']) ? (float)$_POST['admission_fee'] : 0.00;
+    $advance_amount     = isset($_POST['advance_amount']) ? (float)$_POST['advance_amount'] : 0.00;
     $id                 = isset($_POST['id']) ? (int)$_POST['id'] : 0;
     $parent_id          = isset($_POST['parent_id']) && $_POST['parent_id'] !== '' ? (int)$_POST['parent_id'] : null;
 
@@ -64,7 +65,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             $parent_id = $p_res->fetch_assoc()['id'];
             // Ensure phone is attached to parent account
             $u_stmt = $conn->prepare("UPDATE parents SET phone = ? WHERE id = ? AND (phone IS NULL OR phone = '')");
-            $u_stmt->bind_param("si", $phone, $parent_id);
+            $u_stmt->bind_param("si", $parent_id);
             $u_stmt->execute();
         } else {
             // Create a new parent account: BOTH ID & PASSWORD are the Mobile Number (phone)
@@ -111,16 +112,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             emergency_contact_name=?, emergency_relationship=?, emergency_phone=?,
             has_allergies=?, allergies_detail=?, has_medical_condition=?, medical_condition_detail=?,
             physician_name=?, physician_phone=?, insurance_provider=?, insurance_policy=?,
-            target_school=?, class_admitted=?, scholar_mode=?, monthly_discount=?, base_fee=?, security_amount=?, registration_fee=?, admission_fee=?, admission_date=?, parent_id=?, photo=?, student_photo=?
+            target_school=?, class_admitted=?, scholar_mode=?, monthly_discount=?, base_fee=?, security_amount=?, registration_fee=?, admission_fee=?, advance_amount=?, admission_date=?, parent_id=?, photo=?, student_photo=?
             WHERE id=?");
-        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'dddddsissi';
+        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'ddddddsissi';
         $params = [
             $name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
             $parent_name, $guardian_relationship, $phone, $guardian_email, $guardian_address,
             $emergency_contact_name, $emergency_relationship, $emergency_phone,
             $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
             $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
-            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $admission_date, $parent_id, $photo_path, $student_photo_path,
+            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $student_photo_path,
             $id
         ];
         $stmt->bind_param($types, ...$params);
@@ -131,16 +132,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             emergency_contact_name, emergency_relationship, emergency_phone,
             has_allergies, allergies_detail, has_medical_condition, medical_condition_detail,
             physician_name, physician_phone, insurance_provider, insurance_policy,
-            target_school, class_admitted, scholar_mode, monthly_discount, base_fee, security_amount, registration_fee, admission_fee, admission_date, parent_id, photo, student_photo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'dddddsiss';
+            target_school, class_admitted, scholar_mode, monthly_discount, base_fee, security_amount, registration_fee, admission_fee, advance_amount, admission_date, parent_id, photo, student_photo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'ddddddsiss';
         $params = [
             $name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
             $parent_name, $guardian_relationship, $phone, $guardian_email, $guardian_address,
             $emergency_contact_name, $emergency_relationship, $emergency_phone,
             $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
             $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
-            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $admission_date, $parent_id, $photo_path, $student_photo_path
+            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $student_photo_path
         ];
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
@@ -201,9 +202,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
         send_smtp_email('abssimamganj@gmail.com', "New Student Enrolled - " . $name . " (" . $reg_no . ")", $welcome_html);
     }
     
-    // Auto-update parent invoice to reflect new changes
-    $force_student_id = $id > 0 ? $id : (isset($new_id) ? $new_id : 0);
-    if ($force_student_id > 0) {
+    // Generate initial invoice ONLY for brand new student enrollments (never on editing existing student)
+    if (isset($new_id) && $new_id > 0) {
+        $force_student_id = (int)$new_id;
         ob_start();
         require __DIR__ . '/includes/billing_engine.php';
         ob_end_clean();
@@ -571,11 +572,11 @@ if (!empty($site_settings['tuition_modes'])) {
         }
         .modal-content { 
             background: #ffffff; 
-            padding: 40px; 
+            padding: 42px 48px; 
             border-radius: 28px; 
             width: 100%; 
-            max-width: 820px; 
-            box-shadow: 0 40px 100px rgba(15, 23, 42, 0.2); 
+            max-width: 1120px; 
+            box-shadow: 0 40px 100px rgba(15, 23, 42, 0.25); 
             border: 1px solid #e2e8f0; 
             margin: auto; 
             box-sizing: border-box;
@@ -1101,12 +1102,11 @@ if (!empty($site_settings['tuition_modes'])) {
                         </div>
                     </div>
 
-                    <div class="portal-form-row">
+                    <div class="portal-form-row" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));">
                         <div class="portal-input-group">
                             <label>Admission Date</label>
                             <input type="date" name="admission_date" id="admission_date" value="<?php echo date('Y-m-d'); ?>">
                         </div>
-                    <div class="portal-form-row">
                         <div class="portal-input-group">
                             <label>Base Monthly Tuition Fee (₹)</label>
                             <input type="number" name="base_fee" id="base_fee" placeholder="Auto-calculated" step="0.01" required readonly style="background-color: #f8fafc; cursor: not-allowed; color: var(--portal-blue); font-weight: 800;">
@@ -1117,21 +1117,26 @@ if (!empty($site_settings['tuition_modes'])) {
                         </div>
                     </div>
 
-                    <div class="portal-form-row" style="background: #f8fafc; padding: 14px 16px; border-radius: 14px; border: 1px solid #e2e8f0; margin-bottom: 20px;">
+                    <div class="portal-form-row" style="background: #f8fafc; padding: 14px 16px; border-radius: 14px; border: 1px solid #e2e8f0; margin-bottom: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px;">
                         <div class="portal-input-group" style="margin-bottom: 0;">
                             <label><i class="fas fa-shield-alt" style="color: #7c3aed;"></i> Security Deposit (₹)</label>
                             <input type="number" name="security_amount" id="security_amount" placeholder="0.00" step="0.01" value="0.00">
-                            <small style="color: #64748b; font-size: 0.72rem; font-weight: 600; display: block; margin-top: 3px;">Refundable caution money. (Not on fee receipt)</small>
+                            <small style="color: #64748b; font-size: 0.72rem; font-weight: 600; display: block; margin-top: 3px;">Refundable caution money</small>
                         </div>
                         <div class="portal-input-group" style="margin-bottom: 0;">
                             <label><i class="fas fa-id-card" style="color: #2563eb;"></i> Registration Fee (₹)</label>
                             <input type="number" name="registration_fee" id="registration_fee" placeholder="0.00" step="0.01" value="0.00">
-                            <small style="color: #64748b; font-size: 0.72rem; font-weight: 600; display: block; margin-top: 3px;">One-time registration charge</small>
+                            <small style="color: #64748b; font-size: 0.72rem; font-weight: 600; display: block; margin-top: 3px;">One-time registration</small>
                         </div>
                         <div class="portal-input-group" style="margin-bottom: 0;">
                             <label><i class="fas fa-file-invoice-dollar" style="color: #16a34a;"></i> Admission Fee (₹)</label>
                             <input type="number" name="admission_fee" id="admission_fee" placeholder="0.00" step="0.01" value="0.00">
                             <small style="color: #64748b; font-size: 0.72rem; font-weight: 600; display: block; margin-top: 3px;">One-time admission charge</small>
+                        </div>
+                        <div class="portal-input-group" style="margin-bottom: 0;">
+                            <label><i class="fas fa-hand-holding-usd" style="color: #ea580c;"></i> Advance Amount (₹)</label>
+                            <input type="number" name="advance_amount" id="advance_amount" placeholder="0.00" step="0.01" value="0.00">
+                            <small style="color: #64748b; font-size: 0.72rem; font-weight: 600; display: block; margin-top: 3px;">Advance credit balance</small>
                         </div>
                     </div>
 
@@ -1292,6 +1297,7 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('security_amount').value = '0.00';
             document.getElementById('registration_fee').value = '0.00';
             document.getElementById('admission_fee').value = '0.00';
+            document.getElementById('advance_amount').value = '0.00';
         }
 
         const feeSettings = <?php echo json_encode($tuition_modes); ?>;
@@ -1354,6 +1360,7 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('security_amount').value = data.security_amount || '0.00';
             document.getElementById('registration_fee').value = data.registration_fee || '0.00';
             document.getElementById('admission_fee').value = data.admission_fee || '0.00';
+            document.getElementById('advance_amount').value = data.advance_amount || '0.00';
             document.getElementById('admission_date').value = data.admission_date || '';
 
             // Guardian info

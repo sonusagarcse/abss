@@ -15,9 +15,9 @@ $err = '';
 $stmt = $conn->prepare("SELECT name, reg_no, base_fee, monthly_discount FROM students WHERE id = ?");
 $stmt->bind_param("i", $student_id);
 $stmt->execute();
-$student = $stmt->get_result()->fetch_assoc();
+$current_student = $stmt->get_result()->fetch_assoc();
 
-if (!$student) {
+if (!$current_student) {
     header("Location: students.php");
     exit();
 }
@@ -60,6 +60,12 @@ if (isset($_GET['delete'])) {
     }
 }
 
+// Refresh student record if billing engine modified anything
+$stmt = $conn->prepare("SELECT name, reg_no, base_fee, monthly_discount FROM students WHERE id = ?");
+$stmt->bind_param("i", $student_id);
+$stmt->execute();
+$current_student = $stmt->get_result()->fetch_assoc();
+
 // Fetch current addons
 $addons_res = $conn->query("SELECT * FROM student_addons WHERE student_id = $student_id ORDER BY created_at DESC");
 $total_addons = 0;
@@ -93,14 +99,14 @@ $total_addons = 0;
 
         <div class="student-card">
             <div>
-                <h2 style="margin:0 0 5px;"><?php echo htmlspecialchars($student['name']); ?></h2>
-                <p style="margin:0; font-size:0.9rem;"><?php echo htmlspecialchars($student['reg_no'] ?? ''); ?></p>
+                <h2 style="margin:0 0 5px;"><?php echo htmlspecialchars($current_student['name'] ?? 'Student'); ?></h2>
+                <p style="margin:0; font-size:0.9rem;"><?php echo htmlspecialchars($current_student['reg_no'] ?? ''); ?></p>
             </div>
             <div style="text-align:right;">
                 <p style="margin:0; font-size:0.85rem; font-weight:800; text-transform:uppercase;">Base Fee</p>
-                <h3 style="margin:0; color:#2e7d32;">₹<?php echo number_format($student['base_fee'], 2); ?></h3>
-                <?php if($student['monthly_discount'] > 0): ?>
-                    <p style="margin:0; font-size:0.8rem; color:#d32f2f;">- ₹<?php echo number_format($student['monthly_discount'], 2); ?> Discount</p>
+                <h3 style="margin:0; color:#2e7d32;">₹<?php echo number_format((float)($current_student['base_fee'] ?? 0), 2); ?></h3>
+                <?php if(((float)($current_student['monthly_discount'] ?? 0)) > 0): ?>
+                    <p style="margin:0; font-size:0.8rem; color:#d32f2f;">- ₹<?php echo number_format((float)$current_student['monthly_discount'], 2); ?> Discount</p>
                 <?php endif; ?>
             </div>
         </div>

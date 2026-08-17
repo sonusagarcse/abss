@@ -21,6 +21,18 @@ while ($c = $children_res->fetch_assoc()) {
 $total_paid = 0;
 $recent_results = [];
 $outstanding_dues = 0;
+$total_advance = 0;
+$total_late_fine = 0;
+
+$settings = function_exists('getAllSettings') ? getAllSettings() : [];
+
+foreach ($children as $c) {
+    $total_advance += (float)($c['advance_amount'] ?? 0);
+    if (function_exists('get_student_total_fine')) {
+        $fine_info = get_student_total_fine($c['id'], $conn, $settings);
+        $total_late_fine += $fine_info['total_fine'];
+    }
+}
 
 if (!empty($children_ids)) {
     $ids_str = implode(',', $children_ids);
@@ -284,13 +296,23 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
                     </div>
                 </div>
 
-                <div class="stat-card">
-                    <div class="stat-icon" style="background:#dcfce7; color:#15803d;"><i class="fas fa-check-circle"></i></div>
+                <div class="stat-card" style="border-left: 4px solid #ea580c;">
+                    <div class="stat-icon" style="background:#ffedd5; color:#ea580c;"><i class="fas fa-coins"></i></div>
                     <div class="stat-info">
-                        <h3>₹ <?= number_format($total_paid, 2) ?></h3>
-                        <span>Tuition Paid</span>
+                        <h3 style="color:#ea580c;">₹ <?= number_format($total_late_fine, 2) ?></h3>
+                        <span style="font-weight:700;">Total Late Fine</span>
                     </div>
                 </div>
+
+                <?php if ($total_advance > 0): ?>
+                <div class="stat-card" style="border-left: 4px solid #0284c7;">
+                    <div class="stat-icon" style="background:#e0f2fe; color:#0284c7;"><i class="fas fa-hand-holding-usd"></i></div>
+                    <div class="stat-info">
+                        <h3 style="color:#0284c7;">₹ <?= number_format($total_advance, 2) ?></h3>
+                        <span style="font-weight:700;">Advance Balance</span>
+                    </div>
+                </div>
+                <?php endif; ?>
 
                 <div class="stat-card" style="border-left: 4px solid #dc2626;">
                     <div class="stat-icon" style="background:#fee2e2; color:#b91c1c;"><i class="fas fa-exclamation-circle"></i></div>
@@ -316,6 +338,26 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
                         <?php endif; ?>
                     </div>
                 </div>
+            </div>
+
+            <!-- Hindi Late Fee Advisory Callout Banner -->
+            <div style="background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border: 1.5px solid #fed7aa; border-radius: 16px; padding: 14px 20px; margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; box-shadow: 0 4px 15px rgba(234, 88, 12, 0.06);">
+                <div style="display: flex; align-items: center; gap: 12px; flex: 1; min-width: 260px;">
+                    <div style="width: 40px; height: 40px; border-radius: 12px; background: #ea580c; color: #ffffff; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                    </div>
+                    <div>
+                        <h4 style="margin: 0 0 2px; font-size: 0.95rem; font-weight: 800; color: #9a3412;">
+                            विलंब शुल्क सूचना (Late Fee Advisory)
+                        </h4>
+                        <p style="margin: 0; font-size: 0.85rem; color: #c2410c; font-weight: 700; line-height: 1.4;">
+                            कृपया प्रत्येक माह की 5 तारीख तक शुल्क जमा करें, अन्यथा ₹5 प्रतिदिन की दर से विलंब शुल्क (Fine) देय होगा।
+                        </p>
+                    </div>
+                </div>
+                <span style="background: #ea580c; color: #ffffff; font-size: 0.75rem; font-weight: 800; padding: 5px 14px; border-radius: 50px; white-space: nowrap;">
+                    ₹5 / दिन Fine
+                </span>
             </div>
 
             <!-- Quick Action Shortcuts -->
