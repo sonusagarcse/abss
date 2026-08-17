@@ -45,11 +45,13 @@ if (!empty($children_ids)) {
     
     // Outstanding dues total & latest unpaid bill ID
     $latest_unpaid_bill_id = 0;
+    $base_dues = 0;
     $dues_query = $conn->query("SELECT SUM(amount) AS total_dues FROM fees_generated WHERE student_id IN ($ids_str) AND status = 'unpaid'");
     if ($dues_query && $row = $dues_query->fetch_assoc()) {
-        $outstanding_dues = (float)$row['total_dues'];
+        $base_dues = (float)$row['total_dues'];
+        $outstanding_dues = $base_dues + $total_late_fine;
     }
-    if ($outstanding_dues > 0) {
+    if ($base_dues > 0) {
         $latest_bill_q = $conn->query("SELECT id FROM fees_generated WHERE student_id IN ($ids_str) AND status = 'unpaid' ORDER BY billing_date DESC, id DESC LIMIT 1");
         if ($latest_bill_q && $bRow = $latest_bill_q->fetch_assoc()) {
             $latest_unpaid_bill_id = (int)$bRow['id'];
@@ -319,18 +321,21 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
                     <div class="stat-info" style="width: 100%;">
                         <h3 style="color:#b91c1c;">₹ <?= number_format($outstanding_dues, 2) ?></h3>
                         <span style="font-weight:700;">Outstanding Dues</span>
+                        <?php if ($total_late_fine > 0): ?>
+                            <small style="color:#ea580c; font-weight:700; font-size:0.75rem; display:block; margin-top:2px;">(Includes ₹ <?= number_format($total_late_fine, 2) ?> Late Fine)</small>
+                        <?php endif; ?>
                         <?php if ($outstanding_dues > 0 && $latest_unpaid_bill_id > 0): ?>
                             <div style="margin-top: 10px;">
                                 <a href="view_bill.php?id=<?= $latest_unpaid_bill_id ?>" 
                                    style="display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%); color: #ffffff; padding: 7px 16px; border-radius: 50px; font-size: 0.82rem; font-weight: 800; text-decoration: none; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35); transition: transform 0.2s;">
-                                    <i class="fas fa-credit-card"></i> Pay Now →
+                                    <i class="fas fa-credit-card"></i> Pay Now (₹ <?= number_format($outstanding_dues, 2) ?>) →
                                 </a>
                             </div>
                         <?php elseif ($outstanding_dues > 0): ?>
                             <div style="margin-top: 10px;">
                                 <a href="fees.php" 
                                    style="display: inline-flex; align-items: center; gap: 6px; background: linear-gradient(135deg, #dc2626 0%, #ea580c 100%); color: #ffffff; padding: 7px 16px; border-radius: 50px; font-size: 0.82rem; font-weight: 800; text-decoration: none; box-shadow: 0 4px 14px rgba(220, 38, 38, 0.35);">
-                                    <i class="fas fa-credit-card"></i> Pay Now →
+                                    <i class="fas fa-credit-card"></i> Pay Now (₹ <?= number_format($outstanding_dues, 2) ?>) →
                                 </a>
                             </div>
                         <?php else: ?>

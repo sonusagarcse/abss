@@ -50,12 +50,21 @@ if ($http_status === 200) {
     
     // Check if payment was authorized or captured and amount matches
     if (isset($data['status']) && ($data['status'] === 'authorized' || $data['status'] === 'captured')) {
-        $paid_amount = $data['amount'] / 100; // Convert subunit to INR
+        $paid_amount = (float)($data['amount'] / 100); // Convert subunit to INR
         
-        // We accept the payment if the amount is roughly equal
-        if (abs($paid_amount - $bill['amount']) < 1) {
-            $sid = $bill['student_id'];
+        // Calculate expected amount including dynamic late fine
+        $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
+        $fine_amount = (float)$fine_calc['fine_amount'];
+        $expected_with_fine = (float)$bill['amount'] + $fine_amount;
+        $expected_base = (float)$bill['amount'];
+
+        // Accept if paid amount matches total with fine OR base amount (within ₹1 tolerance)
+        if (abs($paid_amount - $expected_with_fine) < 1 || abs($paid_amount - $expected_base) < 1) {
+            $sid = (int)$bill['student_id'];
             $month = $bill['month_for'];
+            if ($fine_amount > 0 && abs($paid_amount - $expected_with_fine) < 1) {
+                $month .= " (Incl. ₹" . number_format($fine_amount, 2) . " Late Fine)";
+            }
             $payment_date = date('Y-m-d');
             $method = 'Online (Razorpay: ' . $payment_id . ')';
 
@@ -67,7 +76,7 @@ if ($http_status === 200) {
                 $pay_stmt->bind_param("idsss", $sid, $paid_amount, $payment_date, $month, $method);
                 $pay_stmt->execute();
                 
-                // Update Bill
+                // Update Bill to paid
                 $update_bill = $conn->prepare("UPDATE fees_generated SET status = 'paid' WHERE id = ?");
                 $update_bill->bind_param("i", $bill_id);
                 $update_bill->execute();
@@ -76,17 +85,17 @@ if ($http_status === 200) {
                 
                 // Log and redirect
                 if (function_exists('log_activity')) {
-                    log_activity('online_payment_success', "Parent $parent_id paid ₹$paid_amount via Razorpay for Bill #$bill_id");
+                    log_activity('online_payment_success', "Parent $parent_id paid ₹$paid_amount via Razorpay for Bill #$bill_id (Base: ₹{$bill['amount']}, Fine: ₹$fine_amount)");
                 }
                 
                 header("Location: fees.php?success=1");
                 exit();
             } catch (Exception $e) {
                 $conn->rollback();
-                die("Database error while recording payment.");
+                die("Database error while recording payment: " . $e->getMessage());
             }
         } else {
-            die("Payment amount mismatch. Paid: $paid_amount, Expected: {$bill['amount']}");
+            die("Payment amount mismatch. Paid: ₹" . number_format($paid_amount, 2) . ", Expected: ₹" . number_format($expected_with_fine, 2) . " (Base: ₹" . number_format($expected_base, 2) . ($fine_amount > 0 ? " + Fine: ₹" . number_format($fine_amount, 2) : "") . ")");
         }
     } else {
         die("Payment not successful. Current status: " . ($data['status'] ?? 'unknown'));

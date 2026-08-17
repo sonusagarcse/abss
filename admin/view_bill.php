@@ -66,7 +66,12 @@ function amountToWords($number) {
     return ($Rupees ? $Rupees . 'Rupees ' : '') . ($paise ? 'and ' . $paise : '') . 'Only';
 }
 
-$amount_in_words = amountToWords($bill['amount']);
+// Calculate dynamic late fine (if enabled in settings)
+$fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0, 'rate_per_day' => 5.00];
+$fine_amount = ($bill['status'] === 'unpaid') ? $fine_calc['fine_amount'] : 0.00;
+$total_payable_amount = (float)$bill['amount'] + $fine_amount;
+
+$amount_in_words = amountToWords($total_payable_amount);
 $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . str_pad($bill['id'], 5, '0', STR_PAD_LEFT);
 ?>
 
@@ -268,13 +273,30 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                     <?php
                 }
                 ?>
+                <?php if ($fine_amount > 0): ?>
+                    <tr style="background: #fff7ed;">
+                        <td class="text-center" style="font-weight: 700; color: #ea580c;"><?php echo $sno++; ?></td>
+                        <td style="font-weight: 700; color: #9a3412;">
+                            <i class="fas fa-coins" style="color:#ea580c;"></i> Late Fine (विलंब शुल्क)
+                            <span style="font-size:0.75rem; font-weight:600; color:#ea580c; background:#ffedd5; padding:2px 8px; border-radius:50px; margin-left:6px;">
+                                <?php echo $fine_calc['overdue_days']; ?> Days Overdue @ ₹<?php echo number_format($fine_calc['rate_per_day'], 2); ?>/day
+                            </span>
+                        </td>
+                        <td style="font-weight: 700; color: #ea580c;">
+                            <?php echo htmlspecialchars($bill['month_for']); ?>
+                        </td>
+                        <td class="text-right" style="font-weight: 800; color:#ea580c;">
+                            ₹ <?php echo number_format($fine_amount, 2); ?>
+                        </td>
+                    </tr>
+                <?php endif; ?>
             </tbody>
         </table>
 
         <!-- Grand Total Strip -->
         <div class="total-strip">
             <div class="total-label">Total Amount Due</div>
-            <div class="total-value">₹ <?php echo number_format($bill['amount'], 2); ?></div>
+            <div class="total-value">₹ <?php echo number_format($total_payable_amount, 2); ?></div>
         </div>
 
         <!-- Amount in Words -->

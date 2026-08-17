@@ -256,24 +256,30 @@ if (isset($_GET['collect_offline'])) {
 
     if ($bill) {
         $sid = $bill['student_id'];
-        $amount = $bill['amount'];
+        $settings = function_exists('getAllSettings') ? getAllSettings() : [];
+        $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
+        $fine_amount = (float)$fine_calc['fine_amount'];
+        $total_amount = (float)$bill['amount'] + $fine_amount;
         $date = date('Y-m-d');
         $month = $bill['month_for'];
+        if ($fine_amount > 0) {
+            $month .= " (Incl. ₹" . number_format($fine_amount, 2) . " Late Fine)";
+        }
         $method = 'Cash (Offline Direct)';
 
         $conn->begin_transaction();
         try {
             $stmt = $conn->prepare("INSERT INTO fee_payments (student_id, amount, payment_date, month_for, payment_method) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param("idsss", $sid, $amount, $date, $month, $method);
+            $stmt->bind_param("idsss", $sid, $total_amount, $date, $month, $method);
             $stmt->execute();
             $pay_id = $conn->insert_id;
 
             $conn->query("UPDATE fees_generated SET status = 'paid' WHERE id = $bill_id");
             $conn->commit();
 
-            $msg = "Successfully collected ₹" . number_format($amount, 2) . " cash payment for " . htmlspecialchars($bill['name']) . ". Invoice #$bill_id marked as PAID.";
+            $msg = "Successfully collected ₹" . number_format($total_amount, 2) . " cash payment for " . htmlspecialchars($bill['name']) . " (Base: ₹" . number_format($bill['amount'], 2) . ($fine_amount > 0 ? " + Fine: ₹" . number_format($fine_amount, 2) : "") . "). Invoice #$bill_id marked as PAID.";
             if (function_exists('log_activity')) {
-                log_activity('fee_payment_recorded', "Quick collected cash ₹" . number_format($amount, 2) . " for student " . $bill['name'] . " (Invoice #$bill_id)");
+                log_activity('fee_payment_recorded', "Quick collected cash ₹" . number_format($total_amount, 2) . " for student " . $bill['name'] . " (Invoice #$bill_id)");
             }
         } catch (Exception $e) {
             $conn->rollback();
@@ -282,18 +288,22 @@ if (isset($_GET['collect_offline'])) {
     }
 }
 
-// Fetch active students with total pending dues calculated
+// Fetch active students with total pending dues calculated (including dynamic fine if enabled)
 $students_res = $conn->query("
-    SELECT s.id, s.name, s.scholar_mode, s.base_fee, s.monthly_discount,
-           COALESCE(SUM(fg.amount), 0) AS total_due
+    SELECT s.id, s.name, s.scholar_mode, s.base_fee, s.monthly_discount
     FROM students s
-    LEFT JOIN fees_generated fg ON s.id = fg.student_id AND fg.status = 'unpaid'
     WHERE s.status = 'active'
-    GROUP BY s.id
     ORDER BY s.name ASC
 ");
 $students_list = [];
+$settings = function_exists('getAllSettings') ? getAllSettings() : [];
 while($s = $students_res->fetch_assoc()) {
+    $sid_val = (int)$s['id'];
+    $fine_info = function_exists('get_student_total_fine') ? get_student_total_fine($sid_val, $conn, $settings) : ['total_fine' => 0.00];
+    
+    $base_due_q = $conn->query("SELECT COALESCE(SUM(amount), 0) AS base_due FROM fees_generated WHERE student_id = $sid_val AND status = 'unpaid'");
+    $base_due = (float)($base_due_q ? $base_due_q->fetch_assoc()['base_due'] : 0);
+    $s['total_due'] = $base_due + (float)$fine_info['total_fine'];
     $students_list[] = $s;
 }
 
@@ -645,7 +655,11 @@ if (!empty($settings['tuition_modes'])) {
                                             <td colspan="4" style="text-align: center; color: #94a3b8; padding: 25px;">No invoice records found.</td>
                                         </tr>
                                     <?php else: ?>
-                                        <?php while($b = $bills->fetch_assoc()): ?>
+                                        <?php while($b = $bills->fetch_assoc()): 
+                                            $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($b['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
+                                            $fine_amount = ($b['status'] === 'unpaid') ? (float)$fine_calc['fine_amount'] : 0.00;
+                                            $total_payable = (float)$b['amount'] + $fine_amount;
+                                        ?>
                                             <tr class="bill-row">
                                                 <td style="text-align: center;">
                                                     <input type="checkbox" name="selected_bill_ids[]" value="<?php echo $b['id']; ?>" class="bill-checkbox" onclick="updateBulkDeleteState()" style="cursor:pointer; width:15px; height:15px;">
@@ -655,7 +669,14 @@ if (!empty($settings['tuition_modes'])) {
                                                     <small style="color:#64748b; font-weight:600;">Inv #<?php echo $b['id']; ?> • <?php echo date('d M, Y', strtotime($b['billing_date'])); ?></small>
                                                 </td>
                                                 <td>
-                                                    <div style="font-weight:900; color:var(--portal-dark); font-size:1rem;">₹ <?php echo number_format($b['amount'], 2); ?></div>
+                                                    <div style="font-weight:900; color:var(--portal-dark); font-size:1rem;">
+                                                        ₹ <?php echo number_format($total_payable, 2); ?>
+                                                    </div>
+                                                    <?php if ($fine_amount > 0): ?>
+                                                        <div style="font-size: 0.72rem; color: #ea580c; font-weight: 700; margin-top: 1px;">
+                                                            (Base: ₹<?php echo number_format($b['amount'], 2); ?> + Fine: ₹<?php echo number_format($fine_amount, 2); ?>)
+                                                        </div>
+                                                    <?php endif; ?>
                                                     <small class="bill-month-for" style="color:var(--portal-blue); font-weight:700;"><?php echo htmlspecialchars($b['month_for']); ?></small>
                                                 </td>
                                                 <td>
@@ -680,8 +701,8 @@ if (!empty($settings['tuition_modes'])) {
                                                         </button>
 
                                                         <?php if ($b['status'] === 'unpaid'): ?>
-                                                            <a href="?collect_offline=<?php echo $b['id']; ?>" class="btn-quick-collect" style="background:#dcfce7; color:#15803d; border-color:#bbf7d0;" onclick="return confirm('Record cash payment of ₹<?php echo number_format($b['amount'], 2); ?> for <?php echo htmlspecialchars($b['name']); ?>?')" title="Quick Collect Cash">
-                                                                <i class="fas fa-check"></i> Cash
+                                                            <a href="?collect_offline=<?php echo $b['id']; ?>" class="btn-quick-collect" style="background:#dcfce7; color:#15803d; border-color:#bbf7d0; font-weight:800;" onclick="return confirm('Record cash payment of ₹<?php echo number_format($total_payable, 2); ?> (<?php echo $fine_amount > 0 ? 'Base ₹' . number_format($b['amount'], 2) . ' + Fine ₹' . number_format($fine_amount, 2) : 'Full Dues'; ?>) for <?php echo htmlspecialchars($b['name']); ?>?')" title="Quick Collect Cash">
+                                                                <i class="fas fa-check"></i> Cash (₹<?php echo number_format($total_payable, 2); ?>)
                                                             </a>
                                                         <?php endif; ?>
                                                     </div>

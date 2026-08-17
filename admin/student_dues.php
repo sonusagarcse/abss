@@ -54,8 +54,13 @@ $total_defaulters = 0;
 $total_unpaid_invoices = 0;
 
 if ($dues_query) {
+    $settings = function_exists('getAllSettings') ? getAllSettings() : [];
     while ($row = $dues_query->fetch_assoc()) {
-        $row['total_due'] = (float)$row['total_due'];
+        $sid = (int)$row['id'];
+        $fine_info = function_exists('get_student_total_fine') ? get_student_total_fine($sid, $conn, $settings) : ['total_fine' => 0.00];
+        $row['fine_amount'] = (float)$fine_info['total_fine'];
+        $row['base_due'] = (float)$row['total_due'];
+        $row['total_due'] = $row['base_due'] + $row['fine_amount'];
         $row['unpaid_count'] = (int)$row['unpaid_count'];
         
         // Build formatted complete address
