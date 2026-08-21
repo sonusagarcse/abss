@@ -61,3 +61,7 @@
 [2026-08-21 14:23:37] [SUCCESS] [token_registered] [HTTP 200] | Data: {"token_id":12,"device_type":"web_browser","app_version":"1.0.0","topic_subscribed":true}
 [2026-08-21 14:23:47] [SUCCESS] [topic_subscription_result] [HTTP 200] | Data: {"topic":"/topics/all","tokens_count":1,"results":[[]]}
 [2026-08-21 14:23:47] [SUCCESS] [token_registered] [HTTP 200] | Data: {"token_id":12,"device_type":"web_browser","app_version":"1.0.0","topic_subscribed":true}
+[2026-08-21 14:27:01] [SUCCESS] [topic_subscription_result] [HTTP 200] | Data: {"topic":"/topics/all","tokens_count":1,"results":[[]]}
+[2026-08-21 14:27:01] [SUCCESS] [token_registered] [HTTP 200] | Data: {"token_id":12,"device_type":"web_browser","app_version":"1.0.0","topic_subscribed":true}
+[2026-08-21 14:27:06] [SUCCESS] [topic_subscription_result] [HTTP 200] | Data: {"topic":"/topics/all","tokens_count":1,"results":[[]]}
+[2026-08-21 14:27:06] [SUCCESS] [token_registered] [HTTP 200] | Data: {"token_id":12,"device_type":"web_browser","app_version":"1.0.0","topic_subscribed":true}
