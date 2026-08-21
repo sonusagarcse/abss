@@ -8,21 +8,24 @@ $settings = getAllSettings();
 $active_tab = $_GET['tab'] ?? 'photos';
 $selected_cat = $_GET['cat'] ?? 'all';
 
-// 1. Fetch Photos
-if ($selected_cat !== 'all') {
-    $stmt_p = $conn->prepare("SELECT * FROM gallery WHERE category = ? ORDER BY created_at DESC");
-    $stmt_p->bind_param("s", $selected_cat);
-    $stmt_p->execute();
-    $photos_res = $stmt_p->get_result();
-} else {
-    $photos_res = $conn->query("SELECT * FROM gallery ORDER BY created_at DESC");
-}
-
 $photos = [];
-if ($photos_res && $photos_res->num_rows > 0) {
-    while ($row = $photos_res->fetch_assoc()) {
-        $photos[] = $row;
+try {
+    if ($selected_cat !== 'all') {
+        $stmt_p = $conn->prepare("SELECT * FROM gallery WHERE category = ? ORDER BY created_at DESC");
+        $stmt_p->bind_param("s", $selected_cat);
+        $stmt_p->execute();
+        $photos_res = $stmt_p->get_result();
+    } else {
+        $photos_res = $conn->query("SELECT * FROM gallery ORDER BY created_at DESC");
     }
+
+    if ($photos_res && $photos_res->num_rows > 0) {
+        while ($row = $photos_res->fetch_assoc()) {
+            $photos[] = $row;
+        }
+    }
+} catch (Throwable $e) {
+    $photos = [];
 }
 
 // Fallback curated photos if gallery has few entries
@@ -55,20 +58,24 @@ if (empty($photos) || count($photos) < 8) {
 }
 
 // 2. Fetch YouTube Videos
-if ($selected_cat !== 'all') {
-    $stmt_v = $conn->prepare("SELECT * FROM youtube_videos WHERE status = 1 AND category = ? ORDER BY created_at DESC");
-    $stmt_v->bind_param("s", $selected_cat);
-    $stmt_v->execute();
-    $videos_res = $stmt_v->get_result();
-} else {
-    $videos_res = $conn->query("SELECT * FROM youtube_videos WHERE status = 1 ORDER BY created_at DESC");
-}
-
 $videos = [];
-if ($videos_res && $videos_res->num_rows > 0) {
-    while ($row = $videos_res->fetch_assoc()) {
-        $videos[] = $row;
+try {
+    if ($selected_cat !== 'all') {
+        $stmt_v = $conn->prepare("SELECT * FROM youtube_videos WHERE status = 1 AND category = ? ORDER BY created_at DESC");
+        $stmt_v->bind_param("s", $selected_cat);
+        $stmt_v->execute();
+        $videos_res = $stmt_v->get_result();
+    } else {
+        $videos_res = $conn->query("SELECT * FROM youtube_videos WHERE status = 1 ORDER BY created_at DESC");
     }
+
+    if ($videos_res && $videos_res->num_rows > 0) {
+        while ($row = $videos_res->fetch_assoc()) {
+            $videos[] = $row;
+        }
+    }
+} catch (Throwable $e) {
+    $videos = [];
 }
 
 // Total Counts
@@ -76,8 +83,12 @@ $total_photos_count = count($photos);
 $total_videos_count = count($videos);
 
 // Get distinct categories from database & fallbacks
-$photo_cats_res = $conn->query("SELECT DISTINCT category FROM gallery WHERE category IS NOT NULL AND category != ''");
-$video_cats_res = $conn->query("SELECT DISTINCT category FROM youtube_videos WHERE status = 1 AND category IS NOT NULL AND category != ''");
+$photo_cats_res = false;
+$video_cats_res = false;
+try {
+    $photo_cats_res = @$conn->query("SELECT DISTINCT category FROM gallery WHERE category IS NOT NULL AND category != ''");
+    $video_cats_res = @$conn->query("SELECT DISTINCT category FROM youtube_videos WHERE status = 1 AND category IS NOT NULL AND category != ''");
+} catch (Throwable $e) {}
 
 $categories = [
     'Academics' => true,

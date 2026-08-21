@@ -139,7 +139,19 @@ include 'includes/header.php';
 
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;">
             <?php
-            $schools_query = $conn->query("SELECT * FROM schools WHERE is_active = 1 ORDER BY sort_order ASC, id ASC");
+            $schools_query = false;
+            try {
+                $schools_query = @$conn->query("SELECT * FROM schools WHERE is_active = 1 ORDER BY sort_order ASC, id ASC");
+                if (!$schools_query) {
+                    $schools_query = @$conn->query("SELECT * FROM schools ORDER BY id ASC");
+                }
+            } catch (Throwable $e) {
+                try {
+                    $schools_query = @$conn->query("SELECT * FROM schools ORDER BY id ASC");
+                } catch (Throwable $e2) {
+                    $schools_query = false;
+                }
+            }
             if ($schools_query && $schools_query->num_rows > 0) {
                 while ($exam = $schools_query->fetch_assoc()) {
                     $icon_class = !empty($exam['icon']) ? $exam['icon'] : 'fas fa-graduation-cap';
@@ -423,9 +435,22 @@ include 'includes/header.php';
         // 1. Fetch Tuition Modes dynamically from DB settings
         $tuition_modes = [];
         if (!empty($settings['tuition_modes'])) {
-            $tuition_modes = json_decode($settings['tuition_modes'], true);
+            $tuition_modes = json_decode($settings['tuition_modes'], true) ?: [];
         } else {
-            $tuition_modes = ['Hostler' => 5000, 'Day Scholar' => 3000, 'Tuition' => 1500];
+            $tuition_modes = ['Day Scholar' => 3000, 'Hostler' => 5000, 'Tuition' => 1500];
+        }
+
+        // Standardize Card Order: Day Scholar (Left), Hostler (Center/Recommended), Tuition/Others (Right)
+        if (isset($tuition_modes['Hostler']) && isset($tuition_modes['Day Scholar'])) {
+            $ordered_modes = [];
+            $ordered_modes['Day Scholar'] = $tuition_modes['Day Scholar'];
+            $ordered_modes['Hostler'] = $tuition_modes['Hostler'];
+            foreach ($tuition_modes as $k => $v) {
+                if ($k !== 'Day Scholar' && $k !== 'Hostler') {
+                    $ordered_modes[$k] = $v;
+                }
+            }
+            $tuition_modes = $ordered_modes;
         }
 
         // 2. Fetch Plan Features dynamically from DB settings

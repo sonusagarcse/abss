@@ -176,9 +176,9 @@ $fcm_api_secret      = $settings['fcm_api_secret'] ?? 'abss_fcm_secret_key_2026'
 // Ensure default tuition modes exist
 $tuition_modes = [];
 if (!empty($settings['tuition_modes'])) {
-    $tuition_modes = json_decode($settings['tuition_modes'], true);
+    $tuition_modes = json_decode($settings['tuition_modes'], true) ?: [];
 } else {
-    $tuition_modes = ['Hostler' => 5000, 'Day Scholar' => 3000, 'Tuition' => 1500];
+    $tuition_modes = ['Day Scholar' => 3000, 'Hostler' => 5000, 'Tuition' => 1500];
 }
 
 $razorpay_key_id = $settings['razorpay_key_id'] ?? '';
