@@ -388,7 +388,14 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
             <h3 style="font-size: 1.2rem; margin-bottom: 16px;"><i class="fas fa-children" style="color:var(--portal-purple); margin-right:8px;"></i> Registered Ward Profiles</h3>
             <div class="children-grid">
                 <?php foreach ($children as $c): 
-                    $raw_photo = !empty($c['photo']) ? $c['photo'] : (!empty($c['student_photo']) ? $c['student_photo'] : '');
+                    // Use student_photo (portrait picture) first; fallback to image-based photo if student_photo is not set
+                    $raw_photo = '';
+                    if (!empty($c['student_photo'])) {
+                        $raw_photo = $c['student_photo'];
+                    } elseif (!empty($c['photo']) && preg_match('/\.(jpg|jpeg|png|webp|gif)$/i', $c['photo'])) {
+                        $raw_photo = $c['photo'];
+                    }
+
                     $photo_url = '';
                     if (!empty($raw_photo)) {
                         $photo_url = (strpos($raw_photo, 'http') === 0 || strpos($raw_photo, '../') === 0) ? $raw_photo : '../' . ltrim($raw_photo, '/');
@@ -404,20 +411,29 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
                              title="Click to view large photo"
                              onclick="openPhotoModal('<?= addslashes($c_name) ?>', '<?= addslashes($photo_url) ?>', '<?= addslashes($c_reg) ?>', '<?= addslashes($c_class) ?>', '<?= addslashes($c_mode) ?>', '<?= addslashes($c_target) ?>')">
                             <?php if (!empty($photo_url)): ?>
-                                <img src="<?= $photo_url ?>" 
+                                <img src="<?= htmlspecialchars($photo_url) ?>" 
                                      alt="<?= $c_name ?>"
-                                     style="width:52px; height:52px; object-fit:cover; border-radius:50%;"
+                                     style="width:52px; height:52px; object-fit:cover; border-radius:50%; display:block;"
                                      onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-                                <span style="display:none;"><?= htmlspecialchars(substr($c['name'], 0, 1)) ?></span>
+                                <span style="display:none; width:100%; height:100%; align-items:center; justify-content:center;"><?= htmlspecialchars(strtoupper(substr($c['name'] ?? 'S', 0, 1))) ?></span>
                             <?php else: ?>
-                                <?= htmlspecialchars(substr($c['name'], 0, 1)) ?>
+                                <span style="display:flex; width:100%; height:100%; align-items:center; justify-content:center;"><?= htmlspecialchars(strtoupper(substr($c['name'] ?? 'S', 0, 1))) ?></span>
                             <?php endif; ?>
                         </div>
                         <div class="child-details">
                             <h4><?= $c_name ?></h4>
                             <span>Class: <strong><?= $c_class ?></strong></span><br>
                             <span>Target: <?= $c_target ?></span><br>
-                            <span class="badge badge-purple" style="margin-top:6px;"><i class="fas fa-hotel"></i> <?= $c_mode ?></span>
+                            <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center;">
+                                <span class="badge badge-purple"><i class="fas fa-hotel"></i> <?= $c_mode ?></span>
+                                <?php if (!empty($c['admission_test_paper'])): 
+                                    $tp_url = (strpos($c['admission_test_paper'], 'http') === 0 || strpos($c['admission_test_paper'], '../') === 0) ? $c['admission_test_paper'] : '../' . ltrim($c['admission_test_paper'], '/');
+                                ?>
+                                    <a href="<?= htmlspecialchars($tp_url) ?>" target="_blank" class="badge" style="background: #faf5ff; color: #7e22ce; border: 1px solid #d8b4fe; text-decoration: none;" title="View Admission Test Paper Scan">
+                                        <i class="fas fa-file-signature"></i> Test Paper
+                                    </a>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
                 <?php endforeach; ?>

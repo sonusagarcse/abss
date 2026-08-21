@@ -47,8 +47,10 @@
                 <ul class="footer-link-list">
                     <li><a href="index.php#home"><i class="fas fa-chevron-right"></i> Home Page</a></li>
                     <li><a href="index.php#about"><i class="fas fa-chevron-right"></i> About Institution</a></li>
+                    <li><a href="gallery.php"><i class="fas fa-chevron-right"></i> Campus Gallery & Videos</a></li>
                     <li><a href="index.php#facilities"><i class="fas fa-chevron-right"></i> Campus Facilities</a></li>
                     <li><a href="index.php#achievers"><i class="fas fa-chevron-right"></i> Hall of Excellence</a></li>
+                    <li><a href="contact.php"><i class="fas fa-chevron-right"></i> Contact & Map</a></li>
                     <li><a href="admission.php" style="color: #38bdf8; font-weight:700;"><i class="fas fa-chevron-right"></i> Apply Admission 2026</a></li>
                 </ul>
             </div>

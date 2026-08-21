@@ -2,6 +2,11 @@
 // admin/logout.php - Independent Admin Logout Handler
 
 require_once __DIR__ . '/../includes/security.php';
+require_once __DIR__ . '/../includes/auth_helper.php';
+
+if (function_exists('clear_admin_remember_cookie')) {
+    clear_admin_remember_cookie();
+}
 
 if (isset($_SESSION['admin_id'])) {
     if (function_exists('log_activity')) {
@@ -19,3 +24,4 @@ if (!isset($_SESSION['teacher_id']) && !isset($_SESSION['parent_id'])) {
 
 header("Location: login.php");
 exit();
+?>

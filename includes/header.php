@@ -241,13 +241,13 @@ if (defined('APP_URL')) {
             </div>
 
             <ul class="nav-links">
-                <li><a href="#home">Home</a></li>
-                <li><a href="#about">About</a></li>
-                <li><a href="#exams">Competitive Exams</a></li>
-                <li><a href="#facilities">Facilities</a></li>
-                <li><a href="#achievers">Achievers</a></li>
-                <li><a href="#gallery">Gallery</a></li>
-                <li><a href="#admission">Admission & Fees</a></li>
+                <li><a href="index.php#home">Home</a></li>
+                <li><a href="index.php#about">About</a></li>
+                <li><a href="index.php#exams">Competitive Exams</a></li>
+                <li><a href="index.php#achievers">Achievers</a></li>
+                <li><a href="gallery.php">Gallery</a></li>
+                <li><a href="index.php#admission">Fees</a></li>
+                <li><a href="contact.php">Contact</a></li>
             </ul>
 
             <div style="display:flex; align-items:center; gap:10px;">
@@ -277,11 +277,13 @@ if (defined('APP_URL')) {
         </div>
         <ul class="drawer-links" style="list-style:none; padding:20px; margin:0;">
             <li style="margin-bottom:14px;"><a href="index.php#home" style="text-decoration:none; font-weight:700; color:#0f172a; display:block; padding:6px 0;">Home</a></li>
-            <li style="margin-bottom:14px;"><a href="index.php#about" style="text-decoration:none; font-weight:700; color:#0f172a; display:block; padding:6px 0;">About Institution</a></li>
+            <li style="margin-bottom:14px;"><a href="index.php#about" style="text-decoration:none; font-weight:700; color:#0f172a; display:block; padding:6px 0;">About Us</a></li>
             <li style="margin-bottom:14px;"><a href="index.php#exams" style="text-decoration:none; font-weight:700; color:#0f172a; display:block; padding:6px 0;">Competitive Exams</a></li>
-            <li style="margin-bottom:14px;"><a href="index.php#facilities" style="text-decoration:none; font-weight:700; color:#0f172a; display:block; padding:6px 0;">Campus Facilities</a></li>
+            <!-- <li style="margin-bottom:14px;"><a href="index.php#facilities" style="text-decoration:none; font-weight:700; color:#0f172a; display:block; padding:6px 0;">Campus Facilities</a></li> -->
             <li style="margin-bottom:14px;"><a href="index.php#achievers" style="text-decoration:none; font-weight:700; color:#0f172a; display:block; padding:6px 0;">Hall of Excellence</a></li>
-            <li style="margin-bottom:14px;"><a href="index.php#admission" style="text-decoration:none; font-weight:700; color:#0f172a; display:block; padding:6px 0;">Admission & Fees</a></li>
+            <li style="margin-bottom:14px;"><a href="gallery.php" style="text-decoration:none; font-weight:700; color:#0f172a; display:block; padding:6px 0;">Gallery</a></li>
+            <li style="margin-bottom:14px;"><a href="index.php#admission" style="text-decoration:none; font-weight:700; color:#0f172a; display:block; padding:6px 0;">Fees</a></li>
+            <li style="margin-bottom:14px;"><a href="contact.php" style="text-decoration:none; font-weight:800; color:#2563eb; display:block; padding:6px 0;"><i class="fas fa-headset" style="margin-right:4px;"></i> Contact Us</a></li>
             <li style="margin-bottom:14px; border-top:1px solid #e2e8f0; padding-top:14px;"><a href="parent/login.php" style="text-decoration:none; font-weight:800; color:#059669; display:block; padding:6px 0;"><i class="fas fa-user-friends"></i> Parent Portal Login</a></li>
             <li style="margin-bottom:14px;"><a href="teacher/login.php" style="text-decoration:none; font-weight:800; color:#7c3aed; display:block; padding:6px 0;"><i class="fas fa-chalkboard-teacher"></i> Teacher Portal</a></li>
             <li style="margin-bottom:14px;"><a href="admin/login.php" style="text-decoration:none; font-weight:800; color:#1d4ed8; display:block; padding:6px 0;"><i class="fas fa-user-shield"></i> Admin Portal</a></li>

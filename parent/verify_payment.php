@@ -35,7 +35,15 @@ if (!$bill || $bill['parent_id'] != $parent_id) {
     die("Invalid invoice or unauthorized access.");
 }
 
-// Verify payment with Razorpay API
+// Cryptographic Signature Verification if order_id is present
+if (!empty($_POST['razorpay_order_id']) && !empty($_POST['razorpay_signature'])) {
+    $expected_sig = hash_hmac('sha256', $_POST['razorpay_order_id'] . '|' . $payment_id, $key_secret);
+    if (!hash_equals($expected_sig, $_POST['razorpay_signature'])) {
+        die("Invalid Razorpay payment signature.");
+    }
+}
+
+// Verify payment status and capture with Razorpay API
 $url = "https://api.razorpay.com/v1/payments/" . $payment_id;
 $ch = curl_init();
 curl_setopt($ch, CURLOPT_URL, $url);

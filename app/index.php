@@ -33,8 +33,8 @@ include '../includes/header.php';
                     <button id="install-pwa-btn" class="btn-app-install">
                         <i class="fas fa-download"></i> Install Web App
                     </button>
-                    <a href="app/ABSS_v1.2.0.APK" class="btn-app-apk" download>
-                        <i class="fab fa-android"></i> Download APK File
+                    <a href="ABSS_v1.2.1.APK" class="btn-app-apk" download>
+                        <i class="fab fa-android"></i> Download APK File (v1.2.1)
                     </a>
                 </div>
 
@@ -43,13 +43,13 @@ include '../includes/header.php';
                 <!-- PORTAL QUICK LINKS -->
                 <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 20px;">
                     <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 700; text-transform: uppercase;">Direct Login:</span>
-                    <a href="parent/login.php" style="color: #38bdf8; font-weight: 800; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.06); padding: 6px 14px; border-radius: 50px;">
+                    <a href="../parent/login.php" style="color: #38bdf8; font-weight: 800; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.06); padding: 6px 14px; border-radius: 50px;">
                         <i class="fas fa-user-friends"></i> Parent Portal
                     </a>
-                    <a href="teacher/login.php" style="color: #c084fc; font-weight: 800; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.06); padding: 6px 14px; border-radius: 50px;">
+                    <a href="../teacher/login.php" style="color: #c084fc; font-weight: 800; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.06); padding: 6px 14px; border-radius: 50px;">
                         <i class="fas fa-chalkboard-teacher"></i> Teacher Portal
                     </a>
-                    <a href="admin/login.php" style="color: #f43f5e; font-weight: 800; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.06); padding: 6px 14px; border-radius: 50px;">
+                    <a href="../admin/login.php" style="color: #f43f5e; font-weight: 800; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.06); padding: 6px 14px; border-radius: 50px;">
                         <i class="fas fa-user-shield"></i> Admin Panel
                     </a>
                 </div>
@@ -207,7 +207,7 @@ include '../includes/header.php';
         </div>
 
         <div style="text-align: center; margin-top: 45px;">
-            <a href="parent/login.php" class="btn" style="background: linear-gradient(135deg, #f59e0b, #ea580c); color: #ffffff; padding: 14px 35px; border-radius: 50px; font-weight: 900; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 10px 25px rgba(234, 88, 12, 0.4);">
+            <a href="../parent/login.php" class="btn" style="background: linear-gradient(135deg, #f59e0b, #ea580c); color: #ffffff; padding: 14px 35px; border-radius: 50px; font-weight: 900; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 10px 25px rgba(234, 88, 12, 0.4);">
                 <i class="fas fa-sign-in-alt"></i> Login to Parent Portal Now
             </a>
         </div>

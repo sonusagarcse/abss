@@ -33,7 +33,8 @@ $school_phone = $settings['phone'] ?? '+91 9523012888';
 $school_email = $settings['email'] ?? 'abssimamganj@gmail.com';
 
 // Razorpay Key Configuration
-$razorpay_key = $settings['razorpay_key_id'] ?? 'rzp_test_abss1234567890';
+$razorpay_key = $settings['razorpay_key_id'] ?? '';
+$razorpay_secret = $settings['razorpay_key_secret'] ?? '';
 
 // Function to convert amount to words
 function amountToWords($number) {
@@ -77,6 +78,44 @@ $total_payable_amount = (float)$bill['amount'] + $fine_amount;
 
 $amount_in_words = amountToWords($total_payable_amount);
 $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . str_pad($bill['id'], 5, '0', STR_PAD_LEFT);
+
+// Server-side Razorpay Order Generation for UPI Intent & WebViews
+$razorpay_order_id = '';
+if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_secret) && strpos($razorpay_key, 'rzp_') === 0) {
+    try {
+        $order_payload = [
+            'amount' => (int)round($total_payable_amount * 100),
+            'currency' => 'INR',
+            'receipt' => 'RCPT_' . $bill['id'] . '_' . substr(md5(uniqid()), 0, 8),
+            'notes' => [
+                'bill_id' => (string)$bill['id'],
+                'student_id' => (string)$bill['student_id'],
+                'parent_id' => (string)$_SESSION['parent_id']
+            ]
+        ];
+
+        $ch_ord = curl_init('https://api.razorpay.com/v1/orders');
+        curl_setopt($ch_ord, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch_ord, CURLOPT_POST, true);
+        curl_setopt($ch_ord, CURLOPT_POSTFIELDS, json_encode($order_payload));
+        curl_setopt($ch_ord, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch_ord, CURLOPT_USERPWD, $razorpay_key . ':' . $razorpay_secret);
+        curl_setopt($ch_ord, CURLOPT_TIMEOUT, 8);
+        $order_resp = curl_exec($ch_ord);
+        $order_code = curl_getinfo($ch_ord, CURLINFO_HTTP_CODE);
+        curl_close($ch_ord);
+
+        if ($order_code === 200) {
+            $order_json = json_decode($order_resp, true);
+            if (!empty($order_json['id'])) {
+                $razorpay_order_id = $order_json['id'];
+            }
+        }
+    } catch (Exception $oe) {
+        // Fallback gracefully to direct checkout if order API is unreachable
+        error_log("Razorpay Order API Error: " . $oe->getMessage());
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -367,6 +406,8 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
     <!-- Hidden form for Razorpay Payment Verification -->
     <form id="razorpayForm" action="verify_payment.php" method="POST" style="display:none;">
         <input type="hidden" name="razorpay_payment_id" id="razorpay_payment_id">
+        <input type="hidden" name="razorpay_order_id" id="razorpay_order_id">
+        <input type="hidden" name="razorpay_signature" id="razorpay_signature">
         <input type="hidden" name="bill_id" value="<?php echo $bill['id']; ?>">
     </form>
 
@@ -378,9 +419,34 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                 "currency": "INR",
                 "name": "<?php echo addslashes($school_name); ?>",
                 "description": "Fee Invoice #<?php echo $bill['id']; ?> (<?php echo addslashes($bill['month_for']); ?>)",
-                "image": "../assets/logo.png",
+                <?php if (!empty($razorpay_order_id)): ?>
+                "order_id": "<?php echo htmlspecialchars($razorpay_order_id); ?>",
+                <?php endif; ?>
+                <?php 
+                $is_ssl = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
+                $is_local = (strpos($_SERVER['HTTP_HOST'] ?? '', 'localhost') !== false || strpos($_SERVER['HTTP_HOST'] ?? '', '127.0.0.1') !== false);
+                if ($is_ssl && !$is_local && !empty($settings['site_logo'])): ?>
+                "image": "<?php echo htmlspecialchars($settings['site_logo']); ?>",
+                <?php endif; ?>
+                "webview_intent": true,
+                "method": {
+                    "upi": true,
+                    "card": true,
+                    "netbanking": true,
+                    "wallet": true
+                },
+                "retry": {
+                    "enabled": true
+                },
                 "handler": function (response){
+                    console.log('Razorpay Payment Success Returned:', response);
                     document.getElementById('razorpay_payment_id').value = response.razorpay_payment_id;
+                    if (response.razorpay_order_id) {
+                        document.getElementById('razorpay_order_id').value = response.razorpay_order_id;
+                    }
+                    if (response.razorpay_signature) {
+                        document.getElementById('razorpay_signature').value = response.razorpay_signature;
+                    }
                     document.getElementById('razorpayForm').submit();
                 },
                 "prefill": {
@@ -394,9 +460,24 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
                 },
                 "theme": {
                     "color": "#1d4ed8"
+                },
+                "modal": {
+                    "ondismiss": function() {
+                        console.log('Razorpay checkout modal closed by user.');
+                    }
                 }
             };
+
+            console.log('Razorpay Checkout Initialized with webview_intent: true', {
+                order_id: options.order_id || 'direct_payment',
+                amount: options.amount
+            });
+
             var rzp = new Razorpay(options);
+            rzp.on('payment.failed', function (response){
+                console.warn('Razorpay Payment Failed:', response.error);
+                alert('Payment Failed: ' + (response.error.description || 'Transaction cancelled or declined.'));
+            });
             rzp.open();
         }
     </script>

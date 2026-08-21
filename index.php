@@ -124,30 +124,67 @@ include 'includes/header.php';
 <section id="exams" style="padding: 70px 0; background: #f8fafc;">
     <div class="container">
         <div style="text-align: center; margin-bottom: 45px;">
-            <span style="color: #2563eb; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;">Competitive Preparation</span>
-            <h2 style="font-size: 2.2rem; color: #0f172a; font-weight: 900; margin-top: 5px;">Entrance Coaching Programs</h2>
+            <span style="color: #2563eb; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;">
+                <?php echo htmlspecialchars($settings['coaching_section_subtitle'] ?? 'Competitive Preparation'); ?>
+            </span>
+            <h2 style="font-size: 2.2rem; color: #0f172a; font-weight: 900; margin-top: 5px;">
+                <?php echo htmlspecialchars($settings['coaching_section_title'] ?? 'Entrance Coaching Programs'); ?>
+            </h2>
+            <?php if (!empty($settings['coaching_section_desc'])): ?>
+                <p style="color: #64748b; font-size: 0.95rem; max-width: 650px; margin: 10px auto 0; font-weight: 500;">
+                    <?php echo htmlspecialchars($settings['coaching_section_desc']); ?>
+                </p>
+            <?php endif; ?>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px;">
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;">
             <?php
-            $exams_list = [
-                ["name" => "Netarhat Residential", "desc" => "Class 6 Entrance Batch"],
-                ["name" => "Sainik School (AISSEE)", "desc" => "All India Sainik School"],
-                ["name" => "Navodaya Vidyalaya", "desc" => "JNVST Entrance Batch"],
-                ["name" => "Simultala Residential", "desc" => "State Merit Batch"],
-                ["name" => "BHU CHS Entrance", "desc" => "Banaras Hindu University"],
-                ["name" => "Rashtriya Military School", "desc" => "RMS Entrance Batch"]
-            ];
-            foreach ($exams_list as $exam):
+            $schools_query = $conn->query("SELECT * FROM schools WHERE is_active = 1 ORDER BY sort_order ASC, id ASC");
+            if ($schools_query && $schools_query->num_rows > 0) {
+                while ($exam = $schools_query->fetch_assoc()) {
+                    $icon_class = !empty($exam['icon']) ? $exam['icon'] : 'fas fa-graduation-cap';
+                    $badge = !empty($exam['badge_text']) ? $exam['badge_text'] : '';
+                    ?>
+                    <div style="background: #ffffff; border-radius: 20px; padding: 25px; border: 1px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.02); transition: transform 0.25s ease; position: relative;" class="exam-card">
+                        <?php if (!empty($badge)): ?>
+                            <span style="position: absolute; top: 18px; right: 18px; background: #eff6ff; color: #2563eb; font-size: 0.72rem; font-weight: 800; padding: 3px 10px; border-radius: 50px; border: 1px solid #dbeafe;">
+                                <?php echo htmlspecialchars($badge); ?>
+                            </span>
+                        <?php endif; ?>
+                        <div style="width: 48px; height: 48px; border-radius: 14px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 15px;">
+                            <i class="<?php echo htmlspecialchars($icon_class); ?>"></i>
+                        </div>
+                        <h3 style="font-size: 1.15rem; color: #0f172a; font-weight: 800; margin: 0 0 6px 0;"><?php echo htmlspecialchars($exam['school_name']); ?></h3>
+                        <div style="color: #2563eb; font-size: 0.84rem; font-weight: 800; margin-bottom: 2px; display: inline-flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-user-graduate" style="font-size: 0.75rem;"></i> <?php echo htmlspecialchars(!empty($exam['description']) ? $exam['description'] : 'Class 6 / Entrance Batch'); ?>
+                        </div>
+                    </div>
+                    <?php
+                }
+            } else {
+                $exams_list = [
+                    ["name" => "Netarhat Residential", "desc" => "Class 6 / Entrance Batch", "icon" => "fas fa-graduation-cap"],
+                    ["name" => "Sainik School (AISSEE)", "desc" => "All India Sainik School", "icon" => "fas fa-shield-alt"],
+                    ["name" => "Navodaya Vidyalaya", "desc" => "JNVST Entrance Batch", "icon" => "fas fa-award"],
+                    ["name" => "Simultala Residential", "desc" => "State Merit Batch", "icon" => "fas fa-book-reader"],
+                    ["name" => "BHU CHS Entrance", "desc" => "Banaras Hindu University", "icon" => "fas fa-university"],
+                    ["name" => "Rashtriya Military School", "desc" => "RMS Entrance Batch", "icon" => "fas fa-medal"]
+                ];
+                foreach ($exams_list as $exam) {
+                    ?>
+                    <div style="background: #ffffff; border-radius: 20px; padding: 25px; border: 1px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.02); transition: transform 0.25s ease;" class="exam-card">
+                        <div style="width: 48px; height: 48px; border-radius: 14px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 15px;">
+                            <i class="<?php echo $exam['icon']; ?>"></i>
+                        </div>
+                        <h3 style="font-size: 1.15rem; color: #0f172a; font-weight: 800; margin: 0 0 6px 0;"><?php echo $exam['name']; ?></h3>
+                        <div style="color: #2563eb; font-size: 0.84rem; font-weight: 800; margin-bottom: 2px; display: inline-flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-user-graduate" style="font-size: 0.75rem;"></i> <?php echo htmlspecialchars($exam['desc']); ?>
+                        </div>
+                    </div>
+                    <?php
+                }
+            }
             ?>
-            <div style="background: #ffffff; border-radius: 20px; padding: 25px; border: 1px solid #e2e8f0; box-shadow: 0 4px 15px rgba(0,0,0,0.02); transition: transform 0.25s ease;" class="exam-card">
-                <div style="width: 48px; height: 48px; border-radius: 14px; background: #eff6ff; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; margin-bottom: 15px;">
-                    <i class="fas fa-graduation-cap"></i>
-                </div>
-                <h3 style="font-size: 1.1rem; color: #0f172a; font-weight: 800; margin: 0 0 5px 0;"><?php echo $exam['name']; ?></h3>
-                <p style="margin: 0; color: #64748b; font-size: 0.85rem; font-weight: 600;"><?php echo $exam['desc']; ?></p>
-            </div>
-            <?php endforeach; ?>
         </div>
     </div>
 </section>
@@ -291,25 +328,87 @@ include 'includes/header.php';
         <div style="text-align: center; margin-bottom: 50px;">
             <span style="color: #2563eb; font-size: 0.85rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em;">Campus Life</span>
             <h2 style="font-size: 2.2rem; color: #0f172a; font-weight: 900; margin-top: 5px;">Photos & Moments</h2>
+            <p style="color: #64748b; font-weight: 600; font-size: 0.95rem; max-width: 600px; margin: 8px auto 0;">Glimpses of daily life, academic excellence, student activities, and achievements at ABSS.</p>
         </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 20px;">
-            <?php
-            $gallery_query = $conn->query("SELECT * FROM gallery ORDER BY created_at DESC LIMIT 6");
-            if ($gallery_query && $gallery_query->num_rows > 0):
-                while ($photo = $gallery_query->fetch_assoc()): ?>
-                    <div style="border-radius: 16px; overflow: hidden; height: 200px; border: 1px solid #e2e8f0; position: relative;">
-                        <a href="<?php echo htmlspecialchars($photo['image_path']); ?>" class="glightbox" data-gallery="campus-life">
-                            <img src="<?php echo htmlspecialchars($photo['image_path']); ?>" alt="<?php echo htmlspecialchars($photo['caption']); ?>" style="width: 100%; height: 100%; object-fit: cover;">
-                        </a>
-                    </div>
-                <?php endwhile;
-            else: ?>
-                <div style="grid-column: 1/-1; text-align: center; padding: 30px; color: #94a3b8;">Campus gallery being updated.</div>
-            <?php endif; ?>
+        <?php
+        // Fetch up to 8 photos from database
+        $gallery_items = [];
+        $gallery_query = $conn->query("SELECT * FROM gallery ORDER BY created_at DESC LIMIT 8");
+        if ($gallery_query && $gallery_query->num_rows > 0) {
+            while ($row = $gallery_query->fetch_assoc()) {
+                $gallery_items[] = [
+                    'image' => $row['image_path'],
+                    'caption' => !empty($row['caption']) ? $row['caption'] : 'Campus Life at ABSS',
+                    'category' => !empty($row['category']) ? $row['category'] : 'Campus Activity'
+                ];
+            }
+        }
+
+        // Fallback curated photos to guarantee minimum 8 photos if DB has fewer records
+        $fallback_gallery = [
+            ['image' => 'assets/gallery/1776881454_1600.jpg', 'caption' => 'Competitive Entrance Coaching & Classroom Session', 'category' => 'Academics'],
+            ['image' => 'assets/gallery/1780112974_9409.png', 'caption' => 'Morning Assembly & Physical Fitness Training', 'category' => 'Campus Discipline'],
+            ['image' => 'assets/gallery/1787299395_6788.png', 'caption' => 'OMR Weekly Test Series & Evaluation', 'category' => 'Examinations'],
+            ['image' => 'assets/gallery/1787299429_3090.png', 'caption' => 'Annual Merit Awards & Felicitation Ceremony', 'category' => 'Excellence'],
+            ['image' => 'images/home.jpeg', 'caption' => 'ABSS Campus Entrance & Learning Facility', 'category' => 'Campus Life'],
+            ['image' => 'assets/achievers/1776881528_9857.jpg', 'caption' => 'Netarhat & Navodaya Qualifying Scholars', 'category' => 'Achievers'],
+            ['image' => 'assets/achievers/1776882403_7564.jpg', 'caption' => 'Sainik School & Simultala Selected Candidates', 'category' => 'Pride of ABSS'],
+            ['image' => 'assets/Secratery.png', 'caption' => 'Mentorship & Student Guidance Session', 'category' => 'Leadership']
+        ];
+
+        foreach ($fallback_gallery as $fb) {
+            if (count($gallery_items) >= 8) break;
+            $already_present = false;
+            foreach ($gallery_items as $gi) {
+                if ($gi['image'] === $fb['image']) {
+                    $already_present = true;
+                    break;
+                }
+            }
+            if (!$already_present && file_exists(__DIR__ . '/' . $fb['image'])) {
+                $gallery_items[] = $fb;
+            }
+        }
+
+        // Strictly cap at min/max 8 items
+        $gallery_items = array_slice($gallery_items, 0, 8);
+        ?>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 24px;">
+            <?php foreach ($gallery_items as $photo): ?>
+                <div class="gallery-card-item" style="border-radius: 18px; overflow: hidden; height: 220px; border: 1px solid #e2e8f0; position: relative; background: #0f172a; box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.3s ease, box-shadow 0.3s ease;">
+                    <a href="<?php echo htmlspecialchars($photo['image']); ?>" class="glightbox" data-gallery="campus-life" data-title="<?php echo htmlspecialchars($photo['caption']); ?>" data-description="<?php echo htmlspecialchars($photo['category']); ?>" style="display: block; width: 100%; height: 100%; position: relative; overflow: hidden;">
+                        <img src="<?php echo htmlspecialchars($photo['image']); ?>" alt="<?php echo htmlspecialchars($photo['caption']); ?>" style="width: 100%; height: 100%; object-fit: cover; transition: transform 0.5s ease;">
+                        <div class="gallery-overlay" style="position: absolute; inset: 0; background: linear-gradient(to top, rgba(15, 23, 42, 0.85) 0%, rgba(15, 23, 42, 0) 50%); opacity: 0; transition: opacity 0.3s ease; display: flex; flex-direction: column; justify-content: flex-end; padding: 16px;">
+                            <span style="display: inline-block; background: #2563eb; color: #fff; font-size: 0.7rem; font-weight: 800; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; width: fit-content; margin-bottom: 4px;"><?php echo htmlspecialchars($photo['category']); ?></span>
+                            <h4 style="color: #ffffff; font-size: 0.85rem; font-weight: 700; margin: 0; line-height: 1.3; text-shadow: 0 1px 3px rgba(0,0,0,0.5);"><?php echo htmlspecialchars($photo['caption']); ?></h4>
+                        </div>
+                    </a>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <div style="text-align: center; margin-top: 35px;">
+            <a href="gallery.php" style="display: inline-flex; align-items: center; gap: 8px; font-weight: 800; color: #2563eb; text-decoration: none; font-size: 0.95rem; padding: 10px 24px; border-radius: 50px; background: #eff6ff; border: 1px solid #bfdbfe; transition: all 0.25s ease;">
+                <i class="fas fa-images"></i> View Complete Campus Gallery & Videos →
+            </a>
         </div>
     </div>
 </section>
+
+<style>
+    .gallery-card-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 30px rgba(37, 99, 235, 0.18) !important;
+    }
+    .gallery-card-item:hover img {
+        transform: scale(1.08);
+    }
+    .gallery-card-item:hover .gallery-overlay {
+        opacity: 1 !important;
+    }
+</style>
 
 <!-- Fee Structure & Admission Plan -->
 <section id="admission" style="padding: 80px 0; background: #ffffff;">

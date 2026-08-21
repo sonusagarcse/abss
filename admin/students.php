@@ -94,6 +94,18 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
         }
     }
 
+    // Handle admission test paper scan upload (field: admission_test_paper)
+    $admission_test_paper_path = $_POST['existing_admission_test_paper'] ?? '';
+    if (!empty($_FILES['admission_test_paper']['name'])) {
+        $tp_ext = strtolower(pathinfo($_FILES['admission_test_paper']['name'], PATHINFO_EXTENSION));
+        $tp_allowed = ['jpg', 'jpeg', 'png', 'gif', 'pdf', 'webp'];
+        if (in_array($tp_ext, $tp_allowed) && $_FILES['admission_test_paper']['size'] < 5 * 1024 * 1024) {
+            $tp_tmp = 'test_' . time() . '_' . rand(1000, 9999) . '.' . $tp_ext;
+            move_uploaded_file($_FILES['admission_test_paper']['tmp_name'], $upload_dir . $tp_tmp);
+            $admission_test_paper_path = 'uploads/students/' . $tp_tmp;
+        }
+    }
+
     // Handle student picture upload (field: student_photo)
     $student_photo_path = $_POST['existing_student_photo'] ?? '';
     if (!empty($_FILES['student_photo']['name'])) {
@@ -112,16 +124,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             emergency_contact_name=?, emergency_relationship=?, emergency_phone=?,
             has_allergies=?, allergies_detail=?, has_medical_condition=?, medical_condition_detail=?,
             physician_name=?, physician_phone=?, insurance_provider=?, insurance_policy=?,
-            target_school=?, class_admitted=?, scholar_mode=?, monthly_discount=?, base_fee=?, security_amount=?, registration_fee=?, admission_fee=?, advance_amount=?, admission_date=?, parent_id=?, photo=?, student_photo=?
+            target_school=?, class_admitted=?, scholar_mode=?, monthly_discount=?, base_fee=?, security_amount=?, registration_fee=?, admission_fee=?, advance_amount=?, admission_date=?, parent_id=?, photo=?, admission_test_paper=?, student_photo=?
             WHERE id=?");
-        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'ddddddsissi';
+        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'ddddddsisssi';
         $params = [
             $name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
             $parent_name, $guardian_relationship, $phone, $guardian_email, $guardian_address,
             $emergency_contact_name, $emergency_relationship, $emergency_phone,
             $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
             $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
-            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $student_photo_path,
+            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $admission_test_paper_path, $student_photo_path,
             $id
         ];
         $stmt->bind_param($types, ...$params);
@@ -132,16 +144,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             emergency_contact_name, emergency_relationship, emergency_phone,
             has_allergies, allergies_detail, has_medical_condition, medical_condition_detail,
             physician_name, physician_phone, insurance_provider, insurance_policy,
-            target_school, class_admitted, scholar_mode, monthly_discount, base_fee, security_amount, registration_fee, admission_fee, advance_amount, admission_date, parent_id, photo, student_photo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'ddddddsiss';
+            target_school, class_admitted, scholar_mode, monthly_discount, base_fee, security_amount, registration_fee, admission_fee, advance_amount, admission_date, parent_id, photo, admission_test_paper, student_photo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'ddddddsisss';
         $params = [
             $name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
             $parent_name, $guardian_relationship, $phone, $guardian_email, $guardian_address,
             $emergency_contact_name, $emergency_relationship, $emergency_phone,
             $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
             $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
-            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $student_photo_path
+            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $admission_test_paper_path, $student_photo_path
         ];
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
@@ -157,6 +169,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
                 rename(__DIR__ . '/../' . $photo_path, __DIR__ . '/../' . $new_photo);
             }
             $conn->query("UPDATE students SET photo = '" . $conn->real_escape_string($new_photo) . "' WHERE id = $new_id");
+        }
+        // Rename admission test paper scan with actual student id
+        if (!empty($admission_test_paper_path)) {
+            $tp_ext2 = pathinfo($admission_test_paper_path, PATHINFO_EXTENSION);
+            $new_tp = 'uploads/students/' . $new_id . '_testpaper.' . $tp_ext2;
+            if (file_exists(__DIR__ . '/../' . $admission_test_paper_path)) {
+                rename(__DIR__ . '/../' . $admission_test_paper_path, __DIR__ . '/../' . $new_tp);
+            }
+            $conn->query("UPDATE students SET admission_test_paper = '" . $conn->real_escape_string($new_tp) . "' WHERE id = $new_id");
         }
         // Rename student picture with actual student id
         if (!empty($student_photo_path)) {
@@ -852,6 +873,11 @@ if (!empty($site_settings['tuition_modes'])) {
                                         <i class="fas fa-file-pdf"></i>
                                     </a>
                                 <?php endif; ?>
+                                <?php if(!empty($row['admission_test_paper'])): ?>
+                                    <a href="../<?php echo htmlspecialchars($row['admission_test_paper']); ?>" target="_blank" class="action-icon-btn" style="background: #f5f3ff; color: #7c3aed;" title="View Admission Test Paper Scan">
+                                        <i class="fas fa-file-signature"></i>
+                                    </a>
+                                <?php endif; ?>
                                 <a href="student_addons.php?id=<?php echo $row['id']; ?>" class="action-icon-btn btn-addon-act" title="Manage Addons & Expenses">
                                     <i class="fas fa-plus-circle"></i>
                                 </a>
@@ -962,6 +988,11 @@ if (!empty($site_settings['tuition_modes'])) {
                                                 <i class="fas fa-file-image"></i>
                                             </a>
                                         <?php endif; ?>
+                                        <?php if(!empty($row['admission_test_paper'])): ?>
+                                            <a href="../<?php echo htmlspecialchars($row['admission_test_paper']); ?>" target="_blank" class="action-icon-btn" style="background: #f5f3ff; color: #7c3aed;" title="View Admission Test Paper">
+                                                <i class="fas fa-file-signature"></i>
+                                            </a>
+                                        <?php endif; ?>
                                         <a href="student_addons.php?id=<?php echo $row['id']; ?>" class="action-icon-btn btn-addon-act" title="Addons">
                                             <i class="fas fa-plus-circle"></i>
                                         </a>
@@ -996,6 +1027,7 @@ if (!empty($site_settings['tuition_modes'])) {
                 <form action="" method="POST" enctype="multipart/form-data" id="studentForm">
                     <input type="hidden" name="id" id="student_id">
                     <input type="hidden" name="existing_photo" id="existing_photo">
+                    <input type="hidden" name="existing_admission_test_paper" id="existing_admission_test_paper">
                     <input type="hidden" name="existing_student_photo" id="existing_student_photo">
 
                     <!-- SECTION 1: STUDENT INFORMATION -->
@@ -1154,6 +1186,20 @@ if (!empty($site_settings['tuition_modes'])) {
                         </div>
                     </div>
 
+                    <!-- Upload Admission Test Paper -->
+                    <div class="portal-input-group">
+                        <label><i class="fas fa-file-signature" style="color: #7c3aed; margin-right: 4px;"></i> Upload Admission Test Paper (Evaluated Answer Sheet / Scan PDF / Image)</label>
+                        <div class="photo-upload-area" id="uploadTestPaperArea" style="border-color: #ddd6fe; background: #faf5ff;">
+                            <input type="file" name="admission_test_paper" id="admission_test_paper_input" accept="image/*,.pdf" onchange="previewTestPaperFile(this)">
+                            <i class="fas fa-file-signature" style="font-size: 2rem; color: #7c3aed; opacity: 0.6;"></i>
+                            <p id="upload_test_paper_label" style="margin: 8px 0 0; color: #6b21a8; font-size: 0.85rem; font-weight: 600;">Click or drag to upload Admission Test Paper (JPG, PNG, PDF — max 5MB)</p>
+                        </div>
+                        <div id="current_test_paper_display" style="display: none; margin-top: 10px; font-size: 0.85rem; color: #7c3aed; font-weight: 700;">
+                            <i class="fas fa-paperclip"></i> <span id="current_test_paper_name"></span>
+                            <a href="#" id="view_test_paper_link" target="_blank" style="margin-left: 10px; color: #7c3aed;">View Test Paper Scan</a>
+                        </div>
+                    </div>
+
                     <!-- SECTION 2: GUARDIAN INFORMATION -->
                     <span class="form-section-title"><i class="fas fa-user-shield" style="margin-right: 8px;"></i>2. Guardian Information</span>
 
@@ -1283,10 +1329,13 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('studentModal').style.display = 'flex';
             document.getElementById('student_id').value = '';
             document.getElementById('existing_photo').value = '';
+            document.getElementById('existing_admission_test_paper').value = '';
             document.getElementById('existing_student_photo').value = '';
             document.getElementById('current_photo_display').style.display = 'none';
+            document.getElementById('current_test_paper_display').style.display = 'none';
             document.getElementById('current_student_photo_display').style.display = 'none';
             document.getElementById('upload_label').textContent = 'Click or drag to upload admission form scan (JPG, PNG, PDF — max 5MB)';
+            document.getElementById('upload_test_paper_label').textContent = 'Click or drag to upload Admission Test Paper (JPG, PNG, PDF — max 5MB)';
             document.getElementById('photoPreviewImg').style.display = 'none';
             document.getElementById('photoPreviewImg').src = '';
             document.getElementById('photoPreviewIcon').style.display = 'flex';
@@ -1324,6 +1373,12 @@ if (!empty($site_settings['tuition_modes'])) {
             }
         }
 
+        function previewTestPaperFile(input) {
+            if (input.files && input.files[0]) {
+                document.getElementById('upload_test_paper_label').textContent = '✅ ' + input.files[0].name + ' selected';
+            }
+        }
+
         function previewStudentPhoto(input) {
             if (input.files && input.files[0]) {
                 var reader = new FileReader();
@@ -1342,6 +1397,7 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('studentModal').style.display = 'flex';
             document.getElementById('student_id').value = data.id;
             document.getElementById('existing_photo').value = data.photo || '';
+            document.getElementById('existing_admission_test_paper').value = data.admission_test_paper || '';
 
             // Student info
             document.getElementById('name').value = data.name || '';
@@ -1397,6 +1453,15 @@ if (!empty($site_settings['tuition_modes'])) {
                 document.getElementById('view_photo_link').href = '../' + data.photo;
             } else {
                 document.getElementById('current_photo_display').style.display = 'none';
+            }
+
+            // Existing admission test paper scan
+            if (data.admission_test_paper) {
+                document.getElementById('current_test_paper_display').style.display = 'block';
+                document.getElementById('current_test_paper_name').textContent = data.admission_test_paper.split('/').pop();
+                document.getElementById('view_test_paper_link').href = '../' + data.admission_test_paper;
+            } else {
+                document.getElementById('current_test_paper_display').style.display = 'none';
             }
 
             // Existing student picture in circle

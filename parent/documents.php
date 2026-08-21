@@ -48,7 +48,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['upload_doc'])) {
 }
 
 // Fetch all active children
-$children_query = $conn->prepare("SELECT id, name, class_admitted FROM students WHERE parent_id = ? AND status = 'active' ORDER BY name ASC");
+$children_query = $conn->prepare("SELECT id, name, class_admitted, photo, admission_test_paper FROM students WHERE parent_id = ? AND status = 'active' ORDER BY name ASC");
 $children_query->bind_param("i", $pid);
 $children_query->execute();
 $children_res = $children_query->get_result();
@@ -234,46 +234,104 @@ unset($child);
                     </span>
                 </div>
 
-                <?php if(empty($child['docs'])): ?>
-                    <p style="color:#94a3b8; font-size:0.9rem;">No required documents configured.</p>
-                <?php else: ?>
-                    <?php foreach ($child['docs'] as $doc): ?>
-                        <div class="doc-row">
-                            <div style="flex:1; min-width:200px;">
-                                <h4 style="margin:0 0 6px 0; color:var(--portal-dark); font-weight:800; font-size:0.95rem;"><?php echo htmlspecialchars($doc['type']['name']); ?></h4>
-                                <span class="doc-status-badge status-<?php echo $doc['status']; ?>">
-                                    <?php 
-                                    if ($doc['status'] === 'approved') echo '✓ APPROVED';
-                                    elseif ($doc['status'] === 'pending') echo '⏳ UNDER REVIEW';
-                                    elseif ($doc['status'] === 'rejected') echo '✖ REJECTED';
-                                    else echo '⚠️ MISSING';
-                                    ?>
+                <!-- Official School Admission Records Section -->
+                <div style="margin-bottom: 22px;">
+                    <h4 style="font-size: 0.88rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: #6b21a8; margin: 0 0 12px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-file-signature"></i> Official Admission Records & Entrance Test
+                    </h4>
+
+                    <!-- Admission Test Paper Row -->
+                    <div class="doc-row" style="background: #faf5ff; border-color: #e9d5ff;">
+                        <div style="flex: 1; min-width: 220px;">
+                            <h4 style="margin: 0 0 4px 0; color: #581c87; font-weight: 800; font-size: 0.96rem;">
+                                <i class="fas fa-file-signature" style="color: #9333ea; margin-right: 6px;"></i> Admission Test Paper (प्रवेश परीक्षा प्रश्न-उत्तर पत्र)
+                            </h4>
+                            <small style="color: #7e22ce; font-weight: 600; display: block; margin-bottom: 6px;">Evaluated Entrance Exam Answer Sheet / Question Paper</small>
+                            <?php if(!empty($child['admission_test_paper'])): ?>
+                                <span class="doc-status-badge status-approved" style="background: #f3e8ff; color: #7e22ce; border-color: #d8b4fe;">
+                                    ✓ AVAILABLE (स्कैन उपलब्ध)
                                 </span>
+                            <?php else: ?>
+                                <span class="doc-status-badge" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1;">
+                                    ℹ️ NOT UPLOADED YET
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <div>
+                            <?php if(!empty($child['admission_test_paper'])): ?>
+                                <a href="../<?php echo htmlspecialchars($child['admission_test_paper']); ?>" target="_blank" class="inline-btn" style="background: #9333ea; color: #ffffff; box-shadow: 0 4px 12px rgba(147, 51, 234, 0.25);">
+                                    <i class="fas fa-eye"></i> View / Download Test Paper
+                                </a>
+                            <?php else: ?>
+                                <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 600;">School has not uploaded test paper yet.</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Offline Admission Form Scan Row (if available) -->
+                    <?php if(!empty($child['photo'])): ?>
+                        <div class="doc-row" style="background: #f0f9ff; border-color: #bae6fd;">
+                            <div style="flex: 1; min-width: 220px;">
+                                <h4 style="margin: 0 0 4px 0; color: #0369a1; font-weight: 800; font-size: 0.96rem;">
+                                    <i class="fas fa-file-pdf" style="color: #0284c7; margin-right: 6px;"></i> Admission Registration Form Scan
+                                </h4>
+                                <span class="doc-status-badge status-approved">✓ VERIFIED ARCHIVE</span>
                             </div>
-                            
                             <div>
-                                <?php if($doc['status'] == 'missing' || $doc['status'] == 'rejected'): ?>
-                                    <form action="" method="POST" enctype="multipart/form-data" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                                        <input type="hidden" name="student_id" value="<?php echo $child['id']; ?>">
-                                        <input type="hidden" name="doc_type_id" value="<?php echo $doc['type']['id']; ?>">
-                                        <input type="file" name="document_file" required accept=".pdf,.jpg,.jpeg,.png" style="font-size:0.82rem; padding:8px 10px; border:1px solid #cbd5e1; border-radius:10px; background:#ffffff; max-width:220px;">
-                                        <button type="submit" name="upload_doc" class="inline-btn btn-upload-submit">
-                                            <i class="fas fa-cloud-upload-alt"></i> Upload
-                                        </button>
-                                    </form>
-                                <?php elseif($doc['status'] == 'pending'): ?>
-                                    <span style="color:#b45309; font-weight:700; font-size:0.88rem; display:inline-flex; align-items:center; gap:6px;">
-                                        <i class="fas fa-clock"></i> Pending School Approval
-                                    </span>
-                                <?php else: ?>
-                                    <a href="../<?php echo $doc['file']; ?>" target="_blank" class="inline-btn btn-view-doc">
-                                        <i class="fas fa-eye"></i> View File
-                                    </a>
-                                <?php endif; ?>
+                                <a href="../<?php echo htmlspecialchars($child['photo']); ?>" target="_blank" class="inline-btn" style="background: #0284c7; color: #ffffff;">
+                                    <i class="fas fa-file-download"></i> View Admission Form
+                                </a>
                             </div>
                         </div>
-                    <?php endforeach; ?>
-                <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+
+                <div style="border-top: 1px solid #f1f5f9; padding-top: 18px; margin-top: 10px;">
+                    <h4 style="font-size: 0.88rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; color: var(--portal-blue); margin: 0 0 12px; display: flex; align-items: center; gap: 8px;">
+                        <i class="fas fa-folder-open"></i> Verification Documents
+                    </h4>
+
+                    <?php if(empty($child['docs'])): ?>
+                        <p style="color:#94a3b8; font-size:0.9rem;">No required documents configured.</p>
+                    <?php else: ?>
+                        <?php foreach ($child['docs'] as $doc): ?>
+                            <div class="doc-row">
+                                <div style="flex:1; min-width:200px;">
+                                    <h4 style="margin:0 0 6px 0; color:var(--portal-dark); font-weight:800; font-size:0.95rem;"><?php echo htmlspecialchars($doc['type']['name']); ?></h4>
+                                    <span class="doc-status-badge status-<?php echo $doc['status']; ?>">
+                                        <?php 
+                                        if ($doc['status'] === 'approved') echo '✓ APPROVED';
+                                        elseif ($doc['status'] === 'pending') echo '⏳ UNDER REVIEW';
+                                        elseif ($doc['status'] === 'rejected') echo '✖ REJECTED';
+                                        else echo '⚠️ MISSING';
+                                        ?>
+                                    </span>
+                                </div>
+                                
+                                <div>
+                                    <?php if($doc['status'] == 'missing' || $doc['status'] == 'rejected'): ?>
+                                        <form action="" method="POST" enctype="multipart/form-data" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                                            <input type="hidden" name="student_id" value="<?php echo $child['id']; ?>">
+                                            <input type="hidden" name="doc_type_id" value="<?php echo $doc['type']['id']; ?>">
+                                            <input type="file" name="document_file" required accept=".pdf,.jpg,.jpeg,.png" style="font-size:0.82rem; padding:8px 10px; border:1px solid #cbd5e1; border-radius:10px; background:#ffffff; max-width:220px;">
+                                            <button type="submit" name="upload_doc" class="inline-btn btn-upload-submit">
+                                                <i class="fas fa-cloud-upload-alt"></i> Upload
+                                            </button>
+                                        </form>
+                                    <?php elseif($doc['status'] == 'pending'): ?>
+                                        <span style="color:#b45309; font-weight:700; font-size:0.88rem; display:inline-flex; align-items:center; gap:6px;">
+                                            <i class="fas fa-clock"></i> Pending School Approval
+                                        </span>
+                                    <?php else: ?>
+                                        <a href="../<?php echo $doc['file']; ?>" target="_blank" class="inline-btn btn-view-doc">
+                                            <i class="fas fa-eye"></i> View File
+                                        </a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         <?php endforeach; ?>
 

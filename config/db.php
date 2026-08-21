@@ -201,6 +201,10 @@ function runAutoMigrator($conn) {
         if ($checkPhoto && $checkPhoto->num_rows == 0) {
             $conn->query("ALTER TABLE students ADD COLUMN photo VARCHAR(255) NULL");
         }
+        $checkTestPaper = $conn->query("SHOW COLUMNS FROM students LIKE 'admission_test_paper'");
+        if ($checkTestPaper && $checkTestPaper->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN admission_test_paper VARCHAR(255) NULL AFTER photo");
+        }
         
         $checkDiscount = $conn->query("SHOW COLUMNS FROM students LIKE 'monthly_discount'");
         if ($checkDiscount && $checkDiscount->num_rows == 0) {
@@ -473,13 +477,63 @@ function runAutoMigrator($conn) {
         // Auto-seed Firebase Service Account into settings table if file exists
         $saFile = __DIR__ . '/service-account.json';
         if (file_exists($saFile)) {
-            $checkSaSetting = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'firebase_service_account_json'");
+            $checkSaSetting = $conn->query("SELECT setting_key, setting_value FROM settings WHERE setting_key = 'firebase_service_account_json'");
             if (!$checkSaSetting || $checkSaSetting->num_rows == 0 || empty($checkSaSetting->fetch_assoc()['setting_value'])) {
                 $rawSa = file_get_contents($saFile);
                 if (!empty($rawSa)) {
                     $escSa = $conn->real_escape_string($rawSa);
                     $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('firebase_service_account_json', '$escSa') ON DUPLICATE KEY UPDATE setting_value = '$escSa'");
                 }
+            }
+        }
+
+        // 13. Ensure schools (Entrance Coaching Programs) table exists with full management fields
+        $conn->query("CREATE TABLE IF NOT EXISTS schools (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            school_name VARCHAR(150) NOT NULL,
+            description VARCHAR(255) NULL,
+            icon VARCHAR(50) DEFAULT 'fas fa-graduation-cap',
+            badge_text VARCHAR(50) NULL,
+            sort_order INT DEFAULT 0,
+            is_active TINYINT(1) DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $checkSchoolDesc = $conn->query("SHOW COLUMNS FROM schools LIKE 'description'");
+        if ($checkSchoolDesc && $checkSchoolDesc->num_rows == 0) {
+            $conn->query("ALTER TABLE schools ADD COLUMN description VARCHAR(255) NULL AFTER school_name");
+        }
+        $checkSchoolIcon = $conn->query("SHOW COLUMNS FROM schools LIKE 'icon'");
+        if ($checkSchoolIcon && $checkSchoolIcon->num_rows == 0) {
+            $conn->query("ALTER TABLE schools ADD COLUMN icon VARCHAR(50) DEFAULT 'fas fa-graduation-cap' AFTER description");
+        }
+        $checkSchoolBadge = $conn->query("SHOW COLUMNS FROM schools LIKE 'badge_text'");
+        if ($checkSchoolBadge && $checkSchoolBadge->num_rows == 0) {
+            $conn->query("ALTER TABLE schools ADD COLUMN badge_text VARCHAR(50) NULL AFTER icon");
+        }
+        $checkSchoolSort = $conn->query("SHOW COLUMNS FROM schools LIKE 'sort_order'");
+        $checkSchoolActive = $conn->query("SHOW COLUMNS FROM schools LIKE 'is_active'");
+        if ($checkSchoolActive && $checkSchoolActive->num_rows == 0) {
+            $conn->query("ALTER TABLE schools ADD COLUMN is_active TINYINT(1) DEFAULT 1 AFTER sort_order");
+        }
+        // Update any empty or NULL descriptions to default batch tag
+        $conn->query("UPDATE schools SET description = 'Class 6 / Entrance Batch' WHERE description IS NULL OR TRIM(description) = ''");
+
+        // Seed default coaching programs if table is empty
+        $countSchools = $conn->query("SELECT COUNT(*) as c FROM schools");
+        if ($countSchools && (int)$countSchools->fetch_assoc()['c'] == 0) {
+            $default_programs = [
+                ["Netarhat Residential", "Class 6 Entrance Batch", "fas fa-graduation-cap", "State Premier", 1],
+                ["Sainik School (AISSEE)", "All India Sainik School", "fas fa-shield-alt", "National Merit", 2],
+                ["Navodaya Vidyalaya", "JNVST Entrance Batch", "fas fa-award", "Top Selection", 3],
+                ["Simultala Residential", "State Merit Batch", "fas fa-book-reader", "Merit Program", 4],
+                ["BHU CHS Entrance", "Banaras Hindu University", "fas fa-university", "Central School", 5],
+                ["Rashtriya Military School", "RMS Entrance Batch", "fas fa-medal", "Defense Wings", 6]
+            ];
+            $p_stmt = $conn->prepare("INSERT INTO schools (school_name, description, icon, badge_text, sort_order, is_active) VALUES (?, ?, ?, ?, ?, 1)");
+            foreach ($default_programs as $dp) {
+                $p_stmt->bind_param("ssssi", $dp[0], $dp[1], $dp[2], $dp[3], $dp[4]);
+                $p_stmt->execute();
             }
         }
 
@@ -493,6 +547,28 @@ function runAutoMigrator($conn) {
             }
         }
         
+        // Ensure inquiries table has full contact query and attachment fields
+        $checkInqEmail = $conn->query("SHOW COLUMNS FROM inquiries LIKE 'email'");
+        if ($checkInqEmail && $checkInqEmail->num_rows == 0) {
+            $conn->query("ALTER TABLE inquiries ADD COLUMN email VARCHAR(150) NULL AFTER parent_phone");
+        }
+        $checkInqSub = $conn->query("SHOW COLUMNS FROM inquiries LIKE 'subject'");
+        if ($checkInqSub && $checkInqSub->num_rows == 0) {
+            $conn->query("ALTER TABLE inquiries ADD COLUMN subject VARCHAR(255) NULL AFTER target_exam");
+        }
+        $checkInqMsg = $conn->query("SHOW COLUMNS FROM inquiries LIKE 'message'");
+        if ($checkInqMsg && $checkInqMsg->num_rows == 0) {
+            $conn->query("ALTER TABLE inquiries ADD COLUMN message TEXT NULL AFTER subject");
+        }
+        $checkInqAttach = $conn->query("SHOW COLUMNS FROM inquiries LIKE 'attachment'");
+        if ($checkInqAttach && $checkInqAttach->num_rows == 0) {
+            $conn->query("ALTER TABLE inquiries ADD COLUMN attachment VARCHAR(255) NULL AFTER message");
+        }
+        $checkInqType = $conn->query("SHOW COLUMNS FROM inquiries LIKE 'inquiry_type'");
+        if ($checkInqType && $checkInqType->num_rows == 0) {
+            $conn->query("ALTER TABLE inquiries ADD COLUMN inquiry_type VARCHAR(100) DEFAULT 'General' AFTER attachment");
+        }
+
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
         

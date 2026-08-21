@@ -308,21 +308,121 @@ if (isset($settings['plan_features'])) {
                 
                 <!-- COLUMN 1: PAYMENT GATEWAY, EMAIL, FRONTEND & SECURITY -->
                 <div>
-                    <!-- Razorpay Settings -->
+                    <!-- Razorpay Settings (Masked & Protected) -->
                     <div class="settings-card">
                         <h3 class="section-title">
                             <span><i class="fas fa-credit-card" style="color:var(--portal-blue);"></i> Razorpay Payment Gateway</span>
+                            <span style="font-size:0.72rem; background:#eff6ff; color:#1d4ed8; padding:3px 10px; border-radius:50px; font-weight:800;">
+                                <i class="fas fa-shield-alt"></i> Protected & Hidden
+                            </span>
                         </h3>
+                        <p style="font-size: 0.82rem; color: #64748b; margin-top: -10px; margin-bottom: 15px;">
+                            Payment gateway keys are masked to protect credentials. Click the eye icon to view or edit.
+                        </p>
                         <div class="portal-form-row">
                             <div class="portal-input-group">
                                 <label><i class="fas fa-key" style="color: var(--portal-blue);"></i> Razorpay Key ID</label>
-                                <input type="text" name="settings[razorpay_key_id]" id="razorpay_key_id" value="<?php echo htmlspecialchars($razorpay_key_id); ?>" placeholder="rzp_test_... or rzp_live_...">
+                                <div style="position: relative; display: flex; align-items: center;">
+                                    <input type="password" name="settings[razorpay_key_id]" id="razorpay_key_id" value="<?php echo htmlspecialchars($razorpay_key_id); ?>" placeholder="rzp_test_... or rzp_live_..." autocomplete="off" style="padding-right: 42px; font-family: monospace; letter-spacing: 0.05em;">
+                                    <button type="button" onclick="toggleSecretVisibility('razorpay_key_id', this)" style="position: absolute; right: 10px; background: none; border: none; color: #64748b; cursor: pointer; padding: 6px; font-size: 1rem;" title="Show/Hide Key ID">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="portal-input-group">
                                 <label><i class="fas fa-lock" style="color: var(--portal-blue);"></i> Razorpay Key Secret</label>
-                                <div style="position: relative;">
-                                    <input type="text" name="settings[razorpay_key_secret]" id="razorpay_key_secret" value="<?php echo htmlspecialchars($razorpay_key_secret); ?>" placeholder="Enter Razorpay Secret Key">
+                                <div style="position: relative; display: flex; align-items: center;">
+                                    <input type="password" name="settings[razorpay_key_secret]" id="razorpay_key_secret" value="<?php echo htmlspecialchars($razorpay_key_secret); ?>" placeholder="Enter Razorpay Secret Key" autocomplete="off" style="padding-right: 42px; font-family: monospace; letter-spacing: 0.05em;">
+                                    <button type="button" onclick="toggleSecretVisibility('razorpay_key_secret', this)" style="position: absolute; right: 10px; background: none; border: none; color: #64748b; cursor: pointer; padding: 6px; font-size: 1rem;" title="Show/Hide Key Secret">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
                                 </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contact Page & Public Inquiry Configuration -->
+                    <div class="settings-card" style="border-left: 4px solid #2563eb;">
+                        <h3 class="section-title">
+                            <span><i class="fas fa-headset" style="color:#2563eb;"></i> Contact Page & Enquiry Settings</span>
+                            <div style="display: flex; gap: 8px;">
+                                <a href="../contact.php" target="_blank" class="btn-portal" style="padding: 5px 12px; font-size: 0.75rem; width: auto; background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; text-decoration: none;">
+                                    <i class="fas fa-external-link-alt"></i> Preview Contact
+                                </a>
+                                <a href="inquiries.php" class="btn-portal" style="padding: 5px 12px; font-size: 0.75rem; width: auto; background: #2563eb; text-decoration: none;">
+                                    <i class="fas fa-inbox"></i> View Enquiries
+                                </a>
+                            </div>
+                        </h3>
+                        <p style="font-size: 0.82rem; color: #64748b; margin-top: -10px; margin-bottom: 15px;">
+                            Configure contact details shown on <code>contact.php</code>. All visitor queries submitted via this form are automatically logged in <strong>Lead & Contact Queries</strong>.
+                        </p>
+
+                        <div class="portal-form-row">
+                            <div class="portal-input-group">
+                                <label><i class="fas fa-phone-alt" style="color: #2563eb;"></i> Helpline Phone Number</label>
+                                <input type="text" name="settings[contact_phone]" value="<?php echo htmlspecialchars($settings['contact_phone'] ?? '+91 9523012888'); ?>" placeholder="+91 9523012888">
+                            </div>
+                            <div class="portal-input-group">
+                                <label><i class="fab fa-whatsapp" style="color: #16a34a;"></i> WhatsApp Support Number</label>
+                                <input type="text" name="settings[contact_whatsapp]" value="<?php echo htmlspecialchars($settings['contact_whatsapp'] ?? '919523012888'); ?>" placeholder="919523012888 (with country code)">
+                            </div>
+                        </div>
+
+                        <div class="portal-input-group">
+                            <label><i class="fas fa-map-marked-alt" style="color: #ea580c;"></i> Google Map Embed Code (iFrame / Embed URL)</label>
+                            <textarea name="settings[contact_map_iframe]" id="contact_map_iframe" rows="3" class="portal-input" style="width: 100%; font-family: monospace; font-size: 0.82rem; line-height: 1.4; padding: 10px 14px; border: 2px solid #e2e8f0; border-radius: 12px; outline: none;" placeholder='<iframe src="https://www.google.com/maps/embed?..." width="600" height="450" style="border:0;" allowfullscreen="" loading="lazy"></iframe>' oninput="updateMapPreview()"><?php echo htmlspecialchars($settings['contact_map_iframe'] ?? ''); ?></textarea>
+                            <small style="color: #64748b; font-size: 0.76rem; display: block; margin-top: 4px;">
+                                💡 <strong>How to get:</strong> Open Google Maps &gt; Search your campus location &gt; Click <strong>Share</strong> &gt; Select <strong>"Embed a map"</strong> &gt; Copy and paste the <code>&lt;iframe ...&gt;</code> HTML code here.
+                            </small>
+                        </div>
+
+                        <div class="portal-form-row">
+                            <div class="portal-input-group">
+                                <label><i class="fas fa-directions" style="color: #2563eb;"></i> Direct Google Maps Link (for "Open in Maps" button)</label>
+                                <input type="text" name="settings[contact_map_link]" value="<?php echo htmlspecialchars($settings['contact_map_link'] ?? 'https://maps.google.com/?q=Lok+Kala+Bhavan+Imamganj+Gaya+Bihar'); ?>" placeholder="https://maps.google.com/?q=...">
+                            </div>
+                            <div class="portal-input-group">
+                                <label><i class="fas fa-search-location" style="color: #059669;"></i> Fallback Search Query</label>
+                                <input type="text" name="settings[contact_map_query]" value="<?php echo htmlspecialchars($settings['contact_map_query'] ?? 'Imamganj, Gaya, Bihar 824206'); ?>" placeholder="Imamganj, Gaya, Bihar 824206">
+                            </div>
+                        </div>
+
+                        <!-- Live Map Embed Preview -->
+                        <div style="margin-bottom: 20px;">
+                            <label style="font-weight: 700; font-size: 0.82rem; color: #475569; display: block; margin-bottom: 6px;">Live Map Preview:</label>
+                            <div id="mapPreviewContainer" style="height: 180px; border-radius: 14px; overflow: hidden; border: 1.5px solid #cbd5e1; background: #f8fafc; position: relative;">
+                                <?php 
+                                    $saved_map = trim($settings['contact_map_iframe'] ?? '');
+                                    if (!empty($saved_map)):
+                                        if (strpos($saved_map, '<iframe') !== false):
+                                            // Extract src or render directly
+                                            echo preg_replace('/width="[^"]*"/', 'width="100%"', preg_replace('/height="[^"]*"/', 'height="100%"', $saved_map));
+                                        else:
+                                ?>
+                                    <iframe src="<?php echo htmlspecialchars($saved_map); ?>" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+                                <?php 
+                                        endif;
+                                    else: 
+                                ?>
+                                    <iframe src="https://maps.google.com/maps?q=<?= urlencode($settings['contact_map_query'] ?? 'Imamganj, Gaya, Bihar 824206') ?>&t=&z=14&ie=UTF8&iwloc=&output=embed" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe>
+                                <?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="portal-input-group">
+                            <label><i class="fas fa-building" style="color: #475569;"></i> Campus Physical Address</label>
+                            <input type="text" name="settings[contact_address]" value="<?php echo htmlspecialchars($settings['contact_address'] ?? 'Lok Kala Bhavan, Main Road, Imamganj, Gaya, Bihar - 824206'); ?>" placeholder="Full street address">
+                        </div>
+
+                        <div class="portal-form-row" style="margin-bottom: 0;">
+                            <div class="portal-input-group" style="margin-bottom: 0;">
+                                <label><i class="fas fa-clock" style="color: #d97706;"></i> Weekday Visiting Hours</label>
+                                <input type="text" name="settings[contact_hours_weekday]" value="<?php echo htmlspecialchars($settings['contact_hours_weekday'] ?? 'Mon - Sat: 8:00 AM - 7:00 PM'); ?>" placeholder="Mon - Sat: 8:00 AM - 7:00 PM">
+                            </div>
+                            <div class="portal-input-group" style="margin-bottom: 0;">
+                                <label><i class="fas fa-calendar-day" style="color: #d97706;"></i> Sunday Visiting Hours</label>
+                                <input type="text" name="settings[contact_hours_sunday]" value="<?php echo htmlspecialchars($settings['contact_hours_sunday'] ?? 'Sunday: 9:00 AM - 1:00 PM'); ?>" placeholder="Sunday: 9:00 AM - 1:00 PM">
                             </div>
                         </div>
                     </div>
@@ -671,6 +771,40 @@ if (isset($settings['plan_features'])) {
                 <button type="button" class="btn-remove-mode" onclick="this.parentElement.remove()"><i class="fas fa-trash"></i></button>
             `;
             container.appendChild(row);
+        }
+
+        function toggleSecretVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            const icon = btn.querySelector('i');
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('fa-eye');
+                icon.classList.add('fa-eye-slash');
+                btn.style.color = 'var(--portal-blue)';
+            } else {
+                input.type = 'password';
+                icon.classList.remove('fa-eye-slash');
+                icon.classList.add('fa-eye');
+                btn.style.color = '#64748b';
+            }
+        }
+
+        function updateMapPreview() {
+            const rawVal = document.getElementById('contact_map_iframe').value.trim();
+            const previewBox = document.getElementById('mapPreviewContainer');
+            if (!rawVal) {
+                const queryVal = document.querySelector('input[name="settings[contact_map_query]"]')?.value || 'Imamganj, Gaya, Bihar 824206';
+                previewBox.innerHTML = `<iframe src="https://maps.google.com/maps?q=${encodeURIComponent(queryVal)}&t=&z=14&ie=UTF8&iwloc=&output=embed" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe>`;
+                return;
+            }
+
+            if (rawVal.includes('<iframe')) {
+                // Adjust iframe width/height to 100%
+                let cleanIframe = rawVal.replace(/width="[^"]*"/gi, 'width="100%"').replace(/height="[^"]*"/gi, 'height="100%"');
+                previewBox.innerHTML = cleanIframe;
+            } else if (rawVal.startsWith('http://') || rawVal.startsWith('https://')) {
+                previewBox.innerHTML = `<iframe src="${rawVal}" width="100%" height="100%" style="border:0;" allowfullscreen="" loading="lazy"></iframe>`;
+            }
         }
     </script>
 </body>

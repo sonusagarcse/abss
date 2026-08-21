@@ -1,0 +1,20 @@
+# Disable script execution in uploads directory
+# Prevent PHP and other scripts from executing even if uploaded
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag engine off
+</IfModule>
+
+# Block access to executable files
+<FilesMatch "(?i)\.(php|phtml|php3|php4|php5|php7|phar|sh|pl|cgi|exe|py|asp|aspx|shtml|jsp|env|config)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Prevent directory listings
+Options -Indexes -ExecCGI

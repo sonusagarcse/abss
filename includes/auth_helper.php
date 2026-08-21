@@ -5,35 +5,130 @@ require_once __DIR__ . '/security.php';
 require_once __DIR__ . '/../config/db.php';
 
 /**
+ * Generate Secure Admin Remember Token Hash
+ */
+function generate_admin_remember_hash($admin_id, $username) {
+    return hash_hmac('sha256', (int)$admin_id . '|' . strtolower(trim($username)), get_parent_auth_secret());
+}
+
+/**
+ * Set Persistent 1-Year Admin Remember Cookie
+ */
+function set_admin_remember_cookie($admin_id, $username) {
+    $token_hash = generate_admin_remember_hash($admin_id, $username);
+    $cookie_val = (int)$admin_id . ':' . $token_hash;
+    $oneYear = 31536000;
+    
+    $isSecure = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
+        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+        || (isset($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower($_SERVER['HTTP_X_FORWARDED_SSL']) === 'on')
+        || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+
+    setcookie('abss_admin_remember', $cookie_val, [
+        'expires' => time() + $oneYear,
+        'path' => '/',
+        'domain' => '',
+        'secure' => $isSecure,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+}
+
+/**
+ * Clear Persistent Admin Remember Cookie
+ */
+function clear_admin_remember_cookie() {
+    $isSecure = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
+        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+        || (isset($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower($_SERVER['HTTP_X_FORWARDED_SSL']) === 'on')
+        || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+
+    setcookie('abss_admin_remember', '', [
+        'expires' => time() - 86400,
+        'path' => '/',
+        'domain' => '',
+        'secure' => $isSecure,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+    if (isset($_COOKIE['abss_admin_remember'])) {
+        unset($_COOKIE['abss_admin_remember']);
+    }
+}
+
+/**
+ * Verify and Auto-Restore Admin Session from Persistent Cookie
+ */
+function verify_and_restore_admin_session() {
+    if (isset($_SESSION['admin_id']) && (int)$_SESSION['admin_id'] > 0) {
+        return true;
+    }
+
+    if (isset($_COOKIE['abss_admin_remember'])) {
+        $cookie_data = explode(':', $_COOKIE['abss_admin_remember'], 2);
+        if (count($cookie_data) === 2) {
+            $admin_id = (int)$cookie_data[0];
+            $provided_hash = $cookie_data[1];
+
+            if ($admin_id > 0) {
+                $conn = getDB();
+                $stmt = $conn->prepare("SELECT id, username FROM users WHERE id = ? LIMIT 1");
+                $stmt->bind_param("i", $admin_id);
+                $stmt->execute();
+                $res = $stmt->get_result();
+
+                if ($user = $res->fetch_assoc()) {
+                    $expected_hash = generate_admin_remember_hash($user['id'], $user['username']);
+                    if (hash_equals($expected_hash, $provided_hash)) {
+                        $_SESSION['admin_id'] = (int)$user['id'];
+                        $_SESSION['username'] = $user['username'];
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/**
  * Authenticate Administrator Login
  */
-function authenticate_admin($username, $password) {
+function authenticate_admin($username, $password, $remember = true) {
     $conn = getDB();
-    $stmt = $conn->prepare("SELECT id, username, password FROM users WHERE username = ? LIMIT 1");
-    $stmt->bind_param("s", $username);
+    $clean_username = trim($username);
+    
+    // Case-insensitive lookup to handle mobile keyboard auto-capitalization (e.g., "Admin" vs "admin")
+    $stmt = $conn->prepare("SELECT id, username, password FROM users WHERE LOWER(username) = LOWER(?) LIMIT 1");
+    $stmt->bind_param("s", $clean_username);
     $stmt->execute();
     $result = $stmt->get_result();
 
     if ($user = $result->fetch_assoc()) {
         if (password_verify($password, $user['password'])) {
             session_regenerate_id(false);
-            $_SESSION['admin_id'] = $user['id'];
+            $_SESSION['admin_id'] = (int)$user['id'];
             $_SESSION['username'] = $user['username'];
+            
+            if ($remember) {
+                set_admin_remember_cookie($user['id'], $user['username']);
+            }
+            
             if (function_exists('log_activity')) {
                 log_activity('login', "Admin successfully logged in: " . $user['username']);
             }
             return ['success' => true, 'redirect' => 'dashboard.php'];
         } else {
             if (function_exists('log_activity')) {
-                log_activity('login_failed', "Failed admin login: incorrect password for " . $username);
+                log_activity('login_failed', "Failed admin login: incorrect password for " . $clean_username);
             }
-            return ['success' => false, 'error' => 'Invalid password. Please try again.'];
+            return ['success' => false, 'error' => 'Invalid password. Please verify and try again.'];
         }
     }
     if (function_exists('log_activity')) {
-        log_activity('login_failed', "Failed admin login: username not found " . $username);
+        log_activity('login_failed', "Failed admin login: username not found " . $clean_username);
     }
-    return ['success' => false, 'error' => 'No admin account found with this username.'];
+    return ['success' => false, 'error' => 'No admin account found with username "' . htmlspecialchars($clean_username) . '".'];
 }
 
 /**

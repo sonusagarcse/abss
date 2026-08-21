@@ -138,7 +138,7 @@ $is_notif_page = (strpos($_SERVER['PHP_SELF'], 'notifications') !== false || $cu
         </li>
         <li class="nav-item">
             <a href="<?php echo $admin_url; ?>schools.php" class="nav-link <?php echo $current_page == 'schools.php' ? 'active' : ''; ?>">
-                <i class="fas fa-school"></i> Target Schools
+                <i class="fas fa-graduation-cap"></i> Coaching Programs
             </a>
         </li>
         <li class="nav-item">
