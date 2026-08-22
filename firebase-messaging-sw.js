@@ -15,17 +15,29 @@ const messaging = firebase.messaging();
 
 messaging.onBackgroundMessage(function (payload) {
     console.log('[ABSS FCM ServiceWorker] Background notification received:', payload);
-    const notificationTitle = payload.notification ? payload.notification.title : (payload.data ? payload.data.title : 'ABSS Notification');
+    
+    // If the payload already contains a notification object, the browser SDK renders it automatically.
+    // Only manually trigger showNotification for data-only messages to avoid duplicate notifications.
+    if (payload.notification) {
+        console.log('[ABSS FCM ServiceWorker] Notification payload already rendered by browser SDK.');
+        return;
+    }
+
+    const notificationTitle = (payload.data && payload.data.title) ? payload.data.title : 'ABSS Notification';
+    const tagKey = (payload.data && payload.data.tag) ? payload.data.tag : ('abss_tag_' + Date.now());
+
     const notificationOptions = {
-        body: payload.notification ? payload.notification.body : (payload.data ? payload.data.message : ''),
+        body: (payload.data && (payload.data.body || payload.data.message)) ? (payload.data.body || payload.data.message) : '',
         icon: (payload.data && payload.data.image_url) ? payload.data.image_url : '/abss/assets/logo.png',
         badge: '/abss/assets/logo.png',
+        tag: tagKey,
+        renotify: false,
         data: {
-            url: (payload.data && payload.data.click_url) ? payload.data.click_url : (payload.webpush && payload.webpush.fcm_options ? payload.webpush.fcm_options.link : '/abss/')
+            url: (payload.data && (payload.data.click_url || payload.data.url)) ? (payload.data.click_url || payload.data.url) : '/abss/'
         }
     };
 
-    self.registration.showNotification(notificationTitle, notificationOptions);
+    return self.registration.showNotification(notificationTitle, notificationOptions);
 });
 
 self.addEventListener('notificationclick', function(event) {

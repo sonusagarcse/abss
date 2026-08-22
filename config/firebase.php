@@ -178,6 +178,8 @@ function buildFcmMessagePayload($target, $title, $body, $image = null, $url = nu
     $baseUrl  = defined('APP_URL') ? rtrim(APP_URL, '/') : '/abss';
     $iconUrl  = $baseUrl . '/assets/logo.png';
 
+    $tagKey = 'abss_notif_' . substr(md5($strTitle . $strBody . (string)time()), 0, 12);
+
     $message = [
         $targetKey => $cleanTarget,
         "notification" => [
@@ -201,10 +203,12 @@ function buildFcmMessagePayload($target, $title, $body, $image = null, $url = nu
             "clickUrl" => $strUrl,
             "picture" => $strImage,
             "sound" => "default",
+            "tag" => $tagKey,
             "timestamp" => (string)time()
         ],
         "android" => [
             "priority" => "HIGH",
+            "collapse_key" => $tagKey,
             "direct_boot_ok" => true,
             "notification" => [
                 "title" => $strTitle,
@@ -217,6 +221,7 @@ function buildFcmMessagePayload($target, $title, $body, $image = null, $url = nu
                 "default_light_settings" => true,
                 "notification_priority" => "PRIORITY_MAX",
                 "visibility" => "PUBLIC",
+                "tag" => $tagKey,
                 "channel_id" => "fcm_notification_channel"
             ],
             "data" => [
@@ -227,18 +232,22 @@ function buildFcmMessagePayload($target, $title, $body, $image = null, $url = nu
                 "click_url" => $strUrl,
                 "clickUrl" => $strUrl,
                 "image" => $strImage,
-                "imageUrl" => $strImage
+                "imageUrl" => $strImage,
+                "tag" => $tagKey
             ]
         ],
         "webpush" => [
             "headers" => [
-                "Urgency" => "high"
+                "Urgency" => "high",
+                "Topic" => substr(preg_replace('/[^a-zA-Z0-9_-]/', '', $tagKey), 0, 32)
             ],
             "notification" => [
                 "title" => $strTitle,
                 "body" => $strBody,
                 "icon" => $iconUrl,
                 "badge" => $iconUrl,
+                "tag" => $tagKey,
+                "renotify" => false,
                 "requireInteraction" => true
             ],
             "fcm_options" => [
@@ -247,7 +256,8 @@ function buildFcmMessagePayload($target, $title, $body, $image = null, $url = nu
         ],
         "apns" => [
             "headers" => [
-                "apns-priority" => "10"
+                "apns-priority" => "10",
+                "apns-collapse-id" => $tagKey
             ],
             "payload" => [
                 "aps" => [
@@ -503,22 +513,11 @@ function sendTopicFcmNotification($topicName, $title, $body, $image = null, $url
  * Broadcast FCM Campaign across all standard Android APK topics concurrently
  */
 function broadcastFcmCampaignToAllTopics($title, $body, $image = null, $url = null, $category = 'General') {
-    $topics = [
-        'all',
-        'global',
-        'news',
-        'notice',
-        'android',
-        'all_users',
-        'general',
-        'broadcast',
-        'fcm_broadcast',
-        'abss',
-        'abss_notification',
-        'abss_all',
-        'app',
-        'users'
+    // Send to unified primary topic 'all'
+    $result = sendTopicFcmNotification('all', $title, $body, $image, $url, $category);
+    return [
+        'success_count' => ($result['success'] ? 1 : 0),
+        'failed_count' => ($result['success'] ? 0 : 1),
+        'results' => ['all' => $result]
     ];
-    $result = sendFcmMultiTargets($topics, $title, $body, $image, $url, $category, true);
-    return $result;
 }

@@ -24,18 +24,14 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
             $failed_count = 0;
             $cleaned_tokens = 0;
 
-            // 1. BROADCAST TO ALL FIREBASE TOPICS (all, global, news, notice, android)
-            if ($target === 'all') {
-                broadcastFcmCampaignToAllTopics($title, $message, $image, $url, $category);
-                $sent_count++;
-            }
-
-            // 2. DISPATCH TO SPECIFIC OR STORED DEVICE TOKENS IN DATABASE
+            // Fetch target tokens or execute single dispatch mode
             $tokens = [];
             $custom_token = trim($_POST['custom_token'] ?? '');
+            $direct_result_msg = '';
 
             if ($target === 'custom' && !empty($custom_token)) {
                 $tokens[] = ['id' => 0, 'token' => $custom_token];
+                $targetAudience = 'Direct Custom Token';
             } elseif ($target === 'selected' && !empty($selected_tokens)) {
                 if (is_string($selected_tokens)) {
                     $selected_tokens = explode(',', $selected_tokens);
@@ -51,17 +47,39 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
                         $tokens[] = $row;
                     }
                 }
-            } elseif ($target === 'all') {
+                $targetAudience = 'Selected Tokens (' . count($tokens) . ')';
+            } elseif ($target === 'topic') {
+                // Topic-only broadcast
+                $topicRes = sendTopicFcmNotification('all', $title, $message, $image, $url, $category);
+                if ($topicRes['success']) {
+                    $sent_count++;
+                    $direct_result_msg = "Topic broadcast delivered successfully";
+                } else {
+                    $failed_count++;
+                    $direct_result_msg = "Topic broadcast failed: " . ($topicRes['error'] ?? 'Unknown');
+                }
+                $targetAudience = 'FCM Topic (all)';
+            } else {
+                // Broadcast to all registered app devices (Unique Token Dispatch)
                 $res = $conn->query("SELECT id, token FROM fcm_tokens ORDER BY id DESC");
                 if ($res) {
                     while ($row = $res->fetch_assoc()) {
                         $tokens[] = $row;
                     }
                 }
+                // If no tokens in database yet, broadcast to 'all' topic
+                if (empty($tokens)) {
+                    $topicRes = sendTopicFcmNotification('all', $title, $message, $image, $url, $category);
+                    if ($topicRes['success']) {
+                        $sent_count++;
+                        $direct_result_msg = "Topic broadcast delivered";
+                    } else {
+                        $failed_count++;
+                        $direct_result_msg = "Topic broadcast failed";
+                    }
+                }
+                $targetAudience = 'All Registered Devices (' . count($tokens) . ')';
             }
-
-            $expired_ids = [];
-            $direct_result_msg = '';
 
             foreach ($tokens as $item) {
                 $fcmToken = $item['token'];
@@ -89,7 +107,9 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['dispatch_notification
             }
 
             // RECORD CAMPAIGN LOG IN NOTIFICATION_HISTORY
-            $targetAudience = $target === 'custom' ? 'Direct Custom Token' : (($target === 'selected' && !empty($selected_tokens)) ? 'Selected Tokens (' . count($tokens) . ')' : 'All App Users (FCM Broadcast Topic)');
+            if (empty($targetAudience)) {
+                $targetAudience = $target === 'custom' ? 'Direct Custom Token' : (($target === 'selected' && !empty($selected_tokens)) ? 'Selected Tokens (' . count($tokens) . ')' : 'All App Users');
+            }
             $totalSentLog = max(1, $sent_count);
             $histStmt = $conn->prepare("
                 INSERT INTO notification_history (title, message, image, url, category, target_audience, sent_count, failed_count) 

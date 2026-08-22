@@ -20,6 +20,7 @@ $dues_query = $conn->query("
         s.guardian_relationship,
         s.phone,
         s.guardian_email,
+        p.email AS parent_email,
         s.home_address,
         s.city,
         s.state,
@@ -30,13 +31,16 @@ $dues_query = $conn->query("
         s.target_school,
         s.base_fee,
         s.security_amount,
+        COALESCE(unpaid.latest_bill_id, 0) AS latest_bill_id,
         COALESCE(unpaid.total_due, 0) AS total_due,
         COALESCE(unpaid.unpaid_count, 0) AS unpaid_count,
         COALESCE(unpaid.due_months, '') AS due_months
     FROM students s
+    LEFT JOIN parents p ON s.parent_id = p.id
     INNER JOIN (
         SELECT 
             student_id,
+            MAX(id) AS latest_bill_id,
             SUM(amount) AS total_due,
             COUNT(id) AS unpaid_count,
             GROUP_CONCAT(DISTINCT month_for ORDER BY billing_date ASC SEPARATOR ', ') AS due_months
@@ -96,6 +100,7 @@ $parent_portal_url = "$base_app_url/parent/login.php";
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dues & Arrears Statement | ABSS Admin Portal</title>
     <?php include 'includes/head_css.php'; ?>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
         /* Dues Dashboard & Table Styling */
         .dues-header-row {
@@ -256,6 +261,96 @@ $parent_portal_url = "$base_app_url/parent/login.php";
         .mode-hostler { background: #f3e8ff; color: #7c3aed; }
         .mode-day { background: #dcfce7; color: #166534; }
 
+        .act-btn {
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .act-btn:hover {
+            transform: translateY(-2px);
+            filter: brightness(0.95);
+        }
+
+        /* Email Due Bill Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .modal-card {
+            background: #ffffff;
+            border-radius: 24px;
+            max-width: 540px;
+            width: 100%;
+            padding: 30px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.25);
+            border: 1px solid #e2e8f0;
+            position: relative;
+            animation: modalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        @keyframes modalPop {
+            0% { transform: scale(0.94); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .modal-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .modal-title {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .modal-close-btn {
+            background: #f1f5f9;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            color: #64748b;
+            font-size: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+        .modal-close-btn:hover {
+            background: #fee2e2;
+            color: #dc2626;
+        }
+        .modal-info-box {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 20px;
+        }
+
         /* Print Header Box (Hidden on Web, Visible on Print) */
         .print-only-header {
             display: none;
@@ -368,8 +463,17 @@ $parent_portal_url = "$base_app_url/parent/login.php";
             </div>
 
             <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                <button type="button" class="btn-portal" onclick="window.print()" style="background: #0f172a; color: #ffffff; padding: 12px 20px;">
-                    <i class="fas fa-print"></i> Print / Download PDF
+                <button type="button" class="btn-portal" onclick="bulkSendDueEmails()" style="background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #ffffff; padding: 12px 18px; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);">
+                    <i class="fas fa-paper-plane"></i> Email All Dues &amp; PDFs
+                </button>
+                <?php $all_bill_ids = array_filter(array_column($dues_list, 'latest_bill_id')); ?>
+                <?php if (!empty($all_bill_ids)): ?>
+                    <a href="bulk_print.php?ids=<?php echo implode(',', $all_bill_ids); ?>" target="_blank" class="btn-portal" style="background: #0f172a; color: #ffffff; padding: 12px 18px; text-decoration: none;">
+                        <i class="fas fa-file-pdf"></i> Download All Invoices
+                    </a>
+                <?php endif; ?>
+                <button type="button" class="btn-portal" onclick="window.print()" style="background: #475569; color: #ffffff; padding: 12px 18px;">
+                    <i class="fas fa-print"></i> Print Statement
                 </button>
                 <button type="button" class="btn-portal" onclick="exportDuesToCSV()" style="background: #ffffff; color: #0284c7; border: 2px solid #38bdf8; box-shadow: none; padding: 12px 18px;">
                     <i class="fas fa-file-csv"></i> Export CSV
@@ -586,19 +690,43 @@ $parent_portal_url = "$base_app_url/parent/login.php";
 
                                     <td class="no-print" style="text-align: right;">
                                         <div style="display: inline-flex; align-items: center; gap: 6px;">
+                                            <!-- Direct Email Bill & PDF -->
+                                            <?php 
+                                            $eff_email = $row['guardian_email'] ?: ($row['parent_email'] ?? ''); 
+                                            $latest_bid = (int)($row['latest_bill_id'] ?? 0);
+                                            ?>
+                                            <button type="button" 
+                                                    class="act-btn" 
+                                                    onclick="openEmailDuesModal(<?php echo $row['id']; ?>, '<?php echo addslashes($s_name); ?>', '<?php echo addslashes($p_name); ?>', '<?php echo addslashes($eff_email); ?>', <?php echo (float)$row['total_due']; ?>, '<?php echo addslashes($d_months); ?>', <?php echo (int)$row['unpaid_count']; ?>, <?php echo $latest_bid; ?>)" 
+                                                    style="background: #eff6ff; color: #1d4ed8; width: 34px; height: 34px; border-radius: 8px;" 
+                                                    title="Email Official Fee Invoice &amp; Statement PDF">
+                                                <i class="fas fa-envelope-open-text"></i>
+                                            </button>
+
+                                            <!-- Direct Download PDF Statement (Exact layout from view_bill.php) -->
+                                            <a href="<?php echo ($latest_bid > 0 ? 'ajax_send_due_email.php?action=download_bill_pdf&bill_id=' . $latest_bid : 'ajax_send_due_email.php?action=download_due_pdf&student_id=' . $row['id']); ?>" 
+                                               target="_blank" 
+                                               class="act-btn" 
+                                               style="background: #fee2e2; color: #b91c1c; width: 34px; height: 34px; border-radius: 8px;" 
+                                               title="Download Official Fee Invoice PDF (view_bill.php layout)">
+                                                <i class="fas fa-file-pdf"></i>
+                                            </a>
+
                                             <?php if (!empty($phone_digits)): ?>
                                                 <a href="https://api.whatsapp.com/send?phone=<?php echo (strlen($phone_digits) == 10 ? '91' . $phone_digits : $phone_digits); ?>&text=<?php echo $encoded_wa; ?>" 
                                                    target="_blank" 
                                                    class="act-btn" 
-                                                   style="background: #dcfce7; color: #15803d; width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;" 
+                                                   style="background: #dcfce7; color: #15803d; width: 34px; height: 34px; border-radius: 8px;" 
                                                    title="Send Due Fee WhatsApp Alert">
                                                     <i class="fab fa-whatsapp"></i>
                                                 </a>
                                             <?php endif; ?>
-                                            <a href="fees.php" 
+
+                                            <a href="<?php echo ($latest_bid > 0 ? 'view_bill.php?id=' . $latest_bid : 'fees.php'); ?>" 
+                                               target="_blank"
                                                class="act-btn" 
-                                               style="background: #eff6ff; color: var(--portal-blue); width: 34px; height: 34px; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;" 
-                                               title="View in Fee Ledger">
+                                               style="background: #f1f5f9; color: var(--portal-dark); width: 34px; height: 34px; border-radius: 8px;" 
+                                               title="View Official Fee Invoice (view_bill.php)">
                                                 <i class="fas fa-file-invoice"></i>
                                             </a>
                                         </div>
@@ -706,6 +834,250 @@ $parent_portal_url = "$base_app_url/parent/login.php";
             link.click();
             document.body.removeChild(link);
         }
+
+        // Email Due Statement Modal Logic
+        function openEmailDuesModal(studentId, studentName, parentName, email, totalDue, dueMonths, unpaidCount, billId) {
+            document.getElementById('modalStudentId').value = studentId;
+            document.getElementById('modalBillId').value = billId || 0;
+            document.getElementById('modalStudentName').textContent = studentName;
+            document.getElementById('modalParentName').textContent = parentName;
+            document.getElementById('modalTotalDue').textContent = '₹ ' + Number(totalDue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            document.getElementById('modalDueMonths').textContent = dueMonths || 'Current Session';
+            document.getElementById('modalUnpaidCount').textContent = (unpaidCount || 1) + ' Bill(s)';
+            
+            const emailInput = document.getElementById('modalRecipientEmail');
+            emailInput.value = email || '';
+            
+            const errBox = document.getElementById('modalErrorBox');
+            if (errBox) errBox.style.display = 'none';
+
+            const btn = document.getElementById('btnSubmitEmailDue');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-paper-plane"></i> Send Email with Bill PDF';
+
+            document.getElementById('emailDueModal').style.display = 'flex';
+            if (!email) {
+                emailInput.focus();
+            }
+        }
+
+        function closeEmailDuesModal() {
+            document.getElementById('emailDueModal').style.display = 'none';
+        }
+
+        // Close on backdrop click
+        document.addEventListener('click', function(e) {
+            const modal = document.getElementById('emailDueModal');
+            if (e.target === modal) {
+                closeEmailDuesModal();
+            }
+        });
+
+        // Submit Single Email Dispatch via AJAX with exact view_bill.php Receipt PDF
+        function submitEmailDueForm(e) {
+            if (e) e.preventDefault();
+
+            const studentId = document.getElementById('modalStudentId').value;
+            const billId = document.getElementById('modalBillId').value;
+            const email = (document.getElementById('modalRecipientEmail').value || '').trim();
+            const btn = document.getElementById('btnSubmitEmailDue');
+            const errBox = document.getElementById('modalErrorBox');
+
+            if (!email || !email.includes('@')) {
+                errBox.style.display = 'block';
+                errBox.textContent = 'Please provide a valid recipient email address.';
+                return false;
+            }
+
+            errBox.style.display = 'none';
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rendering Receipt PDF &amp; Sending...';
+
+            const formData = new FormData();
+            formData.append('action', 'send_student_due_email');
+            formData.append('student_id', studentId);
+            if (billId && parseInt(billId) > 0) {
+                formData.append('bill_id', billId);
+            }
+            formData.append('email', email);
+
+            const dispatchEmail = (fd) => {
+                fetch('ajax_send_due_email.php', {
+                    method: 'POST',
+                    body: fd
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.success) {
+                        btn.innerHTML = '<i class="fas fa-check"></i> Dispatched!';
+                        setTimeout(() => {
+                            closeEmailDuesModal();
+                            alert('✅ ' + data.message);
+                        }, 500);
+                    } else {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Try Again';
+                        errBox.style.display = 'block';
+                        errBox.textContent = (data && data.error) ? data.error : 'Failed to dispatch email.';
+                    }
+                })
+                .catch(err => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-paper-plane"></i> Try Again';
+                    errBox.style.display = 'block';
+                    errBox.textContent = 'Network or server error: ' + err.message;
+                });
+            };
+
+            // If a bill_id exists, fetch its view_bill.php receipt DOM & render to base64 PDF using html2pdf
+            if (billId && parseInt(billId) > 0 && typeof html2pdf !== 'undefined') {
+                fetch(`view_bill.php?id=${billId}&embed=1`)
+                .then(res => res.text())
+                .then(html => {
+                    const tempDiv = document.createElement('div');
+                    tempDiv.style.cssText = 'position:absolute;left:-9999px;top:-9999px;width:800px;background:#fff;';
+                    tempDiv.innerHTML = html;
+                    document.body.appendChild(tempDiv);
+
+                    const targetContainer = tempDiv.querySelector('.receipt-container') || tempDiv;
+                    const opt = {
+                        margin: [5, 5, 5, 5],
+                        filename: `Invoice_ABSS_${billId}.pdf`,
+                        image: { type: 'jpeg', quality: 0.98 },
+                        html2canvas: { scale: 2, useCORS: true, logging: false },
+                        jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                    };
+
+                    return html2pdf().set(opt).from(targetContainer).outputPdf('datauristring').then(pdfDataUri => {
+                        document.body.removeChild(tempDiv);
+                        formData.append('pdf_base64', pdfDataUri);
+                        dispatchEmail(formData);
+                    });
+                })
+                .catch(err => {
+                    console.warn("DOM PDF rendering fallback:", err);
+                    dispatchEmail(formData);
+                });
+            } else {
+                dispatchEmail(formData);
+            }
+
+            return false;
+        }
+
+        // Bulk Send Due Statements & Bill PDFs
+        function bulkSendDueEmails() {
+            const count = document.querySelectorAll('#duesTable tbody tr.dues-row').length;
+            if (count === 0) {
+                alert('No students with pending dues available to email.');
+                return;
+            }
+
+            if (!confirm(`Are you sure you want to generate Bill PDFs and email official Dues Statements to all ${count} student parents/guardians with registered email addresses?`)) {
+                return;
+            }
+
+            const overlay = document.createElement('div');
+            overlay.id = 'bulkLoadingOverlay';
+            overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(15,23,42,0.85);backdrop-filter:blur(6px);z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:20px;';
+            overlay.innerHTML = `
+                <i class="fas fa-paper-plane fa-spin fa-3x" style="color:#60a5fa;margin-bottom:16px;"></i>
+                <h2 style="font-size:1.5rem;margin:0 0 8px 0;font-weight:800;">Generating PDFs &amp; Dispatched Emails...</h2>
+                <p style="color:#cbd5e1;font-size:0.95rem;max-width:400px;margin:0;">Please wait while official A4 Bill PDFs are rendered and delivered to student parents via SMTP.</p>
+            `;
+            document.body.appendChild(overlay);
+
+            const formData = new FormData();
+            formData.append('action', 'bulk_send_due_emails');
+
+            fetch('ajax_send_due_email.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.body.removeChild(overlay);
+                if (data && data.success) {
+                    alert('🎉 ' + data.message);
+                } else {
+                    alert('⚠️ ' + ((data && data.error) ? data.error : 'Bulk dispatch encountered an error.'));
+                }
+            })
+            .catch(err => {
+                if (document.getElementById('bulkLoadingOverlay')) {
+                    document.body.removeChild(overlay);
+                }
+                alert('Connection or dispatch error: ' + err.message);
+            });
+        }
     </script>
+
+    <!-- Email Due Statement & Bill PDF Modal -->
+    <div class="modal-overlay" id="emailDueModal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 class="modal-title">
+                    <i class="fas fa-envelope-open-text" style="color:#2563eb;"></i> Email Fee Bill &amp; Statement
+                </h3>
+                <button type="button" class="modal-close-btn" onclick="closeEmailDuesModal()">&times;</button>
+            </div>
+
+            <div id="modalErrorBox" style="display:none;background:#fee2e2;color:#b91c1c;padding:10px 14px;border-radius:10px;font-size:0.85rem;font-weight:700;margin-bottom:15px;border:1px solid #fca5a5;"></div>
+
+            <div class="modal-info-box">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:0.85rem;">
+                    <div>
+                        <span style="color:#64748b;font-weight:700;display:block;font-size:0.75rem;text-transform:uppercase;">Student</span>
+                        <strong id="modalStudentName" style="color:#0f172a;font-size:0.95rem;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color:#64748b;font-weight:700;display:block;font-size:0.75rem;text-transform:uppercase;">Parent / Guardian</span>
+                        <strong id="modalParentName" style="color:#0f172a;font-size:0.95rem;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color:#64748b;font-weight:700;display:block;font-size:0.75rem;text-transform:uppercase;">Total Due Amount</span>
+                        <strong id="modalTotalDue" style="color:#dc2626;font-size:1.1rem;font-weight:900;">-</strong>
+                    </div>
+                    <div>
+                        <span style="color:#64748b;font-weight:700;display:block;font-size:0.75rem;text-transform:uppercase;">Unpaid Bills</span>
+                        <strong id="modalUnpaidCount" style="color:#2563eb;">-</strong>
+                    </div>
+                </div>
+                <div style="margin-top:10px;padding-top:10px;border-top:1px solid #e2e8f0;font-size:0.82rem;color:#475569;">
+                    <span style="font-weight:700;">Due For Months:</span> <span id="modalDueMonths" style="font-weight:800;color:#1e293b;">-</span>
+                </div>
+            </div>
+
+            <form onsubmit="return submitEmailDueForm(event)">
+                <input type="hidden" id="modalStudentId" value="">
+                <input type="hidden" id="modalBillId" value="0">
+
+                <div style="margin-bottom:18px;">
+                    <label style="display:block;font-size:0.82rem;font-weight:800;color:#0f172a;text-transform:uppercase;margin-bottom:6px;">
+                        Guardian / Parent Email Address <span style="color:#ef4444;">*</span>
+                    </label>
+                    <input type="email" id="modalRecipientEmail" required placeholder="parent@example.com" 
+                           style="width:100%;padding:12px 14px;border-radius:12px;border:2px solid #cbd5e1;font-size:0.95rem;font-weight:600;color:#0f172a;box-sizing:border-box;outline:none;">
+                    <small style="color:#64748b;font-size:0.76rem;margin-top:4px;display:block;">The generated official PDF Statement will be attached directly to this email.</small>
+                </div>
+
+                <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px 14px;margin-bottom:20px;font-size:0.82rem;color:#1e40af;display:flex;align-items:center;gap:10px;">
+                    <i class="fas fa-file-pdf" style="font-size:1.4rem;color:#2563eb;"></i>
+                    <div>
+                        <b>Automated A4 PDF Attachment:</b> Includes complete itemized fee breakup, overdue fine calculation, and school bank/portal instructions.
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:10px;justify-content:flex-end;">
+                    <button type="button" class="btn-portal" onclick="closeEmailDuesModal()" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;box-shadow:none;padding:10px 18px;">
+                        Cancel
+                    </button>
+                    <button type="submit" id="btnSubmitEmailDue" class="btn-portal" style="background:linear-gradient(135deg, #2563eb, #1d4ed8);color:#fff;padding:10px 22px;border:none;">
+                        <i class="fas fa-paper-plane"></i> Send Email with Bill PDF
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
 </body>
 </html>

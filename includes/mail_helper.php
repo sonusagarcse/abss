@@ -4,15 +4,16 @@
 require_once __DIR__ . '/../config/db.php';
 
 /**
- * Custom SMTP Client that sends emails using direct TCP socket stream connections.
+ * Custom SMTP Client that sends emails using direct TCP socket stream connections with optional attachments.
  * Falls back to PHP's built-in mail() function if SMTP settings are not provided.
  *
  * @param string $to Recipient Email Address
  * @param string $subject Email Subject Line
  * @param string $message HTML Email Body
+ * @param array $attachments Array of attachments: [['filename' => 'file.pdf', 'content' => $binaryData, 'mime' => 'application/pdf']] or string filepaths
  * @return bool True if successfully dispatched, False otherwise.
  */
-function send_smtp_email($to, $subject, $message) {
+function send_smtp_email($to, $subject, $message, $attachments = []) {
     $settings = getAllSettings();
     
     $host = isset($settings['smtp_host']) ? trim($settings['smtp_host']) : '';
@@ -32,16 +33,64 @@ function send_smtp_email($to, $subject, $message) {
     $from_email = 'no-reply@' . $host_domain;
     $reply_to = isset($settings['email']) ? trim($settings['email']) : 'abssimamganj@gmail.com';
 
+    // Normalize Attachments
+    $normalizedAttachments = [];
+    if (!empty($attachments)) {
+        foreach ($attachments as $att) {
+            if (is_string($att) && file_exists($att)) {
+                $filename = basename($att);
+                $content = file_get_contents($att);
+                $mime = mime_content_type($att) ?: 'application/octet-stream';
+                $normalizedAttachments[] = ['filename' => $filename, 'content' => $content, 'mime' => $mime];
+            } elseif (is_array($att) && !empty($att['content'])) {
+                $filename = $att['filename'] ?? ('attachment_' . time() . '.pdf');
+                $mime = $att['mime'] ?? 'application/pdf';
+                $normalizedAttachments[] = ['filename' => $filename, 'content' => $att['content'], 'mime' => $mime];
+            }
+        }
+    }
+
+    $hasAttachments = !empty($normalizedAttachments);
+    $boundary = '----=_NextPart_' . md5(uniqid((string)time(), true));
+
+    // Base64 encode email headers to prevent encoding/spam issues
+    $encoded_subject = "=?UTF-8?B?" . base64_encode($subject) . "?=";
+    $encoded_from = "=?UTF-8?B?" . base64_encode($from_name) . "?= <" . (!empty($user) ? $user : $from_email) . ">";
+
+    // Build MIME Body
+    if ($hasAttachments) {
+        $bodyContent = "--" . $boundary . "\r\n";
+        $bodyContent .= "Content-Type: text/html; charset=UTF-8\r\n";
+        $bodyContent .= "Content-Transfer-Encoding: 8bit\r\n\r\n";
+        $bodyContent .= $message . "\r\n\r\n";
+
+        foreach ($normalizedAttachments as $att) {
+            $attFilename = preg_replace('/[^a-zA-Z0-9_\.-]/', '_', $att['filename']);
+            $bodyContent .= "--" . $boundary . "\r\n";
+            $bodyContent .= "Content-Type: " . $att['mime'] . "; name=\"" . $attFilename . "\"\r\n";
+            $bodyContent .= "Content-Transfer-Encoding: base64\r\n";
+            $bodyContent .= "Content-Disposition: attachment; filename=\"" . $attFilename . "\"\r\n\r\n";
+            $bodyContent .= chunk_split(base64_encode($att['content'])) . "\r\n";
+        }
+        $bodyContent .= "--" . $boundary . "--\r\n";
+    } else {
+        $bodyContent = $message;
+    }
+
     // If SMTP credentials are not filled, fall back to native PHP mail() function
     if (empty($host) || empty($user) || empty($pass)) {
         error_log("ABSS SMTP System: Mail Server credentials not configured. Falling back to native PHP mail() with SPF domain alignment.");
         $headers = "MIME-Version: 1.0\r\n";
-        $headers .= "Content-type: text/html; charset=UTF-8\r\n";
-        $headers .= "From: =?UTF-8?B?" . base64_encode($from_name) . "?= <$from_email>\r\n";
+        if ($hasAttachments) {
+            $headers .= "Content-Type: multipart/mixed; boundary=\"" . $boundary . "\"\r\n";
+        } else {
+            $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
+        }
+        $headers .= "From: $encoded_from\r\n";
         $headers .= "Reply-To: <$reply_to>\r\n";
         $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
         
-        return @mail($to, $subject, $message, $headers);
+        return @mail($to, $subject, $bodyContent, $headers);
     }
     
     // Direct SMTP Socket implementation
@@ -125,13 +174,9 @@ function send_smtp_email($to, $subject, $message) {
     $writeCommand("DATA");
     $readResponse();
     
-    // Base64 encode email headers to prevent encoding/spam issues
-    $encoded_subject = "=?UTF-8?B?" . base64_encode($subject) . "?=";
-    $encoded_from = "=?UTF-8?B?" . base64_encode($from_name) . "?= <$user>";
-    
     $headers = [
         "MIME-Version: 1.0",
-        "Content-Type: text/html; charset=UTF-8",
+        $hasAttachments ? "Content-Type: multipart/mixed; boundary=\"$boundary\"" : "Content-Type: text/html; charset=UTF-8",
         "From: $encoded_from",
         "To: <$to>",
         "Subject: $encoded_subject",
@@ -141,7 +186,7 @@ function send_smtp_email($to, $subject, $message) {
     ];
     
     // Payload stream transmission
-    $payload = implode("\r\n", $headers) . "\r\n\r\n" . $message . "\r\n.\r\n";
+    $payload = implode("\r\n", $headers) . "\r\n\r\n" . $bodyContent . "\r\n.\r\n";
     $writeCommand($payload);
     $data_res = $readResponse();
     
@@ -417,5 +462,59 @@ function get_ticket_resolved_template($parent_name, $subject, $ticket_id) {
     </div>';
     
     return get_base_template("Support Ticket Resolved", $content);
+}
+
+/**
+ * Generates Student Fee Dues & Arrears Statement HTML email with details and notification of attached PDF.
+ */
+function get_student_dues_email_template($student_name, $total_due, $due_months, $unpaid_count, $fine_amount = 0, $portal_url = '', $parent_name = '') {
+    $parent_salutation = !empty($parent_name) ? "Dear " . htmlspecialchars($parent_name) . " (Parent/Guardian)," : "Dear Parents / Guardians,";
+    $month_str = !empty($due_months) ? htmlspecialchars($due_months) : date('F Y');
+    
+    $content = '
+    <div class="greeting">' . $parent_salutation . '</div>
+    <p>This is an official fee reminder regarding pending tuition and academic dues for <b>' . htmlspecialchars($student_name) . '</b> at <b>Awasiya Bal Shikshan Sansthan (ABSS)</b>. Please find the statement summary below:</p>
+    
+    <div class="info-card">
+        <table role="presentation" width="100%">
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase;">Student Name</td>
+                <td style="padding: 10px 0; font-weight:800; color:#0d47a1; text-align:right;">' . htmlspecialchars($student_name) . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Total Outstanding Due</td>
+                <td style="padding: 10px 0; font-weight:900; color:#dc2626; text-align:right; font-size:19px; border-top:1px solid #eef2ff;">₹ ' . number_format($total_due, 2) . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Unpaid Invoices</td>
+                <td style="padding: 10px 0; font-weight:800; color:#0d47a1; text-align:right; border-top:1px solid #eef2ff;">' . (int)$unpaid_count . ' Month Bill(s)</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Due For Period</td>
+                <td style="padding: 10px 0; font-weight:800; color:#4338ca; text-align:right; border-top:1px solid #eef2ff;">' . $month_str . '</td>
+            </tr>';
+
+    if ($fine_amount > 0) {
+        $content .= '
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#ea580c; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Late Fine / Surcharge</td>
+                <td style="padding: 10px 0; font-weight:800; color:#ea580c; text-align:right; border-top:1px solid #eef2ff;">+ ₹ ' . number_format($fine_amount, 2) . '</td>
+            </tr>';
+    }
+
+    $content .= '
+        </table>
+    </div>
+
+    <div style="background-color:#eff6ff; border-left:4px solid #2563eb; padding:14px 18px; border-radius:8px; margin: 20px 0; font-size:13.5px; color:#1e3a8a; line-height:1.5;">
+        📎 <b>Official PDF Bill Attached:</b> Your complete itemized fee invoice statement is attached directly to this email in PDF format. You can download and save it for your records.
+    </div>
+
+    <p style="margin-bottom: 25px;">You can also log in directly to your secure <b>Parent Portal</b> account to view real-time fees ledger, verify payment history, and make fee deposits.</p>
+    <div style="text-align: center;">
+        <a href="' . htmlspecialchars($portal_url) . '" class="btn" target="_blank">Access Parent Portal & Pay Dues</a>
+    </div>';
+    
+    return get_base_template("Outstanding Fee Dues Notice - $student_name", $content);
 }
 ?>

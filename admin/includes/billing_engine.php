@@ -68,28 +68,45 @@ if ($due_students && $due_students->num_rows > 0) {
         
         // Direct Net Base Fee calculation (base_fee minus monthly discount)
         $net_base_fee = max(0, $base_fee - $discount);
+        // Full 100% monthly fee calculation (No mid-month day proration)
+        $proration_factor = 1.0;
+        $is_prorated = false;
+        $proration_msg = "";
+
         $is_first_bill = is_null($student['last_billed_date']);
 
         if ($is_first_bill) {
-            // New Admission: Prorated billing from admission date to end of admission month (FIRST MONTH ONLY)
+            // New Admission: Full billing starting on 1st of month
             if (empty($student['admission_date'])) {
                 $adm_date = new DateTime($engine_eval_date);
             } else {
                 $adm_date = new DateTime($student['admission_date']);
             }
             
+            $adm_day = (int)$adm_date->format('j'); // Day of month (1-31)
+            $eval_dt = new DateTime($engine_eval_date);
+            
+            // If admitted between the month (after the 1st):
+            // Do NOT generate mid-month partial bill. First auto bill will generate on 1st of next month.
+            if ($adm_day > 1 && !isset($force_student_id)) {
+                $end_of_adm_month = clone $adm_date;
+                $end_of_adm_month->modify('last day of this month');
+                
+                // If evaluation date is still within the admission month, skip generating partial bill
+                if ($eval_dt <= $end_of_adm_month) {
+                    $new_last_billed_date = $end_of_adm_month->format('Y-m-d');
+                    $conn->query("UPDATE students SET last_billed_date = '$new_last_billed_date' WHERE id = $sid");
+                    continue;
+                }
+            }
+
+            // Target Month is 1st of the billing month
+            $bill_month_date = $adm_date->format('Y-m-01');
+            $month_for = $adm_date->format('F Y');
+            
             $end_of_adm_month = clone $adm_date;
             $end_of_adm_month->modify('last day of this month');
-            
-            $days_in_month = (int)$adm_date->format('t');
-            $days_active = $adm_date->diff($end_of_adm_month)->days + 1;
-            
-            $proration_factor = $days_active / $days_in_month;
-            $bill_month_date = $adm_date->format('Y-m-d');
-            $month_for = $adm_date->format('F Y');
             $new_last_billed_date = $end_of_adm_month->format('Y-m-d');
-            $is_prorated = ($days_active < $days_in_month);
-            $proration_msg = $is_prorated ? " (Prorated: $days_active/$days_in_month days)" : "";
         } else {
             // Subsequent Months: Full 100% monthly calculation starting on 1st of month
             $last_billed = new DateTime($student['last_billed_date']);
@@ -105,15 +122,12 @@ if ($due_students && $due_students->num_rows > 0) {
                 }
             }
             
-            $proration_factor = 1.0;
             $bill_month_date = $target_month->format('Y-m-01');
             $month_for = $target_month->format('F Y');
             
             $end_of_target_month = clone $target_month;
             $end_of_target_month->modify('last day of this month');
             $new_last_billed_date = $end_of_target_month->format('Y-m-d');
-            $is_prorated = false;
-            $proration_msg = "";
         }
 
         // Check if an invoice for THIS exact month string already exists for this student (Prevent Duplicate)
@@ -137,9 +151,9 @@ if ($due_students && $due_students->num_rows > 0) {
         $total_amount = 0;
         $remark_parts = [];
 
-        $calc_net = round($net_base_fee * $proration_factor, 2);
+        $calc_net = round($net_base_fee, 2);
         $fee_title = !empty($scholar_mode) ? "$scholar_mode Fee" : "Tuition Fee";
-        $remark_parts[] = "$fee_title: ₹" . number_format($calc_net, 2) . " ($month_for)" . $proration_msg;
+        $remark_parts[] = "$fee_title: ₹" . number_format($calc_net, 2) . " ($month_for)";
         $total_amount += $calc_net;
 
         // Add monthly addons

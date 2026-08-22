@@ -33,37 +33,55 @@ $school_email = $settings['email'] ?? 'abssimamganj@gmail.com';
 
 // Function to convert amount to words
 function amountToWords($number) {
-    $decimal = round($number - ($no = floor($number)), 2) * 100;
-    $hundred = null;
-    $digits_length = strlen($no);
-    $i = 0;
-    $str = array();
+    $decimal = (int)round(($number - floor($number)) * 100);
+    $no = (int)floor($number);
     $words = array(
-        0 => '', 1 => 'One', 2 => 'Two',
-        3 => 'Three', 4 => 'Four', 5 => 'Five', 6 => 'Six',
-        7 => 'Seven', 8 => 'Eight', 9 => 'Nine',
-        10 => 'Ten', 11 => 'Eleven', 12 => 'Twelve',
-        13 => 'Thirteen', 14 => 'Fourteen', 15 => 'Fifteen',
-        16 => 'Sixteen', 17 => 'Seventeen', 18 => 'Eighteen',
-        19 => 'Nineteen', 20 => 'Twenty', 30 => 'Thirty',
-        40 => 'Forty', 50 => 'Fifty', 60 => 'Sixty',
-        70 => 'Seventy', 80 => 'Eighty', 90 => 'Ninety'
+        0 => '', 1 => 'One', 2 => 'Two', 3 => 'Three', 4 => 'Four', 5 => 'Five', 6 => 'Six',
+        7 => 'Seven', 8 => 'Eight', 9 => 'Nine', 10 => 'Ten', 11 => 'Eleven', 12 => 'Twelve',
+        13 => 'Thirteen', 14 => 'Fourteen', 15 => 'Fifteen', 16 => 'Sixteen', 17 => 'Seventeen',
+        18 => 'Eighteen', 19 => 'Nineteen', 20 => 'Twenty', 30 => 'Thirty', 40 => 'Forty',
+        50 => 'Fifty', 60 => 'Sixty', 70 => 'Seventy', 80 => 'Eighty', 90 => 'Ninety'
     );
-    $digits = array('', 'Hundred','Thousand','Lakh', 'Crore');
-    while( $i < $digits_length ) {
+    $digits = array('', 'Hundred', 'Thousand', 'Lakh', 'Crore');
+    
+    $str = array();
+    $digits_length = strlen((string)$no);
+    $i = 0;
+    while ($i < $digits_length) {
         $divider = ($i == 2) ? 10 : 100;
-        $number = floor($no % $divider);
+        $number_part = floor($no % $divider);
         $no = floor($no / $divider);
-        $i += $divider == 10 ? 1 : 2;
-        if ($number) {
-            $plural = (($counter = count($str)) && $number > 9) ? 's' : null;
-            $hundred = ($counter == 1 && $str[0]) ? ' and ' : null;
-            $str [] = ($number < 21) ? $words[$number].' '. $digits[$counter].$plural.' '.$hundred:$words[floor($number / 10) * 10].' '.$words[$number % 10].' '.$digits[$counter].$plural.' '.$hundred;
-        } else $str[] = null;
+        $i += ($divider == 10) ? 1 : 2;
+        if ($number_part) {
+            $counter = count($str);
+            $hundred = ($counter == 1 && !empty($str[0])) ? ' and ' : null;
+            $str[] = ($number_part < 21) 
+                ? $words[$number_part] . ' ' . $digits[$counter] . ' ' . $hundred
+                : $words[floor($number_part / 10) * 10] . ($number_part % 10 ? ' ' . $words[$number_part % 10] : '') . ' ' . $digits[$counter] . ' ' . $hundred;
+        } else {
+            $str[] = null;
+        }
     }
-    $Rupees = implode('', array_reverse($str));
-    $paise = ($decimal > 0) ? "." . ($words[(int)floor($decimal / 10)] . " " . $words[$decimal % 10]) . ' Paise' : '';
-    return ($Rupees ? $Rupees . 'Rupees ' : '') . ($paise ? 'and ' . $paise : '') . 'Only';
+    $Rupees = trim(implode('', array_reverse(array_filter($str))));
+    
+    $paise = '';
+    if ($decimal > 0) {
+        if ($decimal < 21) {
+            $paise_words = $words[$decimal];
+        } else {
+            $paise_words = $words[floor($decimal / 10) * 10] . ($decimal % 10 ? ' ' . $words[$decimal % 10] : '');
+        }
+        $paise = $paise_words . ' Paise';
+    }
+    
+    if (!empty($Rupees) && !empty($paise)) {
+        return $Rupees . ' Rupees and ' . $paise . ' Only';
+    } elseif (!empty($Rupees)) {
+        return $Rupees . ' Rupees Only';
+    } elseif (!empty($paise)) {
+        return $paise . ' Only';
+    }
+    return 'Zero Rupees Only';
 }
 
 // Calculate dynamic late fine (if enabled in settings)
@@ -73,6 +91,7 @@ $total_payable_amount = (float)$bill['amount'] + $fine_amount;
 
 $amount_in_words = amountToWords($total_payable_amount);
 $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . str_pad($bill['id'], 5, '0', STR_PAD_LEFT);
+$is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
 ?>
 
 <!DOCTYPE html>
@@ -83,15 +102,16 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
     <title>Fee Invoice - <?php echo $invoice_no; ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
-        body { font-family: 'Outfit', sans-serif; background: #525659; margin: 0; padding: 30px 0; -webkit-print-color-adjust: exact; }
+        body { font-family: 'Outfit', sans-serif; background: <?php echo $is_embed ? '#ffffff' : '#525659'; ?>; margin: 0; padding: <?php echo $is_embed ? '0' : '30px 0'; ?>; -webkit-print-color-adjust: exact; }
         
         .control-bar { max-width: 800px; margin: 0 auto 20px; background: #fff; padding: 15px 30px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         .btn-control { text-decoration: none; font-weight: 700; font-size: 0.9rem; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: inherit; transition: 0.3s; }
         .btn-back { background: #f0f4f8; color: #1a237e; }
         .btn-back:hover { background: #e2ebf0; }
 
-        .receipt-container { max-width: 800px; margin: 0 auto; background: #fff; padding: 45px; border-radius: 4px; box-shadow: 0 10px 30px rgba(0,0,0,0.15); box-sizing: border-box; position: relative; overflow: hidden; border: 1px solid #dcdcdc; }
+        .receipt-container { max-width: 800px; margin: 0 auto; background: #fff; padding: 45px; border-radius: 4px; box-shadow: <?php echo $is_embed ? 'none' : '0 10px 30px rgba(0,0,0,0.15)'; ?>; box-sizing: border-box; position: relative; overflow: hidden; border: 1px solid #dcdcdc; }
         
         .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 8rem; color: rgba(211, 47, 47, 0.04); font-weight: 800; pointer-events: none; text-align: center; width: 120%; z-index: 1; user-select: none; border: 15px double rgba(211, 47, 47, 0.04); padding: 20px; }
 
@@ -136,16 +156,27 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
 </head>
 <body>
 
+<?php if (!$is_embed): ?>
     <!-- Control Panel -->
     <div class="control-bar">
-        <div style="display:flex; gap: 10px;">
+        <div style="display:flex; gap: 10px; flex-wrap: wrap;">
             <a href="fees.php" class="btn-control btn-back"><i class="fas fa-chevron-left"></i> Back to Ledger</a>
-            <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print / Download PDF</button>
+            <a href="student_dues.php" class="btn-control btn-back"><i class="fas fa-file-invoice-dollar"></i> Student Dues Statement</a>
+        </div>
+        <div style="display:flex; gap: 10px; flex-wrap: wrap;">
+            <button onclick="downloadInvoicePDF()" class="btn-control" id="btnDownloadInvoice" style="background:#fee2e2; color:#b91c1c;">
+                <i class="fas fa-file-pdf"></i> Download PDF
+            </button>
+            <button onclick="emailInvoicePdf(<?php echo $bill['student_id']; ?>)" class="btn-control" id="btnEmailInvoice" style="background:#eff6ff; color:#1d4ed8;">
+                <i class="fas fa-envelope-open-text"></i> Email Bill PDF
+            </button>
+            <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print</button>
         </div>
     </div>
+<?php endif; ?>
 
     <!-- Printable Invoice Container -->
-    <div class="receipt-container">
+    <div class="receipt-container" id="receiptContainer">
         
         <!-- Watermark -->
         <div class="watermark">
@@ -306,5 +337,116 @@ $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . 
 
     </div>
 
+    <script>
+        function downloadInvoicePDF() {
+            const btn = document.getElementById('btnDownloadInvoice');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rendering PDF...';
+            }
+
+            const element = document.getElementById('receiptContainer');
+            const invoiceNo = <?php echo json_encode($invoice_no); ?>;
+            const studentName = <?php echo json_encode(preg_replace('/[^a-zA-Z0-9]+/', '_', $bill['student_name'])); ?>;
+            
+            const opt = {
+                margin: [5, 5, 5, 5],
+                filename: `Invoice_${invoiceNo}_${studentName}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, logging: false },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).save().then(() => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+            }).catch(err => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalHtml;
+                }
+                console.error("PDF generation error:", err);
+                window.location.href = "ajax_send_due_email.php?action=download_bill_pdf&bill_id=<?php echo $bill['id']; ?>";
+            });
+        }
+
+        // Auto trigger download if requested in query parameter
+        window.addEventListener('DOMContentLoaded', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('download') === '1' || urlParams.get('auto_download') === '1') {
+                setTimeout(downloadInvoicePDF, 300);
+            }
+        });
+
+        function emailInvoicePdf(studentId) {
+            const promptEmail = prompt("Enter parent/guardian email address to deliver this Bill PDF statement:", "");
+            if (promptEmail === null) return;
+            
+            const cleanEmail = promptEmail.trim();
+            if (!cleanEmail || !cleanEmail.includes('@')) {
+                alert("Please enter a valid email address.");
+                return;
+            }
+
+            const btn = document.getElementById('btnEmailInvoice');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating Receipt PDF...';
+            }
+
+            const element = document.getElementById('receiptContainer');
+            const invoiceNo = <?php echo json_encode($invoice_no); ?>;
+            const studentName = <?php echo json_encode(preg_replace('/[^a-zA-Z0-9]+/', '_', $bill['student_name'])); ?>;
+            const billId = <?php echo (int)$bill['id']; ?>;
+
+            const opt = {
+                margin: [5, 5, 5, 5],
+                filename: `Invoice_${invoiceNo}_${studentName}.pdf`,
+                image: { type: 'jpeg', quality: 0.98 },
+                html2canvas: { scale: 2, useCORS: true, logging: false },
+                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+            };
+
+            html2pdf().set(opt).from(element).outputPdf('datauristring').then(pdfDataUri => {
+                if (btn) {
+                    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Delivering Email...';
+                }
+
+                const formData = new FormData();
+                formData.append('action', 'send_student_due_email');
+                formData.append('student_id', studentId);
+                formData.append('bill_id', billId);
+                formData.append('email', cleanEmail);
+                formData.append('pdf_base64', pdfDataUri);
+
+                return fetch('ajax_send_due_email.php', {
+                    method: 'POST',
+                    body: formData
+                });
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-envelope-open-text"></i> Email Bill PDF';
+                }
+                if (data && data.success) {
+                    alert('✅ ' + data.message);
+                } else {
+                    alert('⚠️ ' + ((data && data.error) ? data.error : 'Failed to send email.'));
+                }
+            })
+            .catch(err => {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-envelope-open-text"></i> Email Bill PDF';
+                }
+                alert('Dispatch error: ' + err.message);
+            });
+        }
+    </script>
 </body>
 </html>

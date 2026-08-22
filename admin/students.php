@@ -223,14 +223,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
         send_smtp_email('abssimamganj@gmail.com', "New Student Enrolled - " . $name . " (" . $reg_no . ")", $welcome_html);
     }
     
-    // Generate initial invoice ONLY for brand new student enrollments (never on editing existing student)
-    if (isset($new_id) && $new_id > 0) {
-        $force_student_id = (int)$new_id;
-        ob_start();
-        require __DIR__ . '/includes/billing_engine.php';
-        ob_end_clean();
-    }
-    
     header("Location: students.php");
     exit();
 }

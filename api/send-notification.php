@@ -109,15 +109,9 @@ try {
 
         $targetAudience = 'Selected Tokens (' . count($tokens) . ')';
 
-    // 3. BROADCAST TO ALL APPS (DUAL DELIVERY: TOPIC BROADCAST + DIRECT TOKEN DISPATCH)
+    // 3. BROADCAST TO ALL APPS (UNIQUE DEVICE DISPATCH)
     } else {
-        // A. Broadcast across all standard Firebase Topics
-        $topic_broadcast_result = broadcastFcmCampaignToAllTopics($title, $message, $image, $url, $category);
-        if (!empty($topic_broadcast_result['success_count']) && $topic_broadcast_result['success_count'] > 0) {
-            $sent_count += (int)$topic_broadcast_result['success_count'];
-        }
-
-        // B. Dispatch directly to each stored device token in database
+        // Dispatch directly to each stored device token in database
         $res = $conn->query("SELECT id, token FROM fcm_tokens ORDER BY id DESC");
         $tokens = [];
         if ($res) {
@@ -126,29 +120,40 @@ try {
             }
         }
 
-        $expired_ids = [];
-        foreach ($tokens as $item) {
-            $fcmToken = $item['token'];
-            $tokenId  = (int)$item['id'];
-            $result = sendSingleFcmNotification($fcmToken, $title, $message, $image, $url, $category);
-
-            if ($result['success']) {
+        if (empty($tokens)) {
+            // Fallback to topic broadcast if no stored tokens
+            $topic_broadcast_result = sendTopicFcmNotification('all', $title, $message, $image, $url, $category);
+            if (!empty($topic_broadcast_result['success'])) {
                 $sent_count++;
             } else {
                 $failed_count++;
-                if (!empty($result['unregistered'])) {
-                    $expired_ids[] = $tokenId;
+            }
+            $targetAudience = 'All App Users (FCM Topic: all)';
+        } else {
+            $expired_ids = [];
+            foreach ($tokens as $item) {
+                $fcmToken = $item['token'];
+                $tokenId  = (int)$item['id'];
+                $result = sendSingleFcmNotification($fcmToken, $title, $message, $image, $url, $category);
+
+                if ($result['success']) {
+                    $sent_count++;
+                } else {
+                    $failed_count++;
+                    if (!empty($result['unregistered'])) {
+                        $expired_ids[] = $tokenId;
+                    }
                 }
             }
-        }
 
-        if (!empty($expired_ids)) {
-            $cleaned_tokens = count($expired_ids);
-            $idsStr = implode(',', array_map('intval', $expired_ids));
-            $conn->query("DELETE FROM fcm_tokens WHERE id IN ($idsStr)");
-        }
+            if (!empty($expired_ids)) {
+                $cleaned_tokens = count($expired_ids);
+                $idsStr = implode(',', array_map('intval', $expired_ids));
+                $conn->query("DELETE FROM fcm_tokens WHERE id IN ($idsStr)");
+            }
 
-        $targetAudience = 'All App Users (Dual Topic & Token Broadcast)';
+            $targetAudience = 'All Registered App Devices (' . count($tokens) . ')';
+        }
     }
 
     // 4. RECORD CAMPAIGN LOG IN NOTIFICATION_HISTORY
