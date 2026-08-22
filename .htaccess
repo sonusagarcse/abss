@@ -63,6 +63,10 @@
     ExpiresByType image/x-icon "access plus 1 year"
 </IfModule>
 
+# Android APK MIME Type Support
+AddType application/vnd.android.package-archive .apk .APK
+
+
 # 4. URL REWRITING (Professional clean URLs)
 # ----------------------------------------------------------------------
 <IfModule mod_rewrite.c>
