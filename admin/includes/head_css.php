@@ -305,9 +305,37 @@ if ('serviceWorker' in navigator) {
             width: 100%;
         }
         
-        .form-cols, .list-cols, .stats-grid, .analytics-split, .dashboard-row {
+        .form-cols, .list-cols, .stats-grid, .analytics-split, .dashboard-row, .results-layout-grid {
             grid-template-columns: 1fr !important;
             gap: 20px !important;
+        }
+    }
+
+    @media (max-width: 640px) {
+        .main-content {
+            padding: 16px 12px !important;
+        }
+        .portal-card, .card, .glass-card {
+            padding: 18px 14px !important;
+            border-radius: var(--radius-md) !important;
+        }
+        .portal-input-group input, 
+        .portal-input-group select, 
+        .portal-input-group textarea, 
+        .form-control {
+            font-size: 16px !important; /* Prevents auto-zoom on iOS Safari */
+            padding: 12px 14px !important;
+        }
+        .btn-portal, .btn {
+            width: 100% !important;
+            padding: 12px 20px !important;
+        }
+        .stat-card {
+            padding: 16px !important;
+            gap: 12px !important;
+        }
+        .stat-info h3 {
+            font-size: 1.3rem !important;
         }
     }
 </style>

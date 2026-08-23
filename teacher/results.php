@@ -28,7 +28,58 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_result'])) {
         }
 
         if ($stmt && $stmt->execute()) {
-            $msg = "Exam marks recorded successfully for student.";
+            $msg = "Exam marks recorded successfully and parent notified.";
+
+            // Fetch parent email and student info
+            $student_stmt = $conn->prepare("
+                SELECT s.name AS student_name, s.parent_id, p.parent_name, p.email AS parent_email 
+                FROM students s 
+                LEFT JOIN parents p ON s.parent_id = p.id 
+                WHERE s.id = ?
+            ");
+            $student_stmt->bind_param("i", $student_id);
+            $student_stmt->execute();
+            $student_res = $student_stmt->get_result()->fetch_assoc();
+            
+            if ($student_res) {
+                // Create In-Built Portal Notification
+                if (function_exists('create_portal_notification')) {
+                    $pct = ($total_marks > 0) ? round(($score / $total_marks) * 100, 1) : 0;
+                    create_portal_notification(
+                        'result',
+                        "New Result Published: $exam_name",
+                        "Scorecard for " . $student_res['student_name'] . ": $score/$total_marks ($pct%).",
+                        "results.php",
+                        !empty($student_res['parent_id']) ? (int)$student_res['parent_id'] : null,
+                        $student_id,
+                        'fa-award',
+                        '#7c3aed'
+                    );
+                }
+                
+                if (!empty($student_res['parent_email'])) {
+                    require_once __DIR__ . '/../includes/mail_helper.php';
+                    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                    $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+                    $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
+                    $dashboard_url = "$base_url/parent/login.php";
+                    $email_html = get_result_published_template(
+                        $student_res['student_name'], 
+                        $exam_name, 
+                        $score, 
+                        $total_marks, 
+                        null, 
+                        $dashboard_url
+                    );
+                    
+                    send_smtp_email(
+                        $student_res['parent_email'], 
+                        "Result Published: " . $exam_name . " - " . $student_res['student_name'] . " - ABSS", 
+                        $email_html
+                    );
+                    send_smtp_email('abssimamganj@gmail.com', "Result Published: " . $exam_name . " - " . $student_res['student_name'], $email_html);
+                }
+            }
         } else {
             $err = "Error recording marks: " . $conn->error;
         }

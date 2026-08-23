@@ -25,6 +25,17 @@ $today_att_count = $att_res ? $att_res->fetch_assoc()['cnt'] : 0;
 $claims_res = $conn->query("SELECT COUNT(id) as cnt FROM teacher_expenses WHERE teacher_id = $teacher_id AND status = 'pending'");
 $pending_claims = $claims_res ? $claims_res->fetch_assoc()['cnt'] : 0;
 
+// Time of day greeting
+$hour = date('H');
+$greeting = "Good Day";
+if ($hour < 12) {
+    $greeting = "Good Morning";
+} else if ($hour < 17) {
+    $greeting = "Good Afternoon";
+} else {
+    $greeting = "Good Evening";
+}
+
 // Fetch notices
 $notices = $conn->query("SELECT * FROM notices ORDER BY created_at DESC LIMIT 5");
 ?>
@@ -37,57 +48,34 @@ $notices = $conn->query("SELECT * FROM notices ORDER BY created_at DESC LIMIT 5"
     <?php include 'includes/head_css.php'; ?>
     <style>
         .welcome-banner {
-            background: linear-gradient(135deg, var(--teacher-dark), var(--teacher-purple));
-            color: white;
+            background: linear-gradient(135deg, #4c1d95 0%, #7c3aed 60%, #6366f1 100%);
+            color: #ffffff;
             padding: 35px;
-            border-radius: 24px;
+            border-radius: var(--radius-lg);
             margin-bottom: 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
             gap: 20px;
-            box-shadow: 0 15px 30px rgba(124, 58, 237, 0.15);
+            box-shadow: 0 15px 35px rgba(124, 58, 237, 0.25);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.15);
         }
-        .welcome-banner h1 { font-size: 1.8rem; font-weight: 800; margin-bottom: 6px; }
-        .welcome-banner p { opacity: 0.9; font-size: 0.95rem; }
-
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
-            margin-bottom: 35px;
+        .welcome-banner::before {
+            content: '';
+            position: absolute;
+            top: -60px;
+            right: -60px;
+            width: 220px;
+            height: 220px;
+            background: rgba(255, 255, 255, 0.12);
+            filter: blur(50px);
+            border-radius: 50%;
         }
-        .stat-card {
-            background: #ffffff;
-            border-radius: 20px;
-            padding: 24px;
-            border: 1px solid #ede9fe;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.02);
-            display: flex;
-            align-items: center;
-            gap: 18px;
-            transition: transform 0.3s;
-        }
-        .stat-card:hover { transform: translateY(-4px); }
-        .stat-icon {
-            width: 54px;
-            height: 54px;
-            border-radius: 16px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.4rem;
-            flex-shrink: 0;
-        }
-        .icon-purple { background: #ede9fe; color: var(--teacher-purple); }
-        .icon-green { background: #dcfce7; color: #166534; }
-        .icon-blue { background: #dbeafe; color: #1e40af; }
-        .icon-amber { background: #fef3c7; color: #92400e; }
-        .stat-val { font-size: 1.5rem; font-weight: 800; color: #1e1b4b; margin-top: 2px; }
-        .stat-lbl { font-size: 0.8rem; font-weight: 700; color: #64748b; text-transform: uppercase; }
-
-        .section-title { font-size: 1.25rem; font-weight: 800; color: var(--teacher-dark); margin-bottom: 20px; }
+        .welcome-banner h1 { font-size: 1.85rem; font-weight: 900; margin-bottom: 6px; color: #ffffff; }
+        .welcome-banner p { opacity: 0.92; font-size: 0.95rem; color: #e0e7ff; margin: 0; font-weight: 500; }
 
         .quick-actions {
             display: grid;
@@ -96,48 +84,72 @@ $notices = $conn->query("SELECT * FROM notices ORDER BY created_at DESC LIMIT 5"
             margin-bottom: 35px;
         }
         .action-card {
-            background: #ffffff;
-            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.88);
+            backdrop-filter: blur(16px);
+            border-radius: var(--radius-md);
             padding: 20px;
-            border: 1px solid #ede9fe;
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
             text-decoration: none;
             color: #1e1b4b;
-            font-weight: 700;
+            font-weight: 800;
             display: flex;
             align-items: center;
             gap: 14px;
-            transition: all 0.3s;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            font-size: 0.95rem;
         }
         .action-card:hover {
-            background: var(--teacher-purple);
+            background: linear-gradient(135deg, var(--teacher-purple), var(--teacher-dark));
             color: #ffffff;
-            transform: translateY(-3px);
-            box-shadow: 0 10px 20px rgba(124, 58, 237, 0.2);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 25px rgba(124, 58, 237, 0.3);
         }
         .action-card i { font-size: 1.3rem; }
 
         .dashboard-layout {
             display: grid;
-            grid-template-columns: 2fr 1fr;
+            grid-template-columns: 1.6fr 1fr;
             gap: 25px;
         }
         @media (max-width: 992px) { .dashboard-layout { grid-template-columns: 1fr; } }
 
-        .card-panel {
-            background: #ffffff;
-            border-radius: 20px;
-            padding: 28px;
-            border: 1px solid #ede9fe;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.02);
-        }
-
         .notice-item {
-            padding: 14px 0;
-            border-bottom: 1px solid #f1f5f9;
+            padding: 14px 16px;
+            border-radius: 14px;
+            background: #f8fafc;
+            border: 1px solid #ede9fe;
+            margin-bottom: 12px;
+            transition: background 0.2s;
         }
-        .notice-item:last-child { border-bottom: none; }
-        .notice-title { font-weight: 700; font-size: 0.95rem; color: #1e1b4b; }
-        .notice-date { font-size: 0.75rem; color: #94a3b8; margin-top: 4px; }
+        .notice-item:hover { background: #f1f5f9; }
+        .notice-title { font-weight: 800; font-size: 0.92rem; color: #1e1b4b; }
+        .notice-date { font-size: 0.75rem; color: #64748b; font-weight: 700; margin-top: 4px; display: flex; align-items: center; gap: 5px; }
+
+        .profile-avatar-box {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid var(--teacher-purple);
+            box-shadow: 0 8px 20px rgba(124, 58, 237, 0.2);
+            flex-shrink: 0;
+        }
+        .profile-avatar-placeholder {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--teacher-purple), var(--teacher-dark));
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 900;
+            border: 3px solid #ffffff;
+            box-shadow: 0 8px 20px rgba(124, 58, 237, 0.2);
+            flex-shrink: 0;
+        }
     </style>
 </head>
 <body>
@@ -146,18 +158,21 @@ $notices = $conn->query("SELECT * FROM notices ORDER BY created_at DESC LIMIT 5"
     <main class="main-content">
         <!-- Welcome Header Banner -->
         <div class="welcome-banner">
-            <div>
-                <h1>Welcome Back, <?= htmlspecialchars($teacher_name) ?>! 👋</h1>
-                <p><i class="fas fa-graduation-cap"></i> <?= htmlspecialchars($designation) ?> &bull; Department of <?= htmlspecialchars($department) ?></p>
+            <div style="position: relative; z-index: 2;">
+                <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(255, 255, 255, 0.2); backdrop-filter: blur(10px); padding: 4px 14px; border-radius: 50px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; margin-bottom: 10px; color: #fbbf24;">
+                    <i class="far fa-calendar-alt"></i> <?= date('l, d F Y') ?>
+                </div>
+                <h1><?= $greeting ?>, <?= htmlspecialchars($teacher_name) ?>! 👋</h1>
+                <p><i class="fas fa-graduation-cap" style="color: #a78bfa;"></i> <?= htmlspecialchars($designation) ?> &bull; Department of <?= htmlspecialchars($department) ?></p>
             </div>
-            <div>
-                <a href="attendance.php" style="background: rgba(255,255,255,0.2); color: white; padding: 12px 22px; border-radius: 12px; font-weight: 700; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; backdrop-filter: blur(10px);">
-                    <i class="fas fa-calendar-check"></i> Take Today's Attendance
+            <div style="position: relative; z-index: 2;">
+                <a href="attendance.php" style="background: #ffffff; color: var(--teacher-dark); padding: 12px 24px; border-radius: 50px; font-weight: 900; text-decoration: none; display: inline-flex; align-items: center; gap: 8px; box-shadow: 0 8px 20px rgba(0,0,0,0.15); transition: 0.25s;">
+                    <i class="fas fa-calendar-check" style="color: var(--teacher-purple);"></i> Take Today's Attendance
                 </a>
             </div>
         </div>
 
-        <!-- Stats Grid -->
+        <!-- KPI Stats Grid -->
         <div class="stats-grid">
             <div class="stat-card">
                 <div class="stat-icon icon-purple"><i class="fas fa-user-graduate"></i></div>
@@ -192,48 +207,67 @@ $notices = $conn->query("SELECT * FROM notices ORDER BY created_at DESC LIMIT 5"
             </div>
         </div>
 
-        <!-- Quick Shortcuts -->
-        <h2 class="section-title"><i class="fas fa-bolt"></i> Quick Actions</h2>
+        <!-- Quick Action Shortcuts -->
+        <h2 style="font-size: 1.25rem; font-weight: 800; color: var(--teacher-dark); margin-bottom: 18px; display: flex; align-items: center; gap: 8px;">
+            <i class="fas fa-bolt" style="color: #f59e0b;"></i> Quick Shortcuts
+        </h2>
         <div class="quick-actions">
             <a href="attendance.php" class="action-card">
-                <i class="fas fa-calendar-alt"></i> Mark Attendance
+                <i class="fas fa-calendar-alt" style="color: #7c3aed;"></i> Mark Attendance
             </a>
             <a href="results.php" class="action-card">
-                <i class="fas fa-pen-alt"></i> Upload Test Results
+                <i class="fas fa-award" style="color: #059669;"></i> Upload Test Results
             </a>
             <a href="expenses.php" class="action-card">
-                <i class="fas fa-plus-circle"></i> File Expense Claim
+                <i class="fas fa-plus-circle" style="color: #d97706;"></i> File Expense Claim
             </a>
             <a href="invoices.php" class="action-card">
-                <i class="fas fa-file-invoice"></i> View Salary Invoices
+                <i class="fas fa-file-invoice-dollar" style="color: #2563eb;"></i> Salary Invoices
             </a>
         </div>
 
-        <!-- Main Dashboard Content -->
+        <!-- Main Dashboard Content Grid -->
         <div class="dashboard-layout">
             <!-- Faculty Information Card -->
             <div class="card-panel">
-                <h2 class="section-title"><i class="fas fa-id-card"></i> Faculty Profile Summary</h2>
-                <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 20px; flex-wrap: wrap;">
-                    <img src="<?= !empty($teacher['photo']) ? '../' . htmlspecialchars($teacher['photo']) : 'https://cdn-icons-png.flaticon.com/512/3135/3135715.png' ?>" alt="Photo" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #ede9fe;">
+                <h2 style="font-size: 1.2rem; font-weight: 800; color: var(--teacher-dark); margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-id-card" style="color: var(--teacher-purple);"></i> Faculty Profile Summary
+                </h2>
+                
+                <div style="display: flex; gap: 20px; align-items: center; margin-bottom: 22px; flex-wrap: wrap;">
+                    <?php 
+                    $t_photo = !empty($teacher['photo']) ? '../' . htmlspecialchars($teacher['photo']) : '';
+                    $t_initials = strtoupper(substr($teacher_name, 0, 2));
+                    if ($t_photo && file_exists(__DIR__ . '/../' . $teacher['photo'])): ?>
+                        <img src="<?= $t_photo ?>" alt="Photo" class="profile-avatar-box">
+                    <?php else: ?>
+                        <div class="profile-avatar-placeholder"><?= $t_initials ?></div>
+                    <?php endif; ?>
+
                     <div>
-                        <h3 style="font-size: 1.2rem; color: #1e1b4b; font-weight: 800;"><?= htmlspecialchars($teacher_name) ?></h3>
-                        <p style="color: #64748b; font-size: 0.9rem; margin-top: 2px;"><i class="fas fa-envelope"></i> <?= htmlspecialchars($teacher['email'] ?? 'Not specified') ?></p>
-                        <p style="color: #64748b; font-size: 0.9rem; margin-top: 2px;"><i class="fas fa-phone"></i> <?= htmlspecialchars($teacher['phone'] ?? 'Not specified') ?></p>
+                        <h3 style="font-size: 1.25rem; color: #1e1b4b; font-weight: 900; margin: 0 0 4px 0;"><?= htmlspecialchars($teacher_name) ?></h3>
+                        <div style="color: #64748b; font-size: 0.88rem; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-envelope" style="color: var(--teacher-purple);"></i> <?= htmlspecialchars($teacher['email'] ?? 'Not specified') ?>
+                        </div>
+                        <div style="color: #64748b; font-size: 0.88rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                            <i class="fas fa-phone" style="color: var(--teacher-purple);"></i> <?= htmlspecialchars($teacher['phone'] ?? 'Not specified') ?>
+                        </div>
                     </div>
                 </div>
 
-                <div style="background: #f8fafc; border-radius: 12px; padding: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 0.9rem;">
-                    <div><strong>Department:</strong> <?= htmlspecialchars($department) ?></div>
-                    <div><strong>Designation:</strong> <?= htmlspecialchars($designation) ?></div>
-                    <div><strong>Joining Date:</strong> <?= $teacher['join_date'] ? date('M d, Y', strtotime($teacher['join_date'])) : 'N/A' ?></div>
-                    <div><strong>Status:</strong> <span style="color: #166534; font-weight: 700;">Active Faculty</span></div>
+                <div style="background: #f8fafc; border-radius: 16px; padding: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 0.9rem; border: 1px solid #ede9fe;">
+                    <div><span style="color: #64748b; font-weight: 700;">Department:</span> <strong style="color: #1e1b4b; display: block; margin-top: 2px;"><?= htmlspecialchars($department) ?></strong></div>
+                    <div><span style="color: #64748b; font-weight: 700;">Designation:</span> <strong style="color: #1e1b4b; display: block; margin-top: 2px;"><?= htmlspecialchars($designation) ?></strong></div>
+                    <div><span style="color: #64748b; font-weight: 700;">Joining Date:</span> <strong style="color: #1e1b4b; display: block; margin-top: 2px;"><?= $teacher['join_date'] ? date('M d, Y', strtotime($teacher['join_date'])) : 'N/A' ?></strong></div>
+                    <div><span style="color: #64748b; font-weight: 700;">Faculty Status:</span> <span class="badge badge-success" style="display: block; width: fit-content; margin-top: 4px;">Active Faculty</span></div>
                 </div>
             </div>
 
             <!-- School Announcements Widget -->
             <div class="card-panel">
-                <h2 class="section-title"><i class="fas fa-bullhorn"></i> Notice Board</h2>
+                <h2 style="font-size: 1.2rem; font-weight: 800; color: var(--teacher-dark); margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-bullhorn" style="color: #059669;"></i> Notice Board
+                </h2>
                 <?php if ($notices && $notices->num_rows > 0): ?>
                     <?php while ($n = $notices->fetch_assoc()): ?>
                         <div class="notice-item">
@@ -242,7 +276,7 @@ $notices = $conn->query("SELECT * FROM notices ORDER BY created_at DESC LIMIT 5"
                         </div>
                     <?php endwhile; ?>
                 <?php else: ?>
-                    <p style="color: #94a3b8; font-size: 0.9rem;">No announcements posted.</p>
+                    <div style="text-align: center; padding: 25px; color: #94a3b8; font-weight: 600;">No announcements posted yet.</div>
                 <?php endif; ?>
             </div>
         </div>

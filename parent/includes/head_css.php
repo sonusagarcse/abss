@@ -402,8 +402,15 @@ if ('serviceWorker' in navigator) {
         .hero-welcome-card h1 { font-size: 1.5rem; }
         .quick-shortcut-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
         .shortcut-card { padding: 14px 16px; font-size: 0.88rem; }
-        .portal-card { padding: 20px; border-radius: 20px; }
+        .portal-card { padding: 18px 14px; border-radius: 18px; }
         .stats-grid { grid-template-columns: 1fr; gap: 14px; }
         .stat-card { padding: 18px 20px; }
+        .portal-input-group input, 
+        .portal-input-group select, 
+        .portal-input-group textarea,
+        .form-control {
+            font-size: 16px !important; /* Prevents auto-zoom on iOS Safari */
+            padding: 12px 14px !important;
+        }
     }
 </style>

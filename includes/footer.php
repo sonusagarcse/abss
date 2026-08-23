@@ -106,6 +106,65 @@
         </div>
     </footer>
 
+    <!-- Mobile Sticky Quick Action Dock -->
+    <div class="mobile-action-dock">
+        <a href="tel:+919523012888" class="dock-item dock-call">
+            <i class="fas fa-phone-alt"></i> Call Us
+        </a>
+        <a href="https://wa.me/919523012888" target="_blank" class="dock-item dock-whatsapp">
+            <i class="fab fa-whatsapp"></i> WhatsApp
+        </a>
+        <a href="admission.php" class="dock-item dock-apply">
+            <i class="fas fa-edit"></i> Admission 2026
+        </a>
+    </div>
+
+    <style>
+        .mobile-action-dock {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            z-index: 99990;
+            padding: 8px 12px;
+            border-top: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.25);
+        }
+        @media (max-width: 768px) {
+            .mobile-action-dock {
+                display: flex;
+                align-items: center;
+                justify-content: space-around;
+                gap: 8px;
+            }
+            body {
+                padding-bottom: 56px; /* Prevent footer clipping */
+            }
+        }
+        .dock-item {
+            flex: 1;
+            text-align: center;
+            padding: 8px 10px;
+            border-radius: 12px;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 0.76rem;
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: 0.2s;
+        }
+        .dock-call { background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.4); }
+        .dock-whatsapp { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); }
+        .dock-apply { background: linear-gradient(135deg, #f59e0b, #ea580c); color: #ffffff; box-shadow: 0 4px 12px rgba(234, 88, 12, 0.35); }
+    </style>
+
     <style>
         html {
             scroll-behavior: smooth;
