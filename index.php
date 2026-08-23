@@ -417,10 +417,257 @@ include 'includes/header.php';
     .gallery-card-item:hover img {
         transform: scale(1.08);
     }
-    .gallery-card-item:hover .gallery-overlay {
-        opacity: 1 !important;
-    }
 </style>
+
+<!-- Monthly Academic Wall of Fame: Top 1st, 2nd, 3rd Student List -->
+<section id="monthly-top-students" style="padding: 85px 0; background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 60%, #0f172a 100%); color: #ffffff; position: relative; overflow: hidden;">
+    <div style="position: absolute; top: -100px; left: 50%; transform: translateX(-50%); width: 600px; height: 300px; background: rgba(245, 158, 11, 0.12); filter: blur(100px); border-radius: 50%; pointer-events: none;"></div>
+
+    <div class="container" style="position: relative; z-index: 2;">
+        <div style="text-align: center; margin-bottom: 55px;">
+            <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(245, 158, 11, 0.18); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); padding: 6px 18px; border-radius: 50px; font-size: 0.82rem; font-weight: 800; text-transform: uppercase; margin-bottom: 12px; letter-spacing: 0.05em;">
+                <i class="fas fa-crown"></i> Monthly Academic Leaderboard
+            </div>
+            <h2 style="font-size: 2.4rem; color: #ffffff; font-weight: 900; margin: 0; letter-spacing: -0.02em;">
+                Top Student Performers of the Month
+            </h2>
+            <p style="color: #cbd5e1; font-weight: 500; font-size: 0.98rem; max-width: 620px; margin: 10px auto 0;">
+                Celebrating our brightest scholars who achieved highest academic averages in monthly examination evaluations.
+            </p>
+        </div>
+
+        <?php
+        $current_m = date('Y-m');
+        $current_m_label = date('F Y');
+
+        // Fetch top 3 students for the latest evaluation month
+        $top3_query = $conn->query("
+            SELECT s.id, s.name, s.reg_no, s.student_photo, s.photo, s.target_school, s.class_admitted,
+                   AVG((r.score / r.total_marks) * 100) as avg_pct,
+                   MAX((r.score / r.total_marks) * 100) as max_pct,
+                   COUNT(r.id) as total_exams,
+                   MAX(r.exam_name) as latest_exam
+            FROM results r
+            JOIN students s ON r.student_id = s.id
+            WHERE r.total_marks > 0 AND DATE_FORMAT(r.exam_date, '%Y-%m') = '$current_m'
+            GROUP BY r.student_id
+            ORDER BY avg_pct DESC, total_exams DESC
+            LIMIT 3
+        ");
+
+        $top_list = [];
+        if ($top3_query && $top3_query->num_rows > 0) {
+            while ($r = $top3_query->fetch_assoc()) {
+                $top_list[] = $r;
+            }
+        }
+
+        // Fallback to overall top performers if current month has fewer than 3 evaluations
+        if (count($top_list) < 3) {
+            $fallback_query = $conn->query("
+                SELECT s.id, s.name, s.reg_no, s.student_photo, s.photo, s.target_school, s.class_admitted,
+                       AVG((r.score / r.total_marks) * 100) as avg_pct,
+                       MAX((r.score / r.total_marks) * 100) as max_pct,
+                       COUNT(r.id) as total_exams,
+                       MAX(r.exam_name) as latest_exam
+                FROM results r
+                JOIN students s ON r.student_id = s.id
+                WHERE r.total_marks > 0
+                GROUP BY r.student_id
+                ORDER BY avg_pct DESC, total_exams DESC
+                LIMIT 3
+            ");
+            $top_list = [];
+            if ($fallback_query) {
+                while ($r = $fallback_query->fetch_assoc()) {
+                    $top_list[] = $r;
+                }
+            }
+        }
+
+        if (!empty($top_list)):
+            // Podium Arrangement: 2nd place (left), 1st place (center elevated), 3rd place (right)
+            $st_1 = $top_list[0] ?? null;
+            $st_2 = $top_list[1] ?? null;
+            $st_3 = $top_list[2] ?? null;
+
+            // Display order array
+            $podium_items = [];
+            if ($st_2) $podium_items[] = ['data' => $st_2, 'rank' => 2, 'order_class' => 'podium-2'];
+            if ($st_1) $podium_items[] = ['data' => $st_1, 'rank' => 1, 'order_class' => 'podium-1'];
+            if ($st_3) $podium_items[] = ['data' => $st_3, 'rank' => 3, 'order_class' => 'podium-3'];
+        ?>
+
+        <style>
+            .podium-grid {
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 28px;
+                align-items: flex-end;
+                max-width: 1050px;
+                margin: 0 auto;
+            }
+            .podium-card {
+                background: rgba(255, 255, 255, 0.06);
+                backdrop-filter: blur(16px);
+                border-radius: 26px;
+                padding: 30px 22px;
+                text-align: center;
+                border: 1px solid rgba(255, 255, 255, 0.12);
+                position: relative;
+                transition: transform 0.35s ease, box-shadow 0.35s ease;
+            }
+            .podium-card:hover {
+                transform: translateY(-8px);
+            }
+            
+            /* Rank 1 Highlight */
+            .podium-card.rank-1-card {
+                background: linear-gradient(180deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.7) 100%);
+                border: 2px solid #f59e0b;
+                box-shadow: 0 20px 45px rgba(245, 158, 11, 0.25);
+                transform: translateY(-15px);
+                padding: 36px 24px;
+            }
+            .podium-card.rank-1-card:hover {
+                transform: translateY(-22px);
+                box-shadow: 0 25px 55px rgba(245, 158, 11, 0.35);
+            }
+
+            .rank-badge-pill {
+                display: inline-flex;
+                align-items: center;
+                gap: 6px;
+                padding: 5px 14px;
+                border-radius: 50px;
+                font-weight: 900;
+                font-size: 0.82rem;
+                text-transform: uppercase;
+                margin-bottom: 18px;
+            }
+            .badge-gold { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); }
+            .badge-silver { background: linear-gradient(135deg, #94a3b8, #64748b); color: #ffffff; box-shadow: 0 4px 15px rgba(148, 163, 184, 0.3); }
+            .badge-bronze { background: linear-gradient(135deg, #d97706, #b45309); color: #ffffff; box-shadow: 0 4px 15px rgba(217, 119, 6, 0.3); }
+
+            .student-podium-img {
+                width: 100px;
+                height: 100px;
+                border-radius: 50%;
+                object-fit: cover;
+                margin: 0 auto 16px auto;
+                display: block;
+            }
+            .rank-1-card .student-podium-img {
+                width: 120px;
+                height: 120px;
+                border: 4px solid #f59e0b;
+                box-shadow: 0 10px 25px rgba(245, 158, 11, 0.4);
+            }
+            .rank-2-card .student-podium-img { border: 3px solid #94a3b8; }
+            .rank-3-card .student-podium-img { border: 3px solid #d97706; }
+
+            .student-avatar-placeholder {
+                width: 100px;
+                height: 100px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 2rem;
+                font-weight: 900;
+                color: #ffffff;
+                margin: 0 auto 16px auto;
+            }
+            .rank-1-card .student-avatar-placeholder {
+                width: 120px;
+                height: 120px;
+                font-size: 2.4rem;
+                background: linear-gradient(135deg, #f59e0b, #d97706);
+                border: 4px solid #f59e0b;
+            }
+            .rank-2-card .student-avatar-placeholder {
+                background: linear-gradient(135deg, #64748b, #475569);
+                border: 3px solid #94a3b8;
+            }
+            .rank-3-card .student-avatar-placeholder {
+                background: linear-gradient(135deg, #d97706, #78350f);
+                border: 3px solid #d97706;
+            }
+
+            @media (max-width: 900px) {
+                .podium-grid {
+                    grid-template-columns: 1fr;
+                    gap: 20px;
+                }
+                .podium-card.rank-1-card {
+                    transform: none;
+                    order: -1;
+                }
+                .podium-card:hover {
+                    transform: none;
+                }
+            }
+        </style>
+
+        <div class="podium-grid">
+            <?php foreach ($podium_items as $item): 
+                $st = $item['data'];
+                $rk = $item['rank'];
+                $pct = round((float)$st['avg_pct'], 1);
+                
+                $img_src = '';
+                $st_file = !empty($st['student_photo']) ? $st['student_photo'] : (!empty($st['photo']) ? $st['photo'] : '');
+                if (!empty($st_file) && file_exists(__DIR__ . '/' . $st_file)) {
+                    $img_src = $st_file;
+                }
+                $initials = strtoupper(substr($st['name'], 0, 2));
+
+                $badge_class = ($rk === 1) ? 'badge-gold' : (($rk === 2) ? 'badge-silver' : 'badge-bronze');
+                $card_class = 'rank-' . $rk . '-card';
+                $rank_title = ($rk === 1) ? '1st Rank Champion' : (($rk === 2) ? '2nd Rank Holder' : '3rd Rank Holder');
+                $icon_class = ($rk === 1) ? 'fa-crown' : (($rk === 2) ? 'fa-medal' : 'fa-award');
+            ?>
+                <div class="podium-card <?php echo $card_class; ?>">
+                    <div class="rank-badge-pill <?php echo $badge_class; ?>">
+                        <i class="fas <?php echo $icon_class; ?>"></i> <?php echo $rank_title; ?>
+                    </div>
+
+                    <?php if (!empty($img_src)): ?>
+                        <img src="<?php echo htmlspecialchars($img_src); ?>" alt="<?php echo htmlspecialchars($st['name']); ?>" class="student-podium-img">
+                    <?php else: ?>
+                        <div class="student-avatar-placeholder">
+                            <?php echo $initials; ?>
+                        </div>
+                    <?php endif; ?>
+
+                    <h3 style="font-size: 1.3rem; font-weight: 900; color: #ffffff; margin: 0 0 4px 0;">
+                        <?php echo htmlspecialchars($st['name']); ?>
+                    </h3>
+
+                    <div style="font-size: 0.84rem; color: #38bdf8; font-weight: 800; margin-bottom: 8px;">
+                        <?php echo htmlspecialchars($st['target_school'] ?: 'Competitive Batch'); ?>
+                    </div>
+
+                    <div style="background: rgba(255, 255, 255, 0.08); padding: 10px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.1); margin-top: 12px;">
+                        <div style="font-size: 0.72rem; color: #94a3b8; font-weight: 800; text-transform: uppercase;">Average Percentage</div>
+                        <div style="font-size: 1.6rem; font-weight: 900; color: <?php echo ($rk === 1) ? '#f59e0b' : '#ffffff'; ?>; margin-top: 2px;">
+                            <?php echo $pct; ?>%
+                        </div>
+                        <div style="font-size: 0.75rem; color: #cbd5e1; font-weight: 600; margin-top: 2px;">
+                            Evaluated in <?php echo $st['total_exams']; ?> Exam<?php echo $st['total_exams'] > 1 ? 's' : ''; ?>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <?php else: ?>
+            <div style="text-align: center; color: #94a3b8; padding: 40px; font-weight: 600;">
+                Monthly evaluation leaderboard is currently being calculated.
+            </div>
+        <?php endif; ?>
+    </div>
+</section>
 
 <!-- Fee Structure & Admission Plan -->
 <section id="admission" style="padding: 80px 0; background: #ffffff;">
