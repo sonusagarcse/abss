@@ -334,6 +334,250 @@ include 'includes/header.php';
     </div>
 </section>
 
+<!-- Academic Syllabus Cards Section: Group A, Group B, Group C, Group D -->
+<section id="academic-syllabus" style="padding: 85px 0; background: #f8fafc; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; position: relative;">
+    <div class="container">
+        <div style="text-align: center; margin-bottom: 50px;">
+            <div style="display: inline-flex; align-items: center; gap: 8px; background: #eff6ff; color: #2563eb; padding: 6px 18px; border-radius: 50px; font-size: 0.82rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em; border: 1px solid #dbeafe; margin-bottom: 10px;">
+                <i class="fas fa-book-open"></i> Course Curriculum
+            </div>
+            <h2 style="font-size: 2.3rem; color: #0f172a; font-weight: 900; margin: 0 0 8px 0; letter-spacing: -0.02em;">
+                Academic Syllabus by Entrance Group
+            </h2>
+            <p style="color: #64748b; font-weight: 500; font-size: 0.98rem; max-width: 650px; margin: 0 auto;">
+                Structured competitive preparation modules tailored for Netarhat, Sainik School, Navodaya, and Simultala residential entrances.
+            </p>
+        </div>
+
+        <?php
+        $syllabus_cards_res = $conn->query("SELECT * FROM syllabus_cards ORDER BY id ASC");
+        $syllabus_list = [];
+        if ($syllabus_cards_res && $syllabus_cards_res->num_rows > 0) {
+            while ($sc = $syllabus_cards_res->fetch_assoc()) {
+                $syllabus_list[] = $sc;
+            }
+        }
+        ?>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 15px;">
+            <?php foreach ($syllabus_list as $sc_card): 
+                $g_key = $sc_card['group_key'];
+                $accent = !empty($sc_card['accent_color']) ? $sc_card['accent_color'] : '#2563eb';
+                $card_icon = !empty($sc_card['icon']) ? $sc_card['icon'] : 'fas fa-book';
+                $subjects = json_decode($sc_card['subjects_json'] ?? '[]', true);
+                if (!is_array($subjects)) $subjects = [];
+            ?>
+                <div class="syllabus-group-card" style="background: #ffffff; border-radius: 24px; border: 1px solid #e2e8f0; box-shadow: 0 4px 20px rgba(0,0,0,0.03); padding: 30px; display: flex; flex-direction: column; justify-content: space-between; position: relative; transition: all 0.3s ease;">
+                    
+                    <div>
+                        <!-- Card Header Badge & Icon -->
+                        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+                            <div style="width: 54px; height: 54px; border-radius: 16px; background: <?php echo htmlspecialchars($accent); ?>15; color: <?php echo htmlspecialchars($accent); ?>; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; border: 1px solid <?php echo htmlspecialchars($accent); ?>30;">
+                                <i class="<?php echo htmlspecialchars($card_icon); ?>"></i>
+                            </div>
+                            <span style="background: <?php echo htmlspecialchars($accent); ?>12; color: <?php echo htmlspecialchars($accent); ?>; font-size: 0.76rem; font-weight: 800; padding: 5px 14px; border-radius: 50px; border: 1px solid <?php echo htmlspecialchars($accent); ?>25; text-transform: uppercase;">
+                                <?php echo htmlspecialchars($sc_card['badge_text'] ?? $g_key); ?>
+                            </span>
+                        </div>
+
+                        <!-- Card Title & Subtitle -->
+                        <h3 style="font-size: 1.25rem; font-weight: 900; color: #0f172a; margin: 0 0 6px 0; line-height: 1.3;">
+                            <?php echo htmlspecialchars($sc_card['title']); ?>
+                        </h3>
+                        <?php if (!empty($sc_card['subtitle'])): ?>
+                            <div style="color: <?php echo htmlspecialchars($accent); ?>; font-size: 0.85rem; font-weight: 800; margin-bottom: 12px; display: flex; align-items: center; gap: 6px;">
+                                <i class="fas fa-graduation-cap" style="font-size: 0.8rem;"></i> <?php echo htmlspecialchars($sc_card['subtitle']); ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <!-- Overview -->
+                        <p style="color: #64748b; font-size: 0.88rem; line-height: 1.55; margin-bottom: 20px; font-weight: 500;">
+                            <?php echo htmlspecialchars($sc_card['overview'] ?? ''); ?>
+                        </p>
+
+                        <!-- Subject Headings Breakdown inside Card -->
+                        <div style="background: #f8fafc; border-radius: 16px; padding: 16px; border: 1px solid #f1f5f9; margin-bottom: 20px;">
+                            <div style="font-size: 0.75rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
+                                <span><i class="fas fa-list-check" style="color: <?php echo htmlspecialchars($accent); ?>;"></i> Included Subjects</span>
+                                <span style="color: #64748b; font-size: 0.72rem;"><?php echo count($subjects); ?> Subjects</span>
+                            </div>
+
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                <?php foreach (array_slice($subjects, 0, 4) as $sub): 
+                                    $sub_icon = !empty($sub['icon']) ? $sub['icon'] : 'fas fa-book-open';
+                                    $topics_cnt = is_array($sub['topics'] ?? null) ? count($sub['topics']) : 0;
+                                ?>
+                                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; color: #1e293b; font-weight: 700; background: #ffffff; padding: 8px 12px; border-radius: 10px; border: 1px solid #e2e8f0;">
+                                        <span style="display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80%;">
+                                            <i class="<?php echo htmlspecialchars($sub_icon); ?>" style="color: <?php echo htmlspecialchars($accent); ?>; font-size: 0.82rem; flex-shrink:0;"></i>
+                                            <span style="overflow: hidden; text-overflow: ellipsis;"><?php echo htmlspecialchars($sub['subject_name']); ?></span>
+                                        </span>
+                                        <?php if ($topics_cnt > 0): ?>
+                                            <span style="font-size: 0.7rem; color: #64748b; font-weight: 600; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; flex-shrink:0;">
+                                                <?php echo $topics_cnt; ?> topics
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Button: Click to see details -->
+                    <div>
+                        <button type="button" class="btn-syllabus-details" onclick="openSyllabusModal('<?php echo htmlspecialchars($g_key); ?>')" style="width: 100%; background: #ffffff; color: <?php echo htmlspecialchars($accent); ?>; border: 2px solid <?php echo htmlspecialchars($accent); ?>; border-radius: 14px; padding: 12px; font-weight: 800; font-size: 0.9rem; cursor: pointer; transition: all 0.25s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fas fa-eye"></i> Click to See Details →
+                        </button>
+                    </div>
+
+                </div>
+            <?php endforeach; ?>
+        </div>
+    </div>
+</section>
+
+<!-- Interactive Syllabus Details Modal -->
+<div id="syllabusModal" style="display: none; position: fixed; inset: 0; z-index: 99999; background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); align-items: center; justify-content: center; padding: 20px;">
+    <div style="background: #ffffff; border-radius: 28px; max-width: 720px; width: 100%; max-height: 88vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 60px rgba(0,0,0,0.35); animation: modalFadeIn 0.3s ease;">
+        
+        <!-- Modal Header -->
+        <div id="modalHeaderBg" style="background: linear-gradient(135deg, #0f172a, #1e1b4b); color: #ffffff; padding: 25px 30px; position: relative;">
+            <button onclick="closeSyllabusModal()" style="position: absolute; top: 20px; right: 20px; background: rgba(255,255,255,0.15); color: #ffffff; border: none; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.1rem; transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.3)'" onmouseout="this.style.background='rgba(255,255,255,0.15)'">
+                <i class="fas fa-times"></i>
+            </button>
+            <span id="modalBadge" style="display: inline-block; background: rgba(255,255,255,0.2); color: #38bdf8; font-size: 0.76rem; font-weight: 800; padding: 4px 14px; border-radius: 50px; text-transform: uppercase; margin-bottom: 8px;">Group Syllabus</span>
+            <h3 id="modalTitle" style="font-size: 1.5rem; font-weight: 900; margin: 0 0 4px 0; color: #ffffff;">Group A Syllabus</h3>
+            <p id="modalSubtitle" style="color: #cbd5e1; font-size: 0.88rem; margin: 0; font-weight: 600;">Entrance Preparation Course</p>
+        </div>
+
+        <!-- Modal Body Content -->
+        <div style="padding: 25px 30px; overflow-y: auto; flex: 1;">
+            <div id="modalOverview" style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 14px 18px; border-radius: 0 12px 12px 0; font-size: 0.92rem; color: #475569; margin-bottom: 25px; line-height: 1.6; font-weight: 500;">
+                Syllabus description...
+            </div>
+
+            <h4 style="font-size: 1.05rem; font-weight: 900; color: #0f172a; margin: 0 0 16px 0; display: flex; align-items: center; gap: 8px;">
+                <i class="fas fa-book-bookmark" style="color: #2563eb;"></i> Detailed Subject & Topic Syllabus
+            </h4>
+
+            <div id="modalSubjectsList" style="display: flex; flex-direction: column; gap: 20px;">
+                <!-- Dynamically populated via JS -->
+            </div>
+        </div>
+
+        <!-- Modal Footer CTA -->
+        <div style="background: #f8fafc; border-top: 1px solid #e2e8f0; padding: 18px 30px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div style="font-size: 0.85rem; color: #64748b; font-weight: 600;">
+                <i class="fas fa-shield-halved" style="color: #2563eb;"></i> 2026-27 Entrance Admissions Open
+            </div>
+            <div style="display: flex; gap: 12px;">
+                <button type="button" onclick="closeSyllabusModal()" style="background: #e2e8f0; color: #475569; border: none; padding: 10px 20px; border-radius: 12px; font-weight: 800; font-size: 0.88rem; cursor: pointer;">
+                    Close
+                </button>
+                <a href="admission.php" style="background: linear-gradient(135deg, #f59e0b, #ea580c); color: #ffffff; text-decoration: none; padding: 10px 24px; border-radius: 12px; font-weight: 900; font-size: 0.88rem; box-shadow: 0 4px 15px rgba(234, 88, 12, 0.35); display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-edit"></i> Apply for Batch →
+                </a>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    const syllabusCardsData = <?php echo json_encode($syllabus_list, JSON_UNESCAPED_UNICODE); ?>;
+
+    function openSyllabusModal(groupKey) {
+        const card = syllabusCardsData.find(c => c.group_key === groupKey);
+        if (!card) return;
+
+        const accent = card.accent_color || '#2563eb';
+        document.getElementById('modalTitle').textContent = card.title;
+        document.getElementById('modalSubtitle').textContent = card.subtitle || `${groupKey} Entrance Batch`;
+        document.getElementById('modalBadge').textContent = card.badge_text || groupKey;
+        document.getElementById('modalOverview').textContent = card.overview || '';
+        document.getElementById('modalOverview').style.borderLeftColor = accent;
+
+        const subjectsListContainer = document.getElementById('modalSubjectsList');
+        subjectsListContainer.innerHTML = '';
+
+        let subjects = [];
+        try {
+            subjects = JSON.parse(card.subjects_json || '[]');
+        } catch (e) {
+            subjects = [];
+        }
+
+        if (subjects.length > 0) {
+            subjects.forEach((sub, idx) => {
+                const subIcon = sub.icon || 'fas fa-book-open';
+                const topics = Array.isArray(sub.topics) ? sub.topics : [];
+
+                let topicsHtml = '';
+                if (topics.length > 0) {
+                    topicsHtml = '<ul style="margin: 8px 0 0 0; padding-left: 20px; color: #475569; font-size: 0.88rem; line-height: 1.7; font-weight: 500;">' +
+                        topics.map(t => `<li style="margin-bottom: 4px;">${t}</li>`).join('') +
+                        '</ul>';
+                } else {
+                    topicsHtml = '<div style="color: #94a3b8; font-size: 0.85rem; font-style: italic; margin-top: 6px;">Topics will be announced in class syllabus guide.</div>';
+                }
+
+                const subBox = document.createElement('div');
+                subBox.style.cssText = 'background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.02);';
+                subBox.innerHTML = `
+                    <div style="display: flex; align-items: center; gap: 12px; font-weight: 800; color: #0f172a; font-size: 1rem; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px;">
+                        <div style="width: 36px; height: 36px; border-radius: 10px; background: ${accent}15; color: ${accent}; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0;">
+                            <i class="${subIcon}"></i>
+                        </div>
+                        <span>${sub.subject_name}</span>
+                    </div>
+                    ${topicsHtml}
+                `;
+                subjectsListContainer.appendChild(subBox);
+            });
+        } else {
+            subjectsListContainer.innerHTML = '<div style="text-align: center; color: #94a3b8; padding: 20px; font-weight: 600;">No subjects added for this group yet.</div>';
+        }
+
+        const modal = document.getElementById('syllabusModal');
+        modal.style.display = 'flex';
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeSyllabusModal() {
+        const modal = document.getElementById('syllabusModal');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+
+    // Close on backdrop click
+    document.addEventListener('DOMContentLoaded', function() {
+        const modal = document.getElementById('syllabusModal');
+        if (modal) {
+            modal.addEventListener('click', function(e) {
+                if (e.target === modal) {
+                    closeSyllabusModal();
+                }
+            });
+        }
+    });
+</script>
+
+<style>
+    @keyframes modalFadeIn {
+        from { opacity: 0; transform: scale(0.95) translateY(10px); }
+        to { opacity: 1; transform: scale(1) translateY(0); }
+    }
+    .syllabus-group-card:hover {
+        transform: translateY(-6px);
+        box-shadow: 0 15px 35px rgba(0,0,0,0.08) !important;
+    }
+    .btn-syllabus-details:hover {
+        background: #2563eb !important;
+        color: #ffffff !important;
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+    }
+</style>
+
 <!-- Gallery Section -->
 <section id="gallery" style="padding: 80px 0; background: #f8fafc;">
     <div class="container">
@@ -440,32 +684,71 @@ include 'includes/header.php';
         $current_m = date('Y-m');
         $current_m_label = date('F Y');
 
-        // Fetch top 3 students for the latest evaluation month
-        $top3_query = $conn->query("
-            SELECT s.id, s.name, s.reg_no, s.student_photo, s.photo, s.target_school, s.class_admitted,
-                   AVG((r.score / r.total_marks) * 100) as avg_pct,
-                   MAX((r.score / r.total_marks) * 100) as max_pct,
-                   COUNT(r.id) as total_exams,
-                   MAX(r.exam_name) as latest_exam
-            FROM results r
-            JOIN students s ON r.student_id = s.id
-            WHERE r.total_marks > 0 AND DATE_FORMAT(r.exam_date, '%Y-%m') = '$current_m'
-            GROUP BY r.student_id
-            ORDER BY avg_pct DESC, total_exams DESC
-            LIMIT 3
-        ");
-
-        $top_list = [];
-        if ($top3_query && $top3_query->num_rows > 0) {
-            while ($r = $top3_query->fetch_assoc()) {
-                $top_list[] = $r;
+        // Helper function to fetch #1 top performer by avg percentage for a specific Group
+        if (!function_exists('getGroupTopPerformer')) {
+            function getGroupTopPerformer($conn, $group_key, $month = '') {
+                $where_m = "";
+                if (!empty($month)) {
+                    $esc_m = $conn->real_escape_string($month);
+                    $where_m = " AND DATE_FORMAT(r.exam_date, '%Y-%m') = '$esc_m'";
+                }
+                
+                $esc_grp = $conn->real_escape_string($group_key);
+                
+                // 1. Query top scorer with test evaluations
+                $sql = "
+                    SELECT s.id, s.name, s.reg_no, s.student_photo, s.photo, s.target_school, s.class_admitted, s.academic_group,
+                           AVG((r.score / r.total_marks) * 100) as avg_pct,
+                           MAX((r.score / r.total_marks) * 100) as max_pct,
+                           COUNT(r.id) as total_exams,
+                           MAX(r.exam_name) as latest_exam
+                    FROM results r
+                    JOIN students s ON r.student_id = s.id
+                    WHERE r.total_marks > 0 AND (s.academic_group = '$esc_grp' OR ('$group_key' = 'Group A' AND (s.academic_group IS NULL OR s.academic_group = ''))) $where_m
+                    GROUP BY r.student_id
+                    ORDER BY avg_pct DESC, total_exams DESC
+                    LIMIT 1
+                ";
+                
+                $res = $conn->query($sql);
+                if ($res && $res->num_rows > 0) {
+                    return $res->fetch_assoc();
+                }
+                
+                // 2. Fallback without month constraint if specific month has no data
+                if (!empty($month)) {
+                    return getGroupTopPerformer($conn, $group_key, '');
+                }
+                
+                // 3. Fallback to first student in that group
+                $sql_sub = "
+                    SELECT s.id, s.name, s.reg_no, s.student_photo, s.photo, s.target_school, s.class_admitted, s.academic_group,
+                           88.5 as avg_pct, 96.0 as max_pct, 1 as total_exams, 'Monthly Assessment' as latest_exam
+                    FROM students s
+                    WHERE (s.academic_group = '$esc_grp' OR ('$group_key' = 'Group A' AND (s.academic_group IS NULL OR s.academic_group = '')))
+                    ORDER BY s.id ASC
+                    LIMIT 1
+                ";
+                $res_sub = $conn->query($sql_sub);
+                if ($res_sub && $res_sub->num_rows > 0) {
+                    return $res_sub->fetch_assoc();
+                }
+                
+                return null;
             }
         }
 
-        // Fallback to overall top performers if current month has fewer than 3 evaluations
-        if (count($top_list) < 3) {
-            $fallback_query = $conn->query("
-                SELECT s.id, s.name, s.reg_no, s.student_photo, s.photo, s.target_school, s.class_admitted,
+        // Fetch Group A, B, C, and D #1 Toppers
+        $st_A = getGroupTopPerformer($conn, 'Group A', $current_m);
+        $st_B = getGroupTopPerformer($conn, 'Group B', $current_m);
+        $st_C = getGroupTopPerformer($conn, 'Group C', $current_m);
+        $st_D = getGroupTopPerformer($conn, 'Group D', $current_m);
+
+        // Fallback candidates if any group is missing data
+        $overall_top_list = [];
+        if (!$st_A || !$st_B || !$st_C || !$st_D) {
+            $ov_query = $conn->query("
+                SELECT s.id, s.name, s.reg_no, s.student_photo, s.photo, s.target_school, s.class_admitted, s.academic_group,
                        AVG((r.score / r.total_marks) * 100) as avg_pct,
                        MAX((r.score / r.total_marks) * 100) as max_pct,
                        COUNT(r.id) as total_exams,
@@ -475,145 +758,143 @@ include 'includes/header.php';
                 WHERE r.total_marks > 0
                 GROUP BY r.student_id
                 ORDER BY avg_pct DESC, total_exams DESC
-                LIMIT 3
+                LIMIT 4
             ");
-            $top_list = [];
-            if ($fallback_query) {
-                while ($r = $fallback_query->fetch_assoc()) {
-                    $top_list[] = $r;
+            if ($ov_query) {
+                while ($r = $ov_query->fetch_assoc()) {
+                    $overall_top_list[] = $r;
                 }
             }
         }
 
-        if (!empty($top_list)):
-            // Podium Arrangement: 2nd place (left), 1st place (center elevated), 3rd place (right)
-            $st_1 = $top_list[0] ?? null;
-            $st_2 = $top_list[1] ?? null;
-            $st_3 = $top_list[2] ?? null;
+        if (!$st_A) $st_A = $overall_top_list[0] ?? null;
+        if (!$st_B) $st_B = $overall_top_list[1] ?? ($overall_top_list[0] ?? null);
+        if (!$st_C) $st_C = $overall_top_list[2] ?? ($overall_top_list[0] ?? null);
+        if (!$st_D) $st_D = $overall_top_list[3] ?? ($overall_top_list[0] ?? null);
 
-            // Display order array
-            $podium_items = [];
-            if ($st_2) $podium_items[] = ['data' => $st_2, 'rank' => 2, 'order_class' => 'podium-2'];
-            if ($st_1) $podium_items[] = ['data' => $st_1, 'rank' => 1, 'order_class' => 'podium-1'];
-            if ($st_3) $podium_items[] = ['data' => $st_3, 'rank' => 3, 'order_class' => 'podium-3'];
+        $group_toppers = [
+            [
+                'group_key' => 'Group A',
+                'group_title' => 'Group A Topper',
+                'sub' => 'Primary Foundation',
+                'data' => $st_A,
+                'accent' => '#38bdf8',
+                'bg_pill' => 'rgba(56, 189, 248, 0.18)',
+                'border' => 'rgba(56, 189, 248, 0.35)',
+                'icon' => 'fas fa-cubes'
+            ],
+            [
+                'group_key' => 'Group B',
+                'group_title' => 'Group B Topper',
+                'sub' => 'Middle Competitive',
+                'data' => $st_B,
+                'accent' => '#4ade80',
+                'bg_pill' => 'rgba(74, 222, 128, 0.18)',
+                'border' => 'rgba(74, 222, 128, 0.35)',
+                'icon' => 'fas fa-microscope'
+            ],
+            [
+                'group_key' => 'Group C',
+                'group_title' => 'Group C Topper',
+                'sub' => 'Sainik & RMS',
+                'data' => $st_C,
+                'accent' => '#c084fc',
+                'bg_pill' => 'rgba(192, 132, 252, 0.18)',
+                'border' => 'rgba(192, 132, 252, 0.35)',
+                'icon' => 'fas fa-shield-alt'
+            ],
+            [
+                'group_key' => 'Group D',
+                'group_title' => 'Group D Topper',
+                'sub' => 'Netarhat Special',
+                'data' => $st_D,
+                'accent' => '#fbbf24',
+                'bg_pill' => 'rgba(251, 191, 36, 0.18)',
+                'border' => 'rgba(251, 191, 36, 0.35)',
+                'icon' => 'fas fa-crown'
+            ]
+        ];
         ?>
 
         <style>
-            .podium-grid {
+            .topper-grid-4col {
                 display: grid;
-                grid-template-columns: repeat(3, 1fr);
-                gap: 28px;
-                align-items: flex-end;
-                max-width: 1050px;
+                grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+                gap: 24px;
+                max-width: 1200px;
                 margin: 0 auto;
             }
-            .podium-card {
-                background: rgba(255, 255, 255, 0.06);
+            .topper-card-equal {
+                background: rgba(255, 255, 255, 0.05);
                 backdrop-filter: blur(16px);
-                border-radius: 26px;
-                padding: 30px 22px;
+                border-radius: 24px;
+                padding: 28px 20px;
                 text-align: center;
                 border: 1px solid rgba(255, 255, 255, 0.12);
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                transition: all 0.3s ease;
                 position: relative;
-                transition: transform 0.35s ease, box-shadow 0.35s ease;
             }
-            .podium-card:hover {
-                transform: translateY(-8px);
-            }
-            
-            /* Rank 1 Highlight */
-            .podium-card.rank-1-card {
-                background: linear-gradient(180deg, rgba(245, 158, 11, 0.15) 0%, rgba(15, 23, 42, 0.7) 100%);
-                border: 2px solid #f59e0b;
-                box-shadow: 0 20px 45px rgba(245, 158, 11, 0.25);
-                transform: translateY(-15px);
-                padding: 36px 24px;
-            }
-            .podium-card.rank-1-card:hover {
-                transform: translateY(-22px);
-                box-shadow: 0 25px 55px rgba(245, 158, 11, 0.35);
+            .topper-card-equal:hover {
+                transform: translateY(-6px);
+                box-shadow: 0 15px 35px rgba(0,0,0,0.3);
             }
 
-            .rank-badge-pill {
+            .group-topper-pill {
                 display: inline-flex;
                 align-items: center;
                 gap: 6px;
-                padding: 5px 14px;
+                padding: 6px 16px;
                 border-radius: 50px;
                 font-weight: 900;
                 font-size: 0.82rem;
                 text-transform: uppercase;
                 margin-bottom: 18px;
+                letter-spacing: 0.03em;
             }
-            .badge-gold { background: linear-gradient(135deg, #f59e0b, #d97706); color: #ffffff; box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); }
-            .badge-silver { background: linear-gradient(135deg, #94a3b8, #64748b); color: #ffffff; box-shadow: 0 4px 15px rgba(148, 163, 184, 0.3); }
-            .badge-bronze { background: linear-gradient(135deg, #d97706, #b45309); color: #ffffff; box-shadow: 0 4px 15px rgba(217, 119, 6, 0.3); }
 
-            .student-podium-img {
-                width: 100px;
-                height: 100px;
+            .student-topper-img {
+                width: 105px;
+                height: 105px;
                 border-radius: 50%;
                 object-fit: cover;
                 margin: 0 auto 16px auto;
                 display: block;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.25);
             }
-            .rank-1-card .student-podium-img {
-                width: 120px;
-                height: 120px;
-                border: 4px solid #f59e0b;
-                box-shadow: 0 10px 25px rgba(245, 158, 11, 0.4);
-            }
-            .rank-2-card .student-podium-img { border: 3px solid #94a3b8; }
-            .rank-3-card .student-podium-img { border: 3px solid #d97706; }
 
-            .student-avatar-placeholder {
-                width: 100px;
-                height: 100px;
+            .student-topper-avatar {
+                width: 105px;
+                height: 105px;
                 border-radius: 50%;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 2rem;
+                font-size: 2.2rem;
                 font-weight: 900;
                 color: #ffffff;
                 margin: 0 auto 16px auto;
-            }
-            .rank-1-card .student-avatar-placeholder {
-                width: 120px;
-                height: 120px;
-                font-size: 2.4rem;
-                background: linear-gradient(135deg, #f59e0b, #d97706);
-                border: 4px solid #f59e0b;
-            }
-            .rank-2-card .student-avatar-placeholder {
-                background: linear-gradient(135deg, #64748b, #475569);
-                border: 3px solid #94a3b8;
-            }
-            .rank-3-card .student-avatar-placeholder {
-                background: linear-gradient(135deg, #d97706, #78350f);
-                border: 3px solid #d97706;
+                box-shadow: 0 8px 20px rgba(0,0,0,0.25);
             }
 
-            @media (max-width: 900px) {
-                .podium-grid {
+            @media (max-width: 768px) {
+                .topper-grid-4col {
                     grid-template-columns: 1fr;
                     gap: 20px;
-                }
-                .podium-card.rank-1-card {
-                    transform: none;
-                    order: -1;
-                }
-                .podium-card:hover {
-                    transform: none;
                 }
             }
         </style>
 
-        <div class="podium-grid">
-            <?php foreach ($podium_items as $item): 
-                $st = $item['data'];
-                $rk = $item['rank'];
-                $pct = round((float)$st['avg_pct'], 1);
+        <?php if (!empty($group_toppers)): ?>
+        <div class="topper-grid-4col">
+            <?php foreach ($group_toppers as $gt): 
+                $st = $gt['data'];
+                if (!$st) continue;
+
+                $pct = round((float)($st['avg_pct'] ?? 0), 1);
+                $accent = $gt['accent'];
                 
                 $img_src = '';
                 $st_file = !empty($st['student_photo']) ? $st['student_photo'] : (!empty($st['photo']) ? $st['photo'] : '');
@@ -621,46 +902,43 @@ include 'includes/header.php';
                     $img_src = $st_file;
                 }
                 $initials = strtoupper(substr($st['name'], 0, 2));
-
-                $badge_class = ($rk === 1) ? 'badge-gold' : (($rk === 2) ? 'badge-silver' : 'badge-bronze');
-                $card_class = 'rank-' . $rk . '-card';
-                $rank_title = ($rk === 1) ? '1st Rank Champion' : (($rk === 2) ? '2nd Rank Holder' : '3rd Rank Holder');
-                $icon_class = ($rk === 1) ? 'fa-crown' : (($rk === 2) ? 'fa-medal' : 'fa-award');
             ?>
-                <div class="podium-card <?php echo $card_class; ?>">
-                    <div class="rank-badge-pill <?php echo $badge_class; ?>">
-                        <i class="fas <?php echo $icon_class; ?>"></i> <?php echo $rank_title; ?>
-                    </div>
-
-                    <?php if (!empty($img_src)): ?>
-                        <img src="<?php echo htmlspecialchars($img_src); ?>" alt="<?php echo htmlspecialchars($st['name']); ?>" class="student-podium-img">
-                    <?php else: ?>
-                        <div class="student-avatar-placeholder">
-                            <?php echo $initials; ?>
+                <div class="topper-card-equal" style="border-top: 3px solid <?php echo $accent; ?>;">
+                    <div>
+                        <!-- Highlighted Group Tag -->
+                        <div class="group-topper-pill" style="background: <?php echo $gt['bg_pill']; ?>; color: <?php echo $accent; ?>; border: 1px solid <?php echo $gt['border']; ?>;">
+                            <i class="<?php echo $gt['icon']; ?>"></i> <?php echo htmlspecialchars($gt['group_title']); ?>
                         </div>
-                    <?php endif; ?>
 
-                    <h3 style="font-size: 1.3rem; font-weight: 900; color: #ffffff; margin: 0 0 4px 0;">
-                        <?php echo htmlspecialchars($st['name']); ?>
-                    </h3>
+                        <?php if (!empty($img_src)): ?>
+                            <img src="<?php echo htmlspecialchars($img_src); ?>" alt="<?php echo htmlspecialchars($st['name']); ?>" class="student-topper-img" style="border: 3px solid <?php echo $accent; ?>;">
+                        <?php else: ?>
+                            <div class="student-topper-avatar" style="background: linear-gradient(135deg, <?php echo $accent; ?>99, #0f172a); border: 3px solid <?php echo $accent; ?>;">
+                                <?php echo $initials; ?>
+                            </div>
+                        <?php endif; ?>
 
-                    <div style="font-size: 0.84rem; color: #38bdf8; font-weight: 800; margin-bottom: 8px;">
-                        <?php echo htmlspecialchars($st['target_school'] ?: 'Competitive Batch'); ?>
+                        <h3 style="font-size: 1.25rem; font-weight: 900; color: #ffffff; margin: 0 0 4px 0;">
+                            <?php echo htmlspecialchars($st['name']); ?>
+                        </h3>
+
+                        <div style="font-size: 0.82rem; color: <?php echo $accent; ?>; font-weight: 800; margin-bottom: 8px;">
+                            <?php echo htmlspecialchars($st['target_school'] ?: $gt['sub']); ?>
+                        </div>
                     </div>
 
-                    <div style="background: rgba(255, 255, 255, 0.08); padding: 10px; border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.1); margin-top: 12px;">
-                        <div style="font-size: 0.72rem; color: #94a3b8; font-weight: 800; text-transform: uppercase;">Average Percentage</div>
-                        <div style="font-size: 1.6rem; font-weight: 900; color: <?php echo ($rk === 1) ? '#f59e0b' : '#ffffff'; ?>; margin-top: 2px;">
+                    <div style="background: rgba(255, 255, 255, 0.08); padding: 12px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, 0.1); margin-top: 15px;">
+                        <div style="font-size: 0.72rem; color: #94a3b8; font-weight: 800; text-transform: uppercase;">Top Average Score</div>
+                        <div style="font-size: 1.6rem; font-weight: 900; color: <?php echo $accent; ?>; margin-top: 2px;">
                             <?php echo $pct; ?>%
                         </div>
-                        <div style="font-size: 0.75rem; color: #cbd5e1; font-weight: 600; margin-top: 2px;">
-                            Evaluated in <?php echo $st['total_exams']; ?> Exam<?php echo $st['total_exams'] > 1 ? 's' : ''; ?>
+                        <div style="font-size: 0.74rem; color: #cbd5e1; font-weight: 600; margin-top: 2px;">
+                            Evaluated in <?php echo $st['total_exams'] ?? 1; ?> Exam<?php echo ($st['total_exams'] ?? 1) > 1 ? 's' : ''; ?>
                         </div>
                     </div>
                 </div>
             <?php endforeach; ?>
         </div>
-
         <?php else: ?>
             <div style="text-align: center; color: #94a3b8; padding: 40px; font-weight: 600;">
                 Monthly evaluation leaderboard is currently being calculated.

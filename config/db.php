@@ -192,6 +192,11 @@ function runAutoMigrator($conn) {
             $conn->query("ALTER TABLE students ADD COLUMN scholar_mode ENUM('Day Scholar', 'Hostler') DEFAULT 'Day Scholar' AFTER class_admitted");
         }
         
+        $checkAcademicGroup = $conn->query("SHOW COLUMNS FROM students LIKE 'academic_group'");
+        if ($checkAcademicGroup && $checkAcademicGroup->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN academic_group VARCHAR(50) DEFAULT 'Group A' AFTER scholar_mode");
+        }
+        
         // 4. Add student registration number and photo upload
         $checkRegNo = $conn->query("SHOW COLUMNS FROM students LIKE 'reg_no'");
         if ($checkRegNo && $checkRegNo->num_rows == 0) {
@@ -567,6 +572,100 @@ function runAutoMigrator($conn) {
         $checkInqType = $conn->query("SHOW COLUMNS FROM inquiries LIKE 'inquiry_type'");
         if ($checkInqType && $checkInqType->num_rows == 0) {
             $conn->query("ALTER TABLE inquiries ADD COLUMN inquiry_type VARCHAR(100) DEFAULT 'General' AFTER attachment");
+        }
+
+        // 14. Academic Syllabus Cards Table & Auto-Seeding
+        $conn->query("CREATE TABLE IF NOT EXISTS syllabus_cards (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            group_key VARCHAR(20) NOT NULL UNIQUE,
+            title VARCHAR(150) NOT NULL,
+            subtitle VARCHAR(255) NULL,
+            badge_text VARCHAR(50) DEFAULT 'Syllabus',
+            icon VARCHAR(50) DEFAULT 'fas fa-book',
+            accent_color VARCHAR(30) DEFAULT '#2563eb',
+            overview TEXT NULL,
+            subjects_json LONGTEXT NULL,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $countSyllabus = $conn->query("SELECT COUNT(*) as c FROM syllabus_cards");
+        if ($countSyllabus && (int)$countSyllabus->fetch_assoc()['c'] == 0) {
+            $grpA_subjects = [
+                ["subject_name" => "Primary Arithmetic & Mathematics", "icon" => "fas fa-calculator", "topics" => ["Number System, Place Value & Expansion", "Basic Operations: Addition, Subtraction, Multiplication & Division", "Fractional Numbers & Decimal Notation", "LCM & HCF Essentials", "Basic Geometry: Lines, Angles, Shapes & Perimeter"]],
+                ["subject_name" => "Mental Ability & Visual Reasoning", "icon" => "fas fa-brain", "topics" => ["Figure Matching & Odd-One-Out", "Pattern Completion & Series Continuation", "Analogy & Spatial Visualization", "Embedded Figures & Mirror Images"]],
+                ["subject_name" => "Hindi & English Language Skills", "icon" => "fas fa-font", "topics" => ["Unseen Passages & Comprehension (अपठित गद्यांश)", "Vyakaran: Sangya, Sarvanam, Kriya, Visheshan", "Synonyms & Antonyms (पर्यायवाची व विलोम)", "Basic English Vocabulary & Spellings"]],
+                ["subject_name" => "General Awareness & EVS", "icon" => "fas fa-globe-asia", "topics" => ["Our Environment, Plants & Animals", "Human Body, Health & Hygiene", "Basic Geography, Seasons & Directions", "Notable Personalities & National Symbols"]]
+            ];
+
+            $grpB_subjects = [
+                ["subject_name" => "Advanced Arithmetic & Quantitative Aptitude", "icon" => "fas fa-square-root-variable", "topics" => ["Factors, Multiples & Prime Factorization", "Fractions, Decimals & Simplification (BODMAS)", "Unitary Method, Ratio & Proportion", "Percentage, Profit & Loss", "Simple Interest & Average Calculation", "Area, Perimeter & Volume of Basic Solids"]],
+                ["subject_name" => "Logical & Analytical Reasoning", "icon" => "fas fa-puzzle-piece", "topics" => ["Coding-Decoding & Alphabet Series", "Direction Sense & Blood Relations", "Ranking & Seating Arrangement", "Figure Matrix, Folding & Paper Cutting"]],
+                ["subject_name" => "Comprehensive Hindi & English Grammar", "icon" => "fas fa-book-open-reader", "topics" => ["Complex Passage Comprehension & Inference", "Hindi Vyakaran: Sandhi, Samas, Muhavare, Lokoktiyan", "English Grammar: Tenses, Prepositions, Articles, Parts of Speech", "Idioms, One-word Substitutions & Correct Usage"]],
+                ["subject_name" => "General Science & Social Studies", "icon" => "fas fa-atom", "topics" => ["Matter, Force, Energy & Work", "Solar System, Earth & Natural Phenomena", "Indian History Essentials & Freedom Movement", "Indian Constitution & Basic Civics"]]
+            ];
+
+            $grpC_subjects = [
+                ["subject_name" => "AISSEE & RMS Standard Mathematics", "icon" => "fas fa-calculator", "topics" => ["Square Roots & Cube Roots", "Exponents, Powers & Algebraic Expressions", "Ratio, Proportion, Speed, Time & Distance", "Work & Time Problems", "Compound Interest & Profit-Loss Applications", "Coordinate Geometry & Mensuration (2D/3D Surface Area & Volume)"]],
+                ["subject_name" => "Intelligence & Logical Aptitude", "icon" => "fas fa-lightbulb", "topics" => ["Mathematical Reasoning & Syllogism", "Classification, Venn Diagrams & Logical Sequences", "Data Sufficiency & Analytical Puzzles", "Non-Verbal Cube & Dice Reasoning"]],
+                ["subject_name" => "English Language & Grammar Mastery", "icon" => "fas fa-language", "topics" => ["Active/Passive Voice & Direct/Indirect Speech", "Subject-Verb Agreement & Error Spotting", "Reading Comprehension & Critical Passages", "Vocabulary: Synonyms, Antonyms, Analogies & Phrasal Verbs"]],
+                ["subject_name" => "General Knowledge, Science & Defense Studies", "icon" => "fas fa-shield-halved", "topics" => ["Indian Armed Forces, Ranks & Defense History", "Physics & Chemistry Fundamentals", "Biological Sciences & Ecosystems", "Static GK, International Organizations & Current Affairs"]]
+            ];
+
+            $grpD_subjects = [
+                ["subject_name" => "Netarhat Dual-Pattern Mathematics (Obj + Subj)", "icon" => "fas fa-pen-ruler", "topics" => ["Subjective Step-by-Step Problem Solving", "Number Theory, Divisibility Rules & Remainder Theorem", "Commercial Mathematics & Financial Arithmetic", "Advanced Mensuration & Geometric Proofs", "Algebraic Equations & Problem Modeling"]],
+                ["subject_name" => "Advanced Mental Ability & Mental Math", "icon" => "fas fa-head-side-brain", "topics" => ["Speed Math & Mental Calculation Drills", "Complex Pattern Recognition & Number Puzzles", "Logical Deduction & Assertion-Reasoning", "Spatial Reasoning & Diagrammatic Logic"]],
+                ["subject_name" => "Hindi Sahitya & Vyakaran (नेतरहाट विशेष)", "icon" => "fas fa-feather-pointed", "topics" => ["Hindi Vyakaran: Chhand, Rasa, Alankar Basics", "Subjective Nibandh Lekhan (निबंध लेखन)", "Patra Lekhan (पत्र लेखन) & Precise Writing", "Hindi Literature, Authors & Classic Works"]],
+                ["subject_name" => "General Science & Bihar Special Studies", "icon" => "fas fa-flask-vial", "topics" => ["Physics, Chemistry & Biology Concept Deep Dive", "Bihar History, Geography, Culture & Heritage", "Environmental Science & Sustainability", "Current Scientific Innovations & National Affairs"]]
+            ];
+
+            $default_syllabus = [
+                [
+                    "group_key" => "Group A",
+                    "title" => "Group A - Primary Foundation",
+                    "subtitle" => "Class 3rd & 4th Entrance Prep",
+                    "badge_text" => "Foundation Batch",
+                    "icon" => "fas fa-cubes",
+                    "accent_color" => "#2563eb",
+                    "overview" => "Comprehensive foundational coaching designed for young scholars preparing for Netarhat & Sainik School junior entrance exams.",
+                    "subjects_json" => json_encode($grpA_subjects, JSON_UNESCAPED_UNICODE)
+                ],
+                [
+                    "group_key" => "Group B",
+                    "title" => "Group B - Middle Competitive",
+                    "subtitle" => "Class 5th & 6th Entrance Special",
+                    "badge_text" => "Standard Merit",
+                    "icon" => "fas fa-microscope",
+                    "accent_color" => "#059669",
+                    "overview" => "Core academic syllabus focused on high-scoring entrance tests for JNVST Navodaya Vidyalaya, Sainik School AISSEE, and Simultala.",
+                    "subjects_json" => json_encode($grpB_subjects, JSON_UNESCAPED_UNICODE)
+                ],
+                [
+                    "group_key" => "Group C",
+                    "title" => "Group C - Sainik & RMS Entrance",
+                    "subtitle" => "All India Sainik & Military School",
+                    "badge_text" => "Defense Wing",
+                    "icon" => "fas fa-shield-alt",
+                    "accent_color" => "#7c3aed",
+                    "overview" => "Specialized test syllabus for All India Sainik School Entrance Examination (AISSEE) and Rashtriya Military School (RMS).",
+                    "subjects_json" => json_encode($grpC_subjects, JSON_UNESCAPED_UNICODE)
+                ],
+                [
+                    "group_key" => "Group D",
+                    "title" => "Group D - Netarhat & Simultala Special",
+                    "subtitle" => "State Residential Premier Merit",
+                    "badge_text" => "Super Merit Batch",
+                    "icon" => "fas fa-crown",
+                    "accent_color" => "#d97706",
+                    "overview" => "Advanced subjective and objective dual-pattern syllabus tailored for Netarhat Residential School & Simultala Awasiya Vidyalaya entrance.",
+                    "subjects_json" => json_encode($grpD_subjects, JSON_UNESCAPED_UNICODE)
+                ]
+            ];
+
+            $s_stmt = $conn->prepare("INSERT INTO syllabus_cards (group_key, title, subtitle, badge_text, icon, accent_color, overview, subjects_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+            foreach ($default_syllabus as $ds) {
+                $s_stmt->bind_param("ssssssss", $ds['group_key'], $ds['title'], $ds['subtitle'], $ds['badge_text'], $ds['icon'], $ds['accent_color'], $ds['overview'], $ds['subjects_json']);
+                $s_stmt->execute();
+            }
         }
 
         // Restore MySQLi reporting mode

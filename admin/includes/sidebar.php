@@ -152,6 +152,16 @@ $is_notif_page = (strpos($_SERVER['PHP_SELF'], 'notifications') !== false || $cu
             </a>
         </li>
         <li class="nav-item">
+            <a href="<?php echo $admin_url; ?>syllabus.php" class="nav-link <?php echo $current_page == 'syllabus.php' ? 'active' : ''; ?>">
+                <i class="fas fa-book-open"></i> Academic Syllabus
+            </a>
+        </li>
+        <li class="nav-item">
+            <a href="<?php echo $admin_url; ?>assign_groups.php" class="nav-link <?php echo $current_page == 'assign_groups.php' ? 'active' : ''; ?>">
+                <i class="fas fa-users-gear"></i> Assign Student Groups
+            </a>
+        </li>
+        <li class="nav-item">
             <a href="<?php echo $admin_url; ?>achievers.php" class="nav-link <?php echo $current_page == 'achievers.php' ? 'active' : ''; ?>">
                 <i class="fas fa-trophy"></i> Hall of Excellence
             </a>

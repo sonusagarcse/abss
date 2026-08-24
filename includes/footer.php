@@ -114,9 +114,6 @@
         <a href="https://wa.me/919523012888" target="_blank" class="dock-item dock-whatsapp">
             <i class="fab fa-whatsapp"></i> WhatsApp
         </a>
-        <a href="admission.php" class="dock-item dock-apply">
-            <i class="fas fa-edit"></i> Admission 2026
-        </a>
     </div>
 
     <style>

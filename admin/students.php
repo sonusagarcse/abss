@@ -40,6 +40,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
     $target_school      = trim($_POST['target_school']);
     $class_admitted     = trim($_POST['class_admitted']);
     $scholar_mode       = trim($_POST['scholar_mode']);
+    $academic_group     = trim($_POST['academic_group'] ?? 'Group A');
     $admission_date     = trim($_POST['admission_date']);
     $monthly_discount   = isset($_POST['monthly_discount']) ? (float)$_POST['monthly_discount'] : 0.00;
     $base_fee           = isset($_POST['base_fee']) ? (float)$_POST['base_fee'] : 0.00;
@@ -124,16 +125,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             emergency_contact_name=?, emergency_relationship=?, emergency_phone=?,
             has_allergies=?, allergies_detail=?, has_medical_condition=?, medical_condition_detail=?,
             physician_name=?, physician_phone=?, insurance_provider=?, insurance_policy=?,
-            target_school=?, class_admitted=?, scholar_mode=?, monthly_discount=?, base_fee=?, security_amount=?, registration_fee=?, admission_fee=?, advance_amount=?, admission_date=?, parent_id=?, photo=?, admission_test_paper=?, student_photo=?
+            target_school=?, class_admitted=?, scholar_mode=?, academic_group=?, monthly_discount=?, base_fee=?, security_amount=?, registration_fee=?, admission_fee=?, advance_amount=?, admission_date=?, parent_id=?, photo=?, admission_test_paper=?, student_photo=?
             WHERE id=?");
-        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'ddddddsisssi';
+        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 8) . 'ddddddsisssi';
         $params = [
             $name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
             $parent_name, $guardian_relationship, $phone, $guardian_email, $guardian_address,
             $emergency_contact_name, $emergency_relationship, $emergency_phone,
             $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
             $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
-            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $admission_test_paper_path, $student_photo_path,
+            $target_school, $class_admitted, $scholar_mode, $academic_group, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $admission_test_paper_path, $student_photo_path,
             $id
         ];
         $stmt->bind_param($types, ...$params);
@@ -144,16 +145,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             emergency_contact_name, emergency_relationship, emergency_phone,
             has_allergies, allergies_detail, has_medical_condition, medical_condition_detail,
             physician_name, physician_phone, insurance_provider, insurance_policy,
-            target_school, class_admitted, scholar_mode, monthly_discount, base_fee, security_amount, registration_fee, admission_fee, advance_amount, admission_date, parent_id, photo, admission_test_paper, student_photo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 7) . 'ddddddsisss';
+            target_school, class_admitted, scholar_mode, academic_group, monthly_discount, base_fee, security_amount, registration_fee, admission_fee, advance_amount, admission_date, parent_id, photo, admission_test_paper, student_photo)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 8) . 'ddddddsisss';
         $params = [
             $name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
             $parent_name, $guardian_relationship, $phone, $guardian_email, $guardian_address,
             $emergency_contact_name, $emergency_relationship, $emergency_phone,
             $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
             $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
-            $target_school, $class_admitted, $scholar_mode, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $admission_test_paper_path, $student_photo_path
+            $target_school, $class_admitted, $scholar_mode, $academic_group, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $admission_test_paper_path, $student_photo_path
         ];
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
@@ -326,7 +327,7 @@ if (!empty($site_settings['tuition_modes'])) {
 
         .filter-controls-row {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr auto;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto;
             gap: 14px;
             align-items: center;
         }
@@ -748,6 +749,17 @@ if (!empty($site_settings['tuition_modes'])) {
                     </select>
                 </div>
 
+                <!-- Academic Group Filter -->
+                <div>
+                    <select id="groupFilterSelect" class="filter-select" onchange="filterStudents()">
+                        <option value="">-- All Syllabus Groups --</option>
+                        <option value="Group A">Group A</option>
+                        <option value="Group B">Group B</option>
+                        <option value="Group C">Group C</option>
+                        <option value="Group D">Group D</option>
+                    </select>
+                </div>
+
                 <!-- View Mode Switcher -->
                 <div class="view-mode-toggle">
                     <button class="view-mode-btn active" id="btnGridMode" onclick="toggleViewMode('grid')" title="Cards View">
@@ -801,6 +813,7 @@ if (!empty($site_settings['tuition_modes'])) {
                          data-email="<?php echo strtolower(htmlspecialchars($row['guardian_email'] ?? $row['parent_email'] ?? '')); ?>"
                          data-class="<?php echo htmlspecialchars($row['class_admitted'] ?? ''); ?>"
                          data-mode="<?php echo htmlspecialchars($row['scholar_mode'] ?? 'Day Scholar'); ?>"
+                         data-group="<?php echo htmlspecialchars($row['academic_group'] ?? 'Group A'); ?>"
                          data-school="<?php echo htmlspecialchars($row['target_school'] ?? ''); ?>">
 
                         <div>
@@ -819,6 +832,9 @@ if (!empty($site_settings['tuition_modes'])) {
                                         <?php endif; ?>
                                         <span class="scholar-badge <?php echo $scholar_class; ?>">
                                             <i class="fas fa-circle" style="font-size: 0.45rem;"></i> <?php echo htmlspecialchars($mode); ?>
+                                        </span>
+                                        <span class="scholar-badge" style="background:#eff6ff; color:#2563eb; border:1px solid #dbeafe;">
+                                            <i class="fas fa-book-open" style="font-size: 0.55rem;"></i> <?php echo htmlspecialchars($row['academic_group'] ?? 'Group A'); ?>
                                         </span>
                                     </div>
                                 </div>
@@ -918,7 +934,7 @@ if (!empty($site_settings['tuition_modes'])) {
                             if (!empty($parts[1])) $initials .= strtoupper(substr($parts[1], 0, 1));
                             if (empty($initials)) $initials = 'S';
                         ?>
-                            <tr class="student-item-row"
+                             <tr class="student-item-row"
                                 data-name="<?php echo strtolower(htmlspecialchars($row['name'])); ?>"
                                 data-reg="<?php echo strtolower(htmlspecialchars($row['reg_no'] ?? '')); ?>"
                                 data-parent="<?php echo strtolower(htmlspecialchars($row['parent_name'] ?? '')); ?>"
@@ -926,6 +942,7 @@ if (!empty($site_settings['tuition_modes'])) {
                                 data-email="<?php echo strtolower(htmlspecialchars($row['guardian_email'] ?? $row['parent_email'] ?? '')); ?>"
                                 data-class="<?php echo htmlspecialchars($row['class_admitted'] ?? ''); ?>"
                                 data-mode="<?php echo htmlspecialchars($row['scholar_mode'] ?? 'Day Scholar'); ?>"
+                                data-group="<?php echo htmlspecialchars($row['academic_group'] ?? 'Group A'); ?>"
                                 data-school="<?php echo htmlspecialchars($row['target_school'] ?? ''); ?>">
 
                                 <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; border-left: 1px solid #f1f5f9; border-radius: 14px 0 0 14px;">
@@ -961,9 +978,14 @@ if (!empty($site_settings['tuition_modes'])) {
 
                                 <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9;">
                                     <div style="font-weight: 700; color: var(--portal-dark);"><?php echo htmlspecialchars($row['class_admitted']); ?></div>
-                                    <span class="scholar-badge <?php echo $scholar_class; ?>" style="margin-top: 3px;">
-                                        <?php echo htmlspecialchars($mode); ?>
-                                    </span>
+                                    <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-top: 3px;">
+                                        <span class="scholar-badge <?php echo $scholar_class; ?>">
+                                            <?php echo htmlspecialchars($mode); ?>
+                                        </span>
+                                        <span class="scholar-badge" style="background:#eff6ff; color:#2563eb; border:1px solid #dbeafe;">
+                                            <?php echo htmlspecialchars($row['academic_group'] ?? 'Group A'); ?>
+                                        </span>
+                                    </div>
                                 </td>
 
                                 <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; color: #334155; font-weight: 700;">
@@ -1105,7 +1127,7 @@ if (!empty($site_settings['tuition_modes'])) {
                         </div>
                     </div>
 
-                    <div class="portal-form-row">
+                    <div class="portal-form-row" style="grid-template-columns: 1fr 1fr 1fr;">
                         <div class="portal-input-group">
                             <label>Class for Admission</label>
                             <select name="class_admitted" id="class_admitted">
@@ -1122,6 +1144,15 @@ if (!empty($site_settings['tuition_modes'])) {
                                 <?php foreach($tuition_modes as $mode => $fee): ?>
                                     <option value="<?php echo htmlspecialchars($mode); ?>"><?php echo htmlspecialchars($mode); ?></option>
                                 <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="portal-input-group">
+                            <label>Academic Syllabus Group</label>
+                            <select name="academic_group" id="academic_group">
+                                <option value="Group A">Group A (Primary Foundation)</option>
+                                <option value="Group B">Group B (Middle Competitive)</option>
+                                <option value="Group C">Group C (Sainik & RMS Entrance)</option>
+                                <option value="Group D">Group D (Netarhat & Simultala Special)</option>
                             </select>
                         </div>
                     </div>
@@ -1403,6 +1434,9 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('target_school').value = data.target_school || '';
             document.getElementById('class_admitted').value = data.class_admitted || '';
             document.getElementById('scholar_mode').value = data.scholar_mode || 'Day Scholar';
+            if (document.getElementById('academic_group')) {
+                document.getElementById('academic_group').value = data.academic_group || 'Group A';
+            }
             document.getElementById('base_fee').value = data.base_fee || '';
             document.getElementById('monthly_discount').value = data.monthly_discount || '0.00';
             document.getElementById('security_amount').value = data.security_amount || '0.00';
@@ -1499,6 +1533,7 @@ if (!empty($site_settings['tuition_modes'])) {
             const classVal = document.getElementById('classFilterSelect').value.toLowerCase().trim();
             const modeVal = document.getElementById('modeFilterSelect').value.toLowerCase().trim();
             const schoolVal = document.getElementById('schoolFilterSelect').value.toLowerCase().trim();
+            const groupVal = document.getElementById('groupFilterSelect') ? document.getElementById('groupFilterSelect').value.toLowerCase().trim() : '';
 
             const cards = document.querySelectorAll('.student-item-card');
             const rows = document.querySelectorAll('.student-item-row');
@@ -1513,6 +1548,7 @@ if (!empty($site_settings['tuition_modes'])) {
                 const cls = (el.getAttribute('data-class') || '').toLowerCase();
                 const mode = (el.getAttribute('data-mode') || '').toLowerCase();
                 const school = (el.getAttribute('data-school') || '').toLowerCase();
+                const group = (el.getAttribute('data-group') || '').toLowerCase();
 
                 const textSearchMatch = query === '' || 
                     name.includes(query) || 
@@ -1524,8 +1560,9 @@ if (!empty($site_settings['tuition_modes'])) {
                 const classMatch = classVal === '' || cls === classVal;
                 const modeMatch = modeVal === '' || mode === modeVal;
                 const schoolMatch = schoolVal === '' || school === schoolVal;
+                const groupMatch = groupVal === '' || group === groupVal;
 
-                return textSearchMatch && classMatch && modeMatch && schoolMatch;
+                return textSearchMatch && classMatch && modeMatch && schoolMatch && groupMatch;
             }
 
             cards.forEach(card => {
@@ -1549,6 +1586,9 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('classFilterSelect').value = '';
             document.getElementById('modeFilterSelect').value = '';
             document.getElementById('schoolFilterSelect').value = '';
+            if (document.getElementById('groupFilterSelect')) {
+                document.getElementById('groupFilterSelect').value = '';
+            }
             filterStudents();
         }
     </script>
