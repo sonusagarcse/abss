@@ -1,6 +1,25 @@
 <?php
 require_once 'includes/auth.php';
 
+$msg = '';
+
+// Handle Deactivate / Reactivate Student Action
+if (isset($_GET['toggle_status'])) {
+    $toggle_id = (int)$_GET['toggle_status'];
+    $target_status = $_GET['status'] ?? 'inactive';
+    if ($toggle_id > 0 && in_array($target_status, ['active', 'inactive'])) {
+        $stmt = $conn->prepare("UPDATE students SET status = ? WHERE id = ?");
+        $stmt->bind_param("si", $target_status, $toggle_id);
+        if ($stmt->execute()) {
+            $action_label = ($target_status === 'inactive') ? 'deactivated' : 'reactivated';
+            $msg = "Candidate status has been successfully $action_label.";
+            if (function_exists('log_activity')) {
+                log_activity('student_status_changed', "Changed student #$toggle_id status to $target_status");
+            }
+        }
+    }
+}
+
 // Ensure upload directory exists
 $upload_dir = __DIR__ . '/../uploads/students/';
 if (!is_dir($upload_dir)) {
@@ -245,6 +264,8 @@ $students_query = $conn->query("
 
 $students_data = [];
 $total_count = 0;
+$total_active_count = 0;
+$inactive_count = 0;
 $day_scholars_count = 0;
 $hostlers_count = 0;
 $tuition_count = 0;
@@ -255,13 +276,19 @@ if ($students_query) {
     while($row = $students_query->fetch_assoc()) {
         $students_data[] = $row;
         $total_count++;
-        $mode = $row['scholar_mode'] ?? 'Day Scholar';
-        if (strcasecmp($mode, 'Hostler') === 0) $hostlers_count++;
-        elseif (strcasecmp($mode, 'Tuition') === 0) $tuition_count++;
-        else $day_scholars_count++;
+        $st_status = $row['status'] ?? 'active';
+        if ($st_status === 'inactive') {
+            $inactive_count++;
+        } else {
+            $total_active_count++;
+            $mode = $row['scholar_mode'] ?? 'Day Scholar';
+            if (strcasecmp($mode, 'Hostler') === 0) $hostlers_count++;
+            elseif (strcasecmp($mode, 'Tuition') === 0) $tuition_count++;
+            else $day_scholars_count++;
 
-        if (!empty($row['class_admitted'])) $unique_classes[$row['class_admitted']] = true;
-        if (!empty($row['target_school'])) $unique_schools[$row['target_school']] = true;
+            if (!empty($row['class_admitted'])) $unique_classes[$row['class_admitted']] = true;
+            if (!empty($row['target_school'])) $unique_schools[$row['target_school']] = true;
+        }
     }
 }
 
@@ -327,7 +354,7 @@ if (!empty($site_settings['tuition_modes'])) {
 
         .filter-controls-row {
             display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr auto;
             gap: 14px;
             align-items: center;
         }
@@ -683,8 +710,8 @@ if (!empty($site_settings['tuition_modes'])) {
             <div class="stat-card">
                 <div class="stat-icon icon-blue"><i class="fas fa-user-graduate"></i></div>
                 <div class="stat-info">
-                    <h3><?php echo number_format($total_count); ?></h3>
-                    <span>Total Enrolled</span>
+                    <h3><?php echo number_format($total_active_count); ?></h3>
+                    <span>Active Enrolled</span>
                 </div>
             </div>
             <div class="stat-card">
@@ -701,11 +728,11 @@ if (!empty($site_settings['tuition_modes'])) {
                     <span>Hostlers (Boarders)</span>
                 </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-icon icon-orange"><i class="fas fa-user-shield"></i></div>
+            <div class="stat-card" onclick="if(document.getElementById('statusFilterSelect')){document.getElementById('statusFilterSelect').value='inactive'; filterStudents();}" style="cursor: pointer;" title="Click to view inactive / deactivated candidates">
+                <div class="stat-icon" style="background: rgba(239, 68, 68, 0.12); color: #ef4444;"><i class="fas fa-user-slash"></i></div>
                 <div class="stat-info">
-                    <h3><?php echo count($parents_array); ?></h3>
-                    <span>Linked Parents</span>
+                    <h3><?php echo number_format($inactive_count); ?></h3>
+                    <span>Inactive Candidates</span>
                 </div>
             </div>
         </div>
@@ -757,6 +784,15 @@ if (!empty($site_settings['tuition_modes'])) {
                         <option value="Group B">Group B</option>
                         <option value="Group C">Group C</option>
                         <option value="Group D">Group D</option>
+                    </select>
+                </div>
+
+                <!-- Active / Inactive Status Filter -->
+                <div>
+                    <select id="statusFilterSelect" class="filter-select" onchange="filterStudents()">
+                        <option value="active" selected>Active Candidates</option>
+                        <option value="inactive">Inactive / Deactivated</option>
+                        <option value="">-- All Statuses --</option>
                     </select>
                 </div>
 
@@ -814,6 +850,7 @@ if (!empty($site_settings['tuition_modes'])) {
                          data-class="<?php echo htmlspecialchars($row['class_admitted'] ?? ''); ?>"
                          data-mode="<?php echo htmlspecialchars($row['scholar_mode'] ?? 'Day Scholar'); ?>"
                          data-group="<?php echo htmlspecialchars($row['academic_group'] ?? 'Group A'); ?>"
+                         data-status="<?php echo htmlspecialchars($row['status'] ?? 'active'); ?>"
                          data-school="<?php echo htmlspecialchars($row['target_school'] ?? ''); ?>">
 
                         <div>
@@ -836,6 +873,11 @@ if (!empty($site_settings['tuition_modes'])) {
                                         <span class="scholar-badge" style="background:#eff6ff; color:#2563eb; border:1px solid #dbeafe;">
                                             <i class="fas fa-book-open" style="font-size: 0.55rem;"></i> <?php echo htmlspecialchars($row['academic_group'] ?? 'Group A'); ?>
                                         </span>
+                                        <?php if (($row['status'] ?? 'active') === 'inactive'): ?>
+                                            <span class="scholar-badge" style="background:#fee2e2; color:#ef4444; border:1px solid #fecaca;">
+                                                <i class="fas fa-user-slash" style="font-size: 0.55rem;"></i> Inactive
+                                            </span>
+                                        <?php endif; ?>
                                     </div>
                                 </div>
                             </div>
@@ -892,6 +934,15 @@ if (!empty($site_settings['tuition_modes'])) {
                             </div>
 
                             <div style="display: flex; align-items: center; gap: 8px;">
+                                <?php if (($row['status'] ?? 'active') === 'inactive'): ?>
+                                    <a href="?toggle_status=<?php echo $row['id']; ?>&status=active" class="action-icon-btn" style="background:#dcfce7; color:#166534;" onclick="return confirm('Reactivate candidate <?php echo addslashes($row['name']); ?>?')" title="Reactivate Candidate">
+                                        <i class="fas fa-user-check"></i>
+                                    </a>
+                                <?php else: ?>
+                                    <a href="?toggle_status=<?php echo $row['id']; ?>&status=inactive" class="action-icon-btn" style="background:#fee2e2; color:#ef4444;" onclick="return confirm('Deactivate candidate <?php echo addslashes($row['name']); ?>? They will be hidden from website listings.')" title="Deactivate Candidate (Leave Student)">
+                                        <i class="fas fa-user-slash"></i>
+                                    </a>
+                                <?php endif; ?>
                                 <button class="action-icon-btn btn-edit-act" onclick='editStudent(<?php echo json_encode($row); ?>)' title="Edit Profile">
                                     <i class="fas fa-edit"></i>
                                 </button>
@@ -943,6 +994,7 @@ if (!empty($site_settings['tuition_modes'])) {
                                 data-class="<?php echo htmlspecialchars($row['class_admitted'] ?? ''); ?>"
                                 data-mode="<?php echo htmlspecialchars($row['scholar_mode'] ?? 'Day Scholar'); ?>"
                                 data-group="<?php echo htmlspecialchars($row['academic_group'] ?? 'Group A'); ?>"
+                                data-status="<?php echo htmlspecialchars($row['status'] ?? 'active'); ?>"
                                 data-school="<?php echo htmlspecialchars($row['target_school'] ?? ''); ?>">
 
                                 <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; border-left: 1px solid #f1f5f9; border-radius: 14px 0 0 14px;">
@@ -1010,6 +1062,15 @@ if (!empty($site_settings['tuition_modes'])) {
                                         <a href="student_addons.php?id=<?php echo $row['id']; ?>" class="action-icon-btn btn-addon-act" title="Addons">
                                             <i class="fas fa-plus-circle"></i>
                                         </a>
+                                        <?php if (($row['status'] ?? 'active') === 'inactive'): ?>
+                                            <a href="?toggle_status=<?php echo $row['id']; ?>&status=active" class="action-icon-btn" style="background:#dcfce7; color:#166534;" onclick="return confirm('Reactivate candidate <?php echo addslashes($row['name']); ?>?')" title="Reactivate Candidate">
+                                                <i class="fas fa-user-check"></i>
+                                            </a>
+                                        <?php else: ?>
+                                            <a href="?toggle_status=<?php echo $row['id']; ?>&status=inactive" class="action-icon-btn" style="background:#fee2e2; color:#ef4444;" onclick="return confirm('Deactivate candidate <?php echo addslashes($row['name']); ?>? They will be hidden from website listings.')" title="Deactivate Candidate (Leave Student)">
+                                                <i class="fas fa-user-slash"></i>
+                                            </a>
+                                        <?php endif; ?>
                                         <button class="action-icon-btn btn-edit-act" onclick='editStudent(<?php echo json_encode($row); ?>)' title="Edit Profile">
                                             <i class="fas fa-edit"></i>
                                         </button>
@@ -1534,6 +1595,7 @@ if (!empty($site_settings['tuition_modes'])) {
             const modeVal = document.getElementById('modeFilterSelect').value.toLowerCase().trim();
             const schoolVal = document.getElementById('schoolFilterSelect').value.toLowerCase().trim();
             const groupVal = document.getElementById('groupFilterSelect') ? document.getElementById('groupFilterSelect').value.toLowerCase().trim() : '';
+            const statusVal = document.getElementById('statusFilterSelect') ? document.getElementById('statusFilterSelect').value.toLowerCase().trim() : 'active';
 
             const cards = document.querySelectorAll('.student-item-card');
             const rows = document.querySelectorAll('.student-item-row');
@@ -1549,6 +1611,7 @@ if (!empty($site_settings['tuition_modes'])) {
                 const mode = (el.getAttribute('data-mode') || '').toLowerCase();
                 const school = (el.getAttribute('data-school') || '').toLowerCase();
                 const group = (el.getAttribute('data-group') || '').toLowerCase();
+                const status = (el.getAttribute('data-status') || 'active').toLowerCase();
 
                 const textSearchMatch = query === '' || 
                     name.includes(query) || 
@@ -1561,8 +1624,9 @@ if (!empty($site_settings['tuition_modes'])) {
                 const modeMatch = modeVal === '' || mode === modeVal;
                 const schoolMatch = schoolVal === '' || school === schoolVal;
                 const groupMatch = groupVal === '' || group === groupVal;
+                const statusMatch = statusVal === '' || status === statusVal;
 
-                return textSearchMatch && classMatch && modeMatch && schoolMatch && groupMatch;
+                return textSearchMatch && classMatch && modeMatch && schoolMatch && groupMatch && statusMatch;
             }
 
             cards.forEach(card => {
@@ -1589,8 +1653,16 @@ if (!empty($site_settings['tuition_modes'])) {
             if (document.getElementById('groupFilterSelect')) {
                 document.getElementById('groupFilterSelect').value = '';
             }
+            if (document.getElementById('statusFilterSelect')) {
+                document.getElementById('statusFilterSelect').value = 'active';
+            }
             filterStudents();
         }
+
+        // Run filter on initial page load
+        document.addEventListener('DOMContentLoaded', function() {
+            filterStudents();
+        });
     </script>
 </body>
 </html>

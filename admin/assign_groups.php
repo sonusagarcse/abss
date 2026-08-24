@@ -43,8 +43,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['assign_bulk_groups']))
     }
 }
 
-// Fetch all students
-$students_res = $conn->query("SELECT id, reg_no, name, class_admitted, target_school, scholar_mode, academic_group, phone, student_photo FROM students ORDER BY name ASC");
+// Fetch active students
+$students_res = $conn->query("SELECT id, reg_no, name, class_admitted, target_school, scholar_mode, academic_group, phone, student_photo FROM students WHERE (status = 'active' OR status IS NULL) ORDER BY name ASC");
 $all_students = [];
 $group_counts = ['Group A' => 0, 'Group B' => 0, 'Group C' => 0, 'Group D' => 0];
 

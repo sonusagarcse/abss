@@ -254,6 +254,11 @@ function runAutoMigrator($conn) {
             $conn->query("ALTER TABLE students ADD COLUMN state VARCHAR(100) NULL");
             $conn->query("ALTER TABLE students ADD COLUMN zip_code VARCHAR(10) NULL");
         }
+
+        $checkStatusCol = $conn->query("SHOW COLUMNS FROM students LIKE 'status'");
+        if ($checkStatusCol && $checkStatusCol->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN status ENUM('active','inactive') DEFAULT 'active' AFTER scholar_mode");
+        }
         
         // 6. Add guardian/emergency/medical fields
         $checkGuardianRel = $conn->query("SHOW COLUMNS FROM students LIKE 'guardian_relationship'");

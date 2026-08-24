@@ -312,14 +312,15 @@ $payments = $conn->query("
     SELECT f.*, s.name 
     FROM fee_payments f 
     JOIN students s ON f.student_id = s.id 
+    WHERE (s.status = 'active' OR s.status IS NULL)
     ORDER BY f.payment_date DESC LIMIT 10
 ");
 
 // Fetch bills log
 $filter = isset($_GET['filter']) ? $_GET['filter'] : 'unpaid';
-$status_cond = "";
-if ($filter === 'unpaid') $status_cond = " WHERE fg.status = 'unpaid'";
-if ($filter === 'paid') $status_cond = " WHERE fg.status = 'paid'";
+$status_cond = " WHERE (s.status = 'active' OR s.status IS NULL)";
+if ($filter === 'unpaid') $status_cond .= " AND fg.status = 'unpaid'";
+if ($filter === 'paid') $status_cond .= " AND fg.status = 'paid'";
 
 $bills = $conn->query("
     SELECT fg.*, s.name 

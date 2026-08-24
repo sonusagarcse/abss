@@ -135,7 +135,7 @@ if (isset($_GET['delete'])) {
     exit();
 }
 
-// Fetch all parents with aggregate child data
+// Fetch all parents with aggregate child data (active children only)
 $parents_query = $conn->query("
     SELECT 
         p.*, 
@@ -143,7 +143,7 @@ $parents_query = $conn->query("
         GROUP_CONCAT(DISTINCT s.name ORDER BY s.name ASC SEPARATOR '||') AS children_names_raw,
         GROUP_CONCAT(DISTINCT CONCAT(s.name, ' (', COALESCE(s.class_admitted, 'Class 5'), ')') ORDER BY s.name ASC SEPARATOR '||') AS children_details_raw
     FROM parents p
-    LEFT JOIN students s ON s.parent_id = p.id
+    LEFT JOIN students s ON s.parent_id = p.id AND (s.status = 'active' OR s.status IS NULL)
     GROUP BY p.id
     ORDER BY p.created_at DESC
 ");
@@ -164,7 +164,7 @@ if ($parents_query) {
 }
 
 // Fetch active students for the modal linkage selector
-$students_list = $conn->query("SELECT id, name, class_admitted, reg_no, parent_id FROM students ORDER BY name ASC");
+$students_list = $conn->query("SELECT id, name, class_admitted, reg_no, parent_id FROM students WHERE (status = 'active' OR status IS NULL) ORDER BY name ASC");
 $all_students = [];
 if ($students_list) {
     while ($s = $students_list->fetch_assoc()) {

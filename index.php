@@ -695,7 +695,7 @@ include 'includes/header.php';
                 
                 $esc_grp = $conn->real_escape_string($group_key);
                 
-                // 1. Query top scorer with test evaluations
+                // 1. Query top scorer with test evaluations (active students only)
                 $sql = "
                     SELECT s.id, s.name, s.reg_no, s.student_photo, s.photo, s.target_school, s.class_admitted, s.academic_group,
                            AVG((r.score / r.total_marks) * 100) as avg_pct,
@@ -704,7 +704,7 @@ include 'includes/header.php';
                            MAX(r.exam_name) as latest_exam
                     FROM results r
                     JOIN students s ON r.student_id = s.id
-                    WHERE r.total_marks > 0 AND (s.academic_group = '$esc_grp' OR ('$group_key' = 'Group A' AND (s.academic_group IS NULL OR s.academic_group = ''))) $where_m
+                    WHERE r.total_marks > 0 AND (s.status = 'active' OR s.status IS NULL) AND (s.academic_group = '$esc_grp' OR ('$group_key' = 'Group A' AND (s.academic_group IS NULL OR s.academic_group = ''))) $where_m
                     GROUP BY r.student_id
                     ORDER BY avg_pct DESC, total_exams DESC
                     LIMIT 1
@@ -720,12 +720,12 @@ include 'includes/header.php';
                     return getGroupTopPerformer($conn, $group_key, '');
                 }
                 
-                // 3. Fallback to first student in that group
+                // 3. Fallback to active student in that group
                 $sql_sub = "
                     SELECT s.id, s.name, s.reg_no, s.student_photo, s.photo, s.target_school, s.class_admitted, s.academic_group,
                            88.5 as avg_pct, 96.0 as max_pct, 1 as total_exams, 'Monthly Assessment' as latest_exam
                     FROM students s
-                    WHERE (s.academic_group = '$esc_grp' OR ('$group_key' = 'Group A' AND (s.academic_group IS NULL OR s.academic_group = '')))
+                    WHERE (s.status = 'active' OR s.status IS NULL) AND (s.academic_group = '$esc_grp' OR ('$group_key' = 'Group A' AND (s.academic_group IS NULL OR s.academic_group = '')))
                     ORDER BY s.id ASC
                     LIMIT 1
                 ";
