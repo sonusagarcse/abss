@@ -49,10 +49,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_syllabus'])) {
     $subjects_json = json_encode($formatted_subjects, JSON_UNESCAPED_UNICODE);
 
     if (!empty($group_key) && !empty($title)) {
-        $stmt = $conn->prepare("UPDATE syllabus_cards SET title = ?, subtitle = ?, badge_text = ?, icon = ?, accent_color = ?, overview = ?, subjects_json = ? WHERE group_key = ?");
-        $stmt->bind_param("ssssssss", $title, $subtitle, $badge_text, $icon, $accent_color, $overview, $subjects_json, $group_key);
+        $stmt = $conn->prepare("
+            INSERT INTO syllabus_cards (group_key, title, subtitle, badge_text, icon, accent_color, overview, subjects_json) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?) 
+            ON DUPLICATE KEY UPDATE 
+                title = VALUES(title), 
+                subtitle = VALUES(subtitle), 
+                badge_text = VALUES(badge_text), 
+                icon = VALUES(icon), 
+                accent_color = VALUES(accent_color), 
+                overview = VALUES(overview), 
+                subjects_json = VALUES(subjects_json)
+        ");
+        $stmt->bind_param("ssssssss", $group_key, $title, $subtitle, $badge_text, $icon, $accent_color, $overview, $subjects_json);
         
         if ($stmt->execute()) {
+            $_GET['tab'] = $group_key;
             $msg = "Syllabus details for <strong>" . htmlspecialchars($group_key) . "</strong> updated successfully!";
             $msg_type = 'success';
             
@@ -79,8 +91,8 @@ if ($cards_query && $cards_query->num_rows > 0) {
     }
 }
 
-// Active Tab
-$active_tab = $_GET['tab'] ?? 'Group A';
+// Active Tab (preserve selected group tab on POST save)
+$active_tab = $_POST['group_key'] ?? ($_GET['tab'] ?? 'Group A');
 if (!array_key_exists($active_tab, $syllabus_cards) && !empty($syllabus_cards)) {
     $active_tab = array_key_first($syllabus_cards);
 }
