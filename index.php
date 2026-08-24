@@ -403,7 +403,7 @@ include 'includes/header.php';
                             </div>
 
                             <div style="display: flex; flex-direction: column; gap: 8px;">
-                                <?php foreach (array_slice($subjects, 0, 4) as $sub): 
+                                <?php foreach (array_slice($subjects, 0, 20) as $sub): 
                                     $sub_icon = !empty($sub['icon']) ? $sub['icon'] : 'fas fa-book-open';
                                     $topics_cnt = is_array($sub['topics'] ?? null) ? count($sub['topics']) : 0;
                                 ?>

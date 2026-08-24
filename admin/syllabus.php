@@ -46,7 +46,19 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_syllabus'])) {
         }
     }
 
-    $subjects_json = json_encode($formatted_subjects, JSON_UNESCAPED_UNICODE);
+    $subjects_json = json_encode($formatted_subjects, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    if ($subjects_json === false || $subjects_json === null) {
+        // Fallback UTF-8 sanitization
+        array_walk_recursive($formatted_subjects, function (&$item) {
+            if (is_string($item)) {
+                $item = mb_convert_encoding($item, 'UTF-8', 'UTF-8');
+            }
+        });
+        $subjects_json = json_encode($formatted_subjects, JSON_UNESCAPED_UNICODE);
+    }
+    if (empty($subjects_json) || $subjects_json === 'false') {
+        $subjects_json = '[]';
+    }
 
     if (!empty($group_key) && !empty($title)) {
         $stmt = $conn->prepare("
