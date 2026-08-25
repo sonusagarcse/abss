@@ -385,6 +385,8 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
         <?php
         $total_payable = (float)$bill['amount'] + (float)$fine_amount;
         $words_payable = amountToWords($total_payable);
+        $remaining_balance = $total_payable;
+        $final_words = $words_payable;
         ?>
 
         <!-- Total Amount Strip -->
@@ -396,11 +398,6 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
         <!-- Amount in Words -->
         <div class="words-block">
             Amount due in words: <strong><?php echo $words_payable; ?></strong>
-        </div>
-
-        <!-- Amount in Words -->
-        <div class="words-block">
-            Amount in words: <strong><?php echo $final_words; ?></strong>
         </div>
 
         <?php if ($remaining_balance > 0): ?>
