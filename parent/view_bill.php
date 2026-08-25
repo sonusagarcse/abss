@@ -284,21 +284,37 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
                     </tr>
                 </thead>
                 <tbody>
-                    <?php 
-                    $remarks = explode('|', $bill['remark'] ? $bill['remark'] : 'Tuition Fee');
-                    $sno = 1;
+                <?php 
+                $remarks = explode('|', $bill['remark'] ? $bill['remark'] : 'Tuition Fee');
+                $sno = 1;
 
-                    foreach ($remarks as $rem) {
-                        $rem = trim($rem);
-                        if (strpos($rem, 'Auto-generated Bill.') !== false) {
-                            $rem = trim(str_replace('Auto-generated Bill.', '', $rem));
+                foreach ($remarks as $rem) {
+                    $rem = trim($rem);
+                    if (strpos($rem, 'Auto-generated Bill.') !== false) {
+                        $rem = trim(str_replace('Auto-generated Bill.', '', $rem));
+                    }
+                    if (empty($rem)) continue;
+
+                    $is_payment_row = (strpos(strtolower($rem), 'payment received') !== false || strpos($rem, '-₹') !== false);
+                    $item_desc = $rem;
+                    $item_month = $bill['month_for'];
+                    $item_amt = '';
+
+                    if ($is_payment_row) {
+                        if (preg_match('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $rem, $amt_match)) {
+                            $item_amt = '-₹ ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
+                        } elseif (preg_match('/-?\s*[₹Rs\.]\s*([0-9\.,]+)/i', $rem, $amt_match)) {
+                            $item_amt = '-₹ ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
+                        } else {
+                            $item_amt = '-₹ 0.00';
                         }
-                        if (empty($rem)) continue;
-
-                        $item_desc = $rem;
-                        $item_month = $bill['month_for'];
-                        $item_amt = '₹ ' . number_format($bill['amount'], 2);
-
+                        if (preg_match('/[0-9]{4}-[0-9]{2}-[0-9]{2}/', $rem, $d_match)) {
+                            $item_month = date('d M, Y', strtotime($d_match[0]));
+                            $item_desc = "Payment received on " . date('d M, Y', strtotime($d_match[0]));
+                        } else {
+                            $item_desc = "Payment received";
+                        }
+                    } else {
                         // Extract month string from () or [] if present in item remark
                         if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
                             $item_month = trim($m_match[1]);
@@ -319,6 +335,7 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
                             $item_amt = '₹ ' . trim($parts[1]);
                         } else {
                             $item_desc = trim($rem);
+                            $item_amt = '₹ ' . number_format($bill['amount'], 2);
                         }
 
                         // Clean up description if any residual amounts were left in description string
@@ -327,58 +344,66 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
                         }
 
                         if (empty($item_desc)) $item_desc = "Tuition Fee";
-                        ?>
-                        <tr>
-                            <td class="text-center"><?php echo $sno++; ?></td>
-                            <td style="font-weight: 700; color: #1a237e;">
-                                <?php echo htmlspecialchars($item_desc); ?>
-                            </td>
-                            <td style="font-weight: 700; color: #2563eb;">
-                                <?php echo htmlspecialchars($item_month); ?>
-                            </td>
-                            <td class="text-right" style="font-weight: 800; color:#b71c1c;">
-                                <?php echo htmlspecialchars($item_amt); ?>
-                            </td>
-                        </tr>
-                        <?php
                     }
                     ?>
-                    <?php if ($fine_amount > 0): ?>
-                        <tr style="background: #fff7ed;">
-                            <td class="text-center" style="font-weight: 700; color: #ea580c;"><?php echo $sno++; ?></td>
-                            <td style="font-weight: 700; color: #9a3412;">
-                                <i class="fas fa-coins" style="color:#ea580c;"></i> Late Fine (विलंब शुल्क)
-                                <span style="font-size:0.75rem; font-weight:600; color:#ea580c; background:#ffedd5; padding:2px 8px; border-radius:50px; margin-left:6px;">
-                                    <?php echo $fine_calc['overdue_days']; ?> Days Overdue @ ₹<?php echo number_format($fine_calc['rate_per_day'], 2); ?>/day
-                                </span>
-                            </td>
-                            <td style="font-weight: 700; color: #ea580c;">
-                                <?php echo htmlspecialchars($bill['month_for']); ?>
-                            </td>
-                            <td class="text-right" style="font-weight: 800; color:#ea580c;">
-                                ₹ <?php echo number_format($fine_amount, 2); ?>
-                            </td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
+                    <tr style="<?php echo $is_payment_row ? 'background: #f0fdf4;' : ''; ?>">
+                        <td class="text-center"><?php echo $sno++; ?></td>
+                        <td style="font-weight: 700; color: <?php echo $is_payment_row ? '#15803d' : '#1a237e'; ?>;">
+                            <?php if ($is_payment_row): ?><i class="fas fa-check-circle" style="margin-right: 5px;"></i><?php endif; ?>
+                            <?php echo htmlspecialchars($item_desc); ?>
+                        </td>
+                        <td style="font-weight: 700; color: <?php echo $is_payment_row ? '#166534' : '#2563eb'; ?>;">
+                            <?php echo htmlspecialchars($item_month); ?>
+                        </td>
+                        <td class="text-right" style="font-weight: 800; color: <?php echo $is_payment_row ? '#15803d' : '#b71c1c'; ?>;">
+                            <?php echo htmlspecialchars($item_amt); ?>
+                        </td>
+                    </tr>
+                    <?php
+                }
+                ?>
+                <?php if ($fine_amount > 0): ?>
+                    <tr style="background: #fff7ed;">
+                        <td class="text-center" style="font-weight: 700; color: #ea580c;"><?php echo $sno++; ?></td>
+                        <td style="font-weight: 700; color: #9a3412;">
+                            <i class="fas fa-coins" style="color:#ea580c;"></i> Late Fine (विलंब शुल्क)
+                            <span style="font-size:0.75rem; font-weight:600; color:#ea580c; background:#ffedd5; padding:2px 8px; border-radius:50px; margin-left:6px;">
+                                <?php echo $fine_calc['overdue_days']; ?> Days Overdue @ ₹<?php echo number_format($fine_calc['rate_per_day'], 2); ?>/day
+                            </span>
+                        </td>
+                        <td style="font-weight: 700; color: #ea580c;">
+                            <?php echo htmlspecialchars($bill['month_for']); ?>
+                        </td>
+                        <td class="text-right" style="font-weight: 800; color:#ea580c;">
+                            ₹ <?php echo number_format($fine_amount, 2); ?>
+                        </td>
+                    </tr>
+                <?php endif; ?>
+            </tbody>
+        </table>
 
-        <!-- Grand Total Strip -->
+        <?php
+        $total_payable = (float)$bill['amount'] + (float)$fine_amount;
+        $words_payable = amountToWords($total_payable);
+        ?>
+
+        <!-- Total Amount Strip -->
         <div class="total-strip">
-            <div>
-                <div class="total-label">Total Amount Due</div>
-                <small style="color:#64748b; font-weight:600;">Status: <span style="text-transform:uppercase; font-weight:800; color:<?php echo $bill['status']==='paid'?'#15803d':'#dc2626'; ?>;"><?php echo $bill['status']; ?></span></small>
-            </div>
-            <div class="total-value">₹ <?php echo number_format($total_payable_amount, 2); ?></div>
+            <div class="total-label">Total Amount Due</div>
+            <div class="total-value">₹ <?php echo number_format($total_payable, 2); ?></div>
         </div>
 
         <!-- Amount in Words -->
         <div class="words-block">
-            Amount due in words: <strong><?php echo $amount_in_words; ?></strong>
+            Amount due in words: <strong><?php echo $words_payable; ?></strong>
         </div>
 
-        <?php if ($bill['status'] === 'unpaid'): ?>
+        <!-- Amount in Words -->
+        <div class="words-block">
+            Amount in words: <strong><?php echo $final_words; ?></strong>
+        </div>
+
+        <?php if ($remaining_balance > 0): ?>
             <!-- Highlighted Pay Now Action Block Below Total Amount -->
             <div class="receipt-paynow-highlight-box" style="margin-top: 25px; padding: 22px 24px; background: linear-gradient(135deg, #fef2f2 0%, #fff7ed 100%); border: 2px dashed #f87171; border-radius: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; box-shadow: 0 8px 25px rgba(220, 38, 38, 0.08);">
                 <div>
@@ -386,7 +411,7 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
                         <i class="fas fa-exclamation-circle" style="color: #dc2626; font-size: 1.3rem;"></i> Immediate Fee Payment Due
                     </div>
                     <p style="margin: 4px 0 0; color: #475569; font-size: 0.88rem; font-weight: 600;">
-                        Payable Balance: <strong style="color: #dc2626; font-size: 1.05rem;">₹ <?php echo number_format($total_payable_amount, 2); ?></strong>
+                        Payable Balance: <strong style="color: #dc2626; font-size: 1.05rem;">₹ <?php echo number_format($remaining_balance, 2); ?></strong>
                         <?php if ($fine_amount > 0): ?>
                             (Includes ₹ <?php echo number_format($fine_amount, 2); ?> Late Fine)
                         <?php endif; ?>
@@ -395,7 +420,7 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
                 </div>
                 <div>
                     <button type="button" onclick="payWithRazorpay()" class="btn-pay-highlight" style="background: linear-gradient(135deg, #16a34a 0%, #15803d 100%); color: #ffffff; padding: 15px 32px; border-radius: 50px; font-size: 1.1rem; font-weight: 900; border: none; cursor: pointer; display: inline-flex; align-items: center; gap: 10px; box-shadow: 0 8px 25px rgba(22, 163, 74, 0.45); transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform='scale(1)'">
-                        <i class="fas fa-lock"></i> PAY NOW (₹ <?php echo number_format($total_payable_amount, 2); ?>) <i class="fas fa-arrow-right"></i>
+                        <i class="fas fa-lock"></i> PAY NOW (₹ <?php echo number_format($remaining_balance, 2); ?>) <i class="fas fa-arrow-right"></i>
                     </button>
                 </div>
             </div>

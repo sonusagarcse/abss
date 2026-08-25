@@ -256,48 +256,67 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
                     }
                     if (empty($rem)) continue;
 
+                    $is_payment_row = (strpos(strtolower($rem), 'payment received') !== false || strpos($rem, '-₹') !== false);
                     $item_desc = $rem;
                     $item_month = $bill['month_for'];
-                    $item_amt = '₹ ' . number_format($bill['amount'], 2);
+                    $item_amt = '';
 
-                    // Extract month string from () or [] if present in item remark
-                    if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
-                        $item_month = trim($m_match[1]);
-                        $rem = trim(str_replace($m_match[0], '', $rem));
-                    } elseif (preg_match('/\[(.*?)\]/', $rem, $m_match)) {
-                        $item_month = trim($m_match[1]);
-                        $rem = trim(str_replace($m_match[0], '', $rem));
-                    }
-
-                    // Extract amount from : ₹ or :
-                    if (strpos($rem, ': ₹') !== false) {
-                        $parts = explode(': ₹', $rem);
-                        $item_desc = trim($parts[0]);
-                        $item_amt = '₹ ' . trim($parts[1]);
-                    } elseif (strpos($rem, ':') !== false) {
-                        $parts = explode(':', $rem);
-                        $item_desc = trim($parts[0]);
-                        $item_amt = '₹ ' . trim($parts[1]);
+                    if ($is_payment_row) {
+                        if (preg_match('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $rem, $amt_match)) {
+                            $item_amt = '-₹ ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
+                        } elseif (preg_match('/-?\s*[₹Rs\.]\s*([0-9\.,]+)/i', $rem, $amt_match)) {
+                            $item_amt = '-₹ ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
+                        } else {
+                            $item_amt = '-₹ 0.00';
+                        }
+                        if (preg_match('/[0-9]{4}-[0-9]{2}-[0-9]{2}/', $rem, $d_match)) {
+                            $item_month = date('d M, Y', strtotime($d_match[0]));
+                            $item_desc = "Payment received on " . date('d M, Y', strtotime($d_match[0]));
+                        } else {
+                            $item_desc = "Payment received";
+                        }
                     } else {
-                        $item_desc = trim($rem);
-                    }
+                        // Extract month string from () or [] if present in item remark
+                        if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
+                            $item_month = trim($m_match[1]);
+                            $rem = trim(str_replace($m_match[0], '', $rem));
+                        } elseif (preg_match('/\[(.*?)\]/', $rem, $m_match)) {
+                            $item_month = trim($m_match[1]);
+                            $rem = trim(str_replace($m_match[0], '', $rem));
+                        }
 
-                    // Clean up description if any residual amounts were left in description string
-                    if (preg_match('/₹\s*[0-9\.,]+/', $item_desc, $amt_match)) {
-                        $item_desc = trim(str_replace($amt_match[0], '', $item_desc));
-                    }
+                        // Extract amount from : ₹ or :
+                        if (strpos($rem, ': ₹') !== false) {
+                            $parts = explode(': ₹', $rem);
+                            $item_desc = trim($parts[0]);
+                            $item_amt = '₹ ' . trim($parts[1]);
+                        } elseif (strpos($rem, ':') !== false) {
+                            $parts = explode(':', $rem);
+                            $item_desc = trim($parts[0]);
+                            $item_amt = '₹ ' . trim($parts[1]);
+                        } else {
+                            $item_desc = trim($rem);
+                            $item_amt = '₹ ' . number_format($bill['amount'], 2);
+                        }
 
-                    if (empty($item_desc)) $item_desc = "Tuition Fee";
+                        // Clean up description if any residual amounts were left in description string
+                        if (preg_match('/₹\s*[0-9\.,]+/', $item_desc, $amt_match)) {
+                            $item_desc = trim(str_replace($amt_match[0], '', $item_desc));
+                        }
+
+                        if (empty($item_desc)) $item_desc = "Tuition Fee";
+                    }
                     ?>
-                    <tr>
+                    <tr style="<?php echo $is_payment_row ? 'background: #f0fdf4;' : ''; ?>">
                         <td class="text-center"><?php echo $sno++; ?></td>
-                        <td style="font-weight: 700; color: #1a237e;">
+                        <td style="font-weight: 700; color: <?php echo $is_payment_row ? '#15803d' : '#1a237e'; ?>;">
+                            <?php if ($is_payment_row): ?><i class="fas fa-check-circle" style="margin-right: 5px;"></i><?php endif; ?>
                             <?php echo htmlspecialchars($item_desc); ?>
                         </td>
-                        <td style="font-weight: 700; color: #2563eb;">
+                        <td style="font-weight: 700; color: <?php echo $is_payment_row ? '#166534' : '#2563eb'; ?>;">
                             <?php echo htmlspecialchars($item_month); ?>
                         </td>
-                        <td class="text-right" style="font-weight: 800; color:#b71c1c;">
+                        <td class="text-right" style="font-weight: 800; color: <?php echo $is_payment_row ? '#15803d' : '#b71c1c'; ?>;">
                             <?php echo htmlspecialchars($item_amt); ?>
                         </td>
                     </tr>
@@ -324,15 +343,20 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
             </tbody>
         </table>
 
-        <!-- Grand Total Strip -->
+        <?php
+        $total_payable = (float)$bill['amount'] + (float)$fine_amount;
+        $words_payable = amountToWords($total_payable);
+        ?>
+
+        <!-- Total Amount Strip -->
         <div class="total-strip">
             <div class="total-label">Total Amount Due</div>
-            <div class="total-value">₹ <?php echo number_format($total_payable_amount, 2); ?></div>
+            <div class="total-value">₹ <?php echo number_format($total_payable, 2); ?></div>
         </div>
 
         <!-- Amount in Words -->
         <div class="words-block">
-            Amount due in words: <strong><?php echo $amount_in_words; ?></strong>
+            Amount due in words: <strong><?php echo $words_payable; ?></strong>
         </div>
 
     </div>

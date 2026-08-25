@@ -504,7 +504,6 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
     $pdf->Cell(40, 7, "BILL MONTH", 'TB', 0, 'L', true);
     $pdf->Cell(36, 7, "AMOUNT DUE", 'TB', 1, 'R', true);
 
-    // Parse remarks from bill (matching view_bill.php item parser)
     $remarks = explode('|', $bill['remark'] ? $bill['remark'] : 'Tuition Fee');
     $sno = 1;
     $curr_y = $table_y + 7;
@@ -519,34 +518,52 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
         }
         if (empty($rem)) continue;
 
+        $is_payment_row = (strpos(strtolower($rem), 'payment received') !== false || strpos($rem, '-₹') !== false);
         $item_desc = $rem;
         $item_month = $bill['month_for'];
-        $item_amt = 'Rs. ' . number_format($bill['amount'], 2);
+        $item_amt = '';
 
-        if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
-            $item_month = trim($m_match[1]);
-            $rem = trim(str_replace($m_match[0], '', $rem));
-        } elseif (preg_match('/\[(.*?)\]/', $rem, $m_match)) {
-            $item_month = trim($m_match[1]);
-            $rem = trim(str_replace($m_match[0], '', $rem));
-        }
-
-        if (strpos($rem, ': ₹') !== false) {
-            $parts = explode(': ₹', $rem);
-            $item_desc = trim($parts[0]);
-            $item_amt = 'Rs. ' . trim($parts[1]);
-        } elseif (strpos($rem, ':') !== false) {
-            $parts = explode(':', $rem);
-            $item_desc = trim($parts[0]);
-            $item_amt = 'Rs. ' . trim($parts[1]);
+        if ($is_payment_row) {
+            if (preg_match('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $rem, $amt_match)) {
+                $item_amt = '-Rs. ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
+            } elseif (preg_match('/-?\s*[₹Rs\.]\s*([0-9\.,]+)/i', $rem, $amt_match)) {
+                $item_amt = '-Rs. ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
+            } else {
+                $item_amt = '-Rs. 0.00';
+            }
+            if (preg_match('/[0-9]{4}-[0-9]{2}-[0-9]{2}/', $rem, $d_match)) {
+                $item_month = date('d M Y', strtotime($d_match[0]));
+                $item_desc = "Payment received on " . date('d M Y', strtotime($d_match[0]));
+            } else {
+                $item_desc = "Payment received";
+            }
         } else {
-            $item_desc = trim($rem);
-        }
+            if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
+                $item_month = trim($m_match[1]);
+                $rem = trim(str_replace($m_match[0], '', $rem));
+            } elseif (preg_match('/\[(.*?)\]/', $rem, $m_match)) {
+                $item_month = trim($m_match[1]);
+                $rem = trim(str_replace($m_match[0], '', $rem));
+            }
 
-        if (preg_match('/₹\s*[0-9\.,]+/', $item_desc, $amt_match)) {
-            $item_desc = trim(str_replace($amt_match[0], '', $item_desc));
+            if (strpos($rem, ': ₹') !== false) {
+                $parts = explode(': ₹', $rem);
+                $item_desc = trim($parts[0]);
+                $item_amt = 'Rs. ' . trim($parts[1]);
+            } elseif (strpos($rem, ':') !== false) {
+                $parts = explode(':', $rem);
+                $item_desc = trim($parts[0]);
+                $item_amt = 'Rs. ' . trim($parts[1]);
+            } else {
+                $item_desc = trim($rem);
+                $item_amt = 'Rs. ' . number_format($bill['amount'], 2);
+            }
+
+            if (preg_match('/₹\s*[0-9\.,]+/', $item_desc, $amt_match)) {
+                $item_desc = trim(str_replace($amt_match[0], '', $item_desc));
+            }
+            if (empty($item_desc)) $item_desc = "Tuition Fee";
         }
-        if (empty($item_desc)) $item_desc = "Tuition Fee";
 
         $pdf->SetXY(12, $curr_y);
         $pdf->SetFont('Helvetica', '', 8.5);
@@ -554,15 +571,27 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
         $pdf->Cell(14, 7, $sno++, 'B', 0, 'C');
 
         $pdf->SetFont('Helvetica', 'B', 8.5);
-        $pdf->SetTextColor(26, 35, 126); // #1a237e
+        if ($is_payment_row) {
+            $pdf->SetTextColor(21, 128, 61); // Green #15803d
+        } else {
+            $pdf->SetTextColor(26, 35, 126); // #1a237e
+        }
         $pdf->Cell(96, 7, $item_desc, 'B', 0, 'L');
 
         $pdf->SetFont('Helvetica', 'B', 8.5);
-        $pdf->SetTextColor(37, 99, 235); // #2563eb
+        if ($is_payment_row) {
+            $pdf->SetTextColor(22, 101, 52); // Darker Green #166534
+        } else {
+            $pdf->SetTextColor(37, 99, 235); // #2563eb
+        }
         $pdf->Cell(40, 7, $item_month, 'B', 0, 'L');
 
         $pdf->SetFont('Helvetica', 'B', 9);
-        $pdf->SetTextColor(183, 28, 28); // #b71c1c
+        if ($is_payment_row) {
+            $pdf->SetTextColor(21, 128, 61); // Green #15803d
+        } else {
+            $pdf->SetTextColor(183, 28, 28); // #b71c1c
+        }
         $pdf->Cell(36, 7, $item_amt, 'B', 1, 'R');
 
         $curr_y += 7;
@@ -584,34 +613,37 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
         $curr_y += 7;
     }
 
-    // 5. Grand Total Strip (Background #feeef2, border #ffcdd2, red text #b71c1c)
-    $strip_y = $curr_y + 4;
-    $pdf->SetXY(12, $strip_y);
-    $pdf->SetFillColor(254, 238, 242); // #feeef2
-    $pdf->SetDrawColor(255, 205, 210); // #ffcdd2
-    $pdf->Rect(12, $strip_y, 186, 11, 'DF');
+    $total_payable = (float)$bill['amount'] + (float)$fine_amount;
+    $amount_in_words = abss_amount_to_words_pdf($total_payable);
 
-    $pdf->SetXY(16, $strip_y + 1.5);
-    $pdf->SetFont('Helvetica', 'B', 11);
-    $pdf->SetTextColor(183, 28, 28); // #b71c1c
+    // 5. Total Amount Due Strip
+    $strip_y = $curr_y + 3;
+    $pdf->SetXY(12, $strip_y);
+    $pdf->SetFillColor(254, 238, 242);
+    $pdf->SetDrawColor(255, 205, 210);
+    $pdf->Rect(12, $strip_y, 186, 9, 'DF');
+
+    $pdf->SetXY(16, $strip_y + 0.5);
+    $pdf->SetFont('Helvetica', 'B', 9.5);
+    $pdf->SetTextColor(183, 28, 28);
     $pdf->Cell(110, 8, "Total Amount Due", 0, 0, 'L');
 
-    $pdf->SetFont('Helvetica', 'B', 13);
-    $pdf->Cell(68, 8, "Rs. " . number_format($total_payable_amount, 2), 0, 1, 'R');
+    $pdf->SetFont('Helvetica', 'B', 11.5);
+    $pdf->Cell(68, 8, "Rs. " . number_format($total_payable, 2), 0, 1, 'R');
 
-    // 6. Amount in Words Block (border-left 3px solid #d32f2f)
-    $words_y = $strip_y + 16;
-    $pdf->SetDrawColor(211, 47, 47); // #d32f2f
+    // 6. Amount in Words Block
+    $words_y = $strip_y + 12;
+    $pdf->SetDrawColor(211, 47, 47);
     $pdf->SetLineWidth(0.8);
-    $pdf->Line(12, $words_y, 12, $words_y + 7);
+    $pdf->Line(12, $words_y, 12, $words_y + 6);
 
-    $pdf->SetXY(15, $words_y + 1);
+    $pdf->SetXY(15, $words_y + 0.5);
     $pdf->SetFont('Helvetica', 'I', 8.5);
     $pdf->SetTextColor(85, 85, 85);
     $pdf->Cell(45, 5, "Amount due in words: ", 0, 0, 'L');
 
     $pdf->SetFont('Helvetica', 'B', 8.5);
-    $pdf->SetTextColor(211, 47, 47); // #d32f2f
+    $pdf->SetTextColor(211, 47, 47);
     $pdf->Cell(135, 5, $amount_in_words, 0, 1, 'L');
 
     $filename = "Invoice_" . $invoice_no . "_" . preg_replace('/[^a-zA-Z0-9]+/', '_', $student_name) . ".pdf";

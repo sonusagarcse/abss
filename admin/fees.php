@@ -85,18 +85,13 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
         
         if ($bill_res && $bill_res->num_rows > 0) {
             $bill = $bill_res->fetch_assoc();
-            $new_amount = round($bill['amount'] - $amount, 2);
+            $new_amount = max(0, round((float)$bill['amount'] - $amount, 2));
+            $new_status = ($new_amount <= 0) ? 'paid' : 'unpaid';
+            $new_remark = $bill['remark'] . " | Payment received on $date (-₹" . number_format($amount, 2) . ")";
             
-            if ($new_amount <= 0) {
-                // Fully paid
-                $conn->query("UPDATE fees_generated SET status = 'paid' WHERE id = " . $bill['id']);
-            } else {
-                // Partially paid
-                $new_remark = $bill['remark'] . " | Payment received on $date (-₹" . number_format($amount, 2) . ")";
-                $update_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, remark = ? WHERE id = ?");
-                $update_stmt->bind_param("dsi", $new_amount, $new_remark, $bill['id']);
-                $update_stmt->execute();
-            }
+            $update_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = ?, remark = ? WHERE id = ?");
+            $update_stmt->bind_param("dssi", $new_amount, $new_status, $new_remark, $bill['id']);
+            $update_stmt->execute();
         }
 
         // Fetch parent email if linked for billing receipt

@@ -234,6 +234,21 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
             </div>
         </div>
 
+        <?php
+        // Fetch invoice details for gross subtotal and remaining balance calculation
+        $sid = (int)$pay['student_id'];
+        $month_for = $pay['month_for'];
+        $paid_amount = (float)$pay['amount'];
+        $paid_date = date('d M, Y', strtotime($pay['payment_date']));
+
+        $bill_res = $conn->query("SELECT amount, remark, status FROM fees_generated WHERE student_id = $sid AND month_for LIKE '%" . $conn->real_escape_string($month_for) . "%' ORDER BY id DESC LIMIT 1");
+        $bill_row = ($bill_res && $bill_res->num_rows > 0) ? $bill_res->fetch_assoc() : null;
+
+        $subtotal = $bill_row ? (float)$bill_row['amount'] : $paid_amount;
+        if ($subtotal < $paid_amount) $subtotal = $paid_amount;
+        $remaining_due = max(0, $subtotal - $paid_amount);
+        ?>
+
         <!-- Ledger itemization -->
         <table class="item-table">
             <thead>
@@ -246,39 +261,59 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
                 </tr>
             </thead>
             <tbody>
-                <tr>
-                    <td class="text-center">1</td>
-                    <td style="font-weight: 700; color: #1a237e;">
-                        <?php 
-                        // Dynamically retrieve custom invoice remarks, fallback to Monthly Tuition Fee
-                        $fee_desc = 'Monthly Tuition Fee';
-                        $remark_stmt = $conn->prepare("SELECT remark FROM fees_generated WHERE student_id = ? AND month_for = ? LIMIT 1");
-                        $remark_stmt->bind_param("is", $pay['student_id'], $pay['month_for']);
-                        $remark_stmt->execute();
-                        $rem_res = $remark_stmt->get_result()->fetch_assoc();
-                        if ($rem_res && !empty(trim($rem_res['remark']))) {
-                            $fee_desc = trim($rem_res['remark']);
-                        }
-                        echo htmlspecialchars($fee_desc);
-                        ?>
-                    </td>
-                    <td><?php echo htmlspecialchars($pay['month_for']); ?> <?php echo date('Y', strtotime($pay['payment_date'])); ?></td>
-                    <td><?php echo htmlspecialchars($pay['payment_method']); ?></td>
-                    <td class="text-right" style="font-weight: 700;">₹ <?php echo number_format($pay['amount'], 2); ?></td>
-                </tr>
-                <!-- Dynamic calculation row spacer -->
-                <tr>
-                    <td colspan="3" style="border:none;"></td>
-                    <td style="font-weight: 700; border:none; text-align:right;">Subtotal:</td>
-                    <td class="text-right" style="border:none; font-weight: 700;">₹ <?php echo number_format($pay['amount'], 2); ?></td>
-                </tr>
+                <?php 
+                $fee_remarks = !empty($bill_row['remark']) ? explode('|', $bill_row['remark']) : ['Monthly Fee Payment'];
+                $sno = 1;
+                foreach ($fee_remarks as $rem):
+                    $rem = trim($rem);
+                    if (strpos($rem, 'Auto-generated Bill.') !== false) {
+                        $rem = trim(str_replace('Auto-generated Bill.', '', $rem));
+                    }
+                    if (empty($rem)) continue;
+                    if (strpos(strtolower($rem), 'payment received') !== false || strpos($rem, '-₹') !== false || strpos($rem, '-Rs') !== false) {
+                        continue;
+                    }
+                ?>
+                    <tr>
+                        <td class="text-center"><?php echo $sno++; ?></td>
+                        <td style="font-weight: 700; color: #1a237e;">
+                            <?php echo htmlspecialchars($rem); ?>
+                        </td>
+                        <td><?php echo htmlspecialchars($pay['month_for']); ?></td>
+                        <td><?php echo htmlspecialchars($pay['payment_method']); ?></td>
+                        <td class="text-right" style="font-weight: 700;">₹ <?php echo number_format($paid_amount, 2); ?></td>
+                    </tr>
+                <?php endforeach; ?>
             </tbody>
         </table>
 
-        <!-- Total strip -->
-        <div class="total-strip">
-            <span class="total-label">Total Amount Paid</span>
-            <span class="total-value">₹ <?php echo number_format($pay['amount'], 2); ?></span>
+        <!-- Grand Summary Breakdown -->
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 18px 24px; margin-bottom: 25px; position: relative; z-index: 2;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <span style="font-size: 1rem; font-weight: 700; color: #475569;">Subtotal (Gross Charges & Expenses):</span>
+                <span style="font-size: 1.15rem; font-weight: 700; color: #1e293b;">₹ <?php echo number_format($subtotal, 2); ?></span>
+            </div>
+            
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+                <div>
+                    <span style="font-size: 1rem; font-weight: 700; color: #166534;">Less: Amount Paid:</span>
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #15803d; margin-top: 2px;">
+                        <i class="fas fa-check-circle"></i> Paid on <?php echo $paid_date; ?> via <?php echo htmlspecialchars($pay['payment_method']); ?>
+                    </div>
+                </div>
+                <span style="font-size: 1.15rem; font-weight: 700; color: #166534;">- ₹ <?php echo number_format($paid_amount, 2); ?></span>
+            </div>
+
+            <hr style="border: 0; border-top: 2px dashed #cbd5e1; margin: 12px 0;">
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 1.15rem; font-weight: 800; color: <?php echo $remaining_due > 0 ? '#b71c1c' : '#15803d'; ?>;">
+                    <?php echo $remaining_due > 0 ? 'Final Remaining Balance Due:' : 'Final Balance Due:'; ?>
+                </span>
+                <span style="font-size: 1.45rem; font-weight: 800; color: <?php echo $remaining_due > 0 ? '#b71c1c' : '#15803d'; ?>;">
+                    ₹ <?php echo number_format($remaining_due, 2); ?>
+                </span>
+            </div>
         </div>
 
         <!-- Amount in Words -->
