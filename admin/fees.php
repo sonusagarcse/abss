@@ -246,6 +246,47 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
     }
 }
 
+// Handle Add Daily Student Expense POST Request
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['add_daily_expense'])) {
+    $exp_sid = (int)$_POST['expense_student_id'];
+    $item_name = trim($_POST['item_name']);
+    $amount = (float)$_POST['expense_amount'];
+    $expense_date = trim($_POST['expense_date'] ?? date('Y-m-d'));
+
+    if ($exp_sid > 0 && !empty($item_name) && $amount > 0) {
+        $stmt = $conn->prepare("INSERT INTO student_expenses (student_id, item_name, amount, expense_date) VALUES (?, ?, ?, ?)");
+        $stmt->bind_param("isds", $exp_sid, $item_name, $amount, $expense_date);
+        if ($stmt->execute()) {
+            $msg = "Daily expense <strong>" . htmlspecialchars($item_name) . " (₹" . number_format($amount, 2) . ")</strong> recorded successfully.";
+            if (function_exists('log_activity')) {
+                log_activity('daily_expense_added', "Added daily expense of ₹" . number_format($amount, 2) . " for student ID $exp_sid: $item_name");
+            }
+            // Trigger billing engine to safely update active unpaid bill or retain as unbilled without generating next month bill early
+            $force_student_id = $exp_sid;
+            ob_start();
+            require __DIR__ . '/includes/billing_engine.php';
+            ob_end_clean();
+        } else {
+            $err = "Database error while recording daily expense.";
+        }
+    } else {
+        $err = "Please enter valid student, expense item title, and amount.";
+    }
+}
+
+// Handle Delete Daily Expense GET Request
+if (isset($_GET['delete_expense_id'])) {
+    $exp_id = (int)$_GET['delete_expense_id'];
+    $chk = $conn->query("SELECT student_id, item_name, amount FROM student_expenses WHERE id = $exp_id AND status = 'unbilled'");
+    if ($chk && $chk->num_rows > 0) {
+        $st_row = $chk->fetch_assoc();
+        $conn->query("DELETE FROM student_expenses WHERE id = $exp_id AND status = 'unbilled'");
+        $msg = "Unbilled daily expense deleted successfully.";
+    } else {
+        $err = "Cannot delete this expense (it has already been billed into a monthly invoice).";
+    }
+}
+
 // Handle Quick Collect Offline Action via GET
 if (isset($_GET['collect_offline'])) {
     $bill_id = (int)$_GET['collect_offline'];
@@ -313,7 +354,7 @@ $payments = $conn->query("
     FROM fee_payments f 
     JOIN students s ON f.student_id = s.id 
     WHERE (s.status = 'active' OR s.status IS NULL)
-    ORDER BY f.payment_date DESC LIMIT 10
+    ORDER BY f.payment_date DESC LIMIT 5
 ");
 
 // Fetch bills log
@@ -327,7 +368,19 @@ $bills = $conn->query("
     FROM fees_generated fg 
     JOIN students s ON fg.student_id = s.id 
     $status_cond
-    ORDER BY fg.billing_date DESC, fg.id DESC LIMIT 100
+    ORDER BY s.name ASC, fg.id DESC LIMIT 200
+");
+
+// Fetch daily student expenses log (current month only)
+$recent_expenses = $conn->query("
+    SELECT e.*, s.name AS student_name, s.reg_no 
+    FROM student_expenses e 
+    JOIN students s ON e.student_id = s.id 
+    WHERE (s.status = 'active' OR s.status IS NULL)
+      AND MONTH(e.expense_date) = MONTH(CURDATE()) 
+      AND YEAR(e.expense_date) = YEAR(CURDATE())
+    ORDER BY e.expense_date DESC, e.id DESC 
+    LIMIT 100
 ");
 
 // Retrieve tuition modes from settings database table
@@ -611,6 +664,44 @@ if (!empty($settings['tuition_modes'])) {
                         </button>
                     </form>
                 </div>
+
+                <!-- Form 3: Add Daily Student Expense -->
+                <div class="portal-card" style="margin-top: 25px;">
+                    <h3 style="margin-bottom: 20px; font-size: 1.15rem; color:var(--portal-dark); font-weight:800; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">
+                        <i class="fas fa-receipt" style="color:#d97706; margin-right:8px;"></i> Add Daily Student Expense
+                    </h3>
+                    <form action="" method="POST">
+                        <input type="hidden" name="add_daily_expense" value="1">
+                        <div class="portal-input-group">
+                            <label>Select Student</label>
+                            <select name="expense_student_id" required>
+                                <option value="">-- Select Student --</option>
+                                <?php foreach($students_list as $student): ?>
+                                    <option value="<?php echo $student['id']; ?>">
+                                        <?php echo htmlspecialchars($student['name']); ?> (<?php echo htmlspecialchars($student['scholar_mode'] ?? 'Day Scholar'); ?>)
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="portal-input-group">
+                            <label>Expense Item Title / Description</label>
+                            <input type="text" name="item_name" placeholder="e.g. Mess Charges, Books, Medical, Transport" required>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                            <div class="portal-input-group">
+                                <label>Amount (₹)</label>
+                                <input type="number" step="0.01" name="expense_amount" placeholder="250.00" required>
+                            </div>
+                            <div class="portal-input-group">
+                                <label>Expense Date</label>
+                                <input type="date" name="expense_date" value="<?php echo date('Y-m-d'); ?>" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-portal" style="width: 100%; padding: 13px; background: linear-gradient(135deg, #d97706, #b45309);">
+                            <i class="fas fa-plus"></i> Record Daily Expense
+                        </button>
+                    </form>
+                </div>
             </div>
 
             <!-- RIGHT COLUMN: MASTER LEDGER & INVOICES TABLES -->
@@ -752,6 +843,68 @@ if (!empty($settings['tuition_modes'])) {
                                             <td>
                                                 <div style="font-weight:700; color:#334155; font-size:0.82rem;"><?php echo date('d M, Y', strtotime($p['payment_date'])); ?></div>
                                                 <small style="color:#64748b;"><i class="fas fa-wallet"></i> <?php echo htmlspecialchars($p['payment_method']); ?></small>
+                                            </td>
+                                        </tr>
+                                    <?php endwhile; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- List 3: Daily Student Expenses Log -->
+                <div class="portal-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; border-bottom:2px solid #f1f5f9; padding-bottom:12px;">
+                        <h3 style="font-size: 1.15rem; margin:0; font-weight:800;">
+                            <i class="fas fa-receipt" style="color:#d97706; margin-right:8px;"></i> Daily Student Expenses Log
+                        </h3>
+                        <span style="font-size: 0.78rem; font-weight: 700; color: #b45309; background: #fef3c7; padding: 4px 10px; border-radius: 6px;">
+                            <i class="fas fa-calendar-alt"></i> <?php echo date('F Y'); ?> Entries
+                        </span>
+                    </div>
+
+                    <div class="portal-table-container">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Student</th>
+                                    <th>Item & Amount</th>
+                                    <th>Status & Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (!$recent_expenses || $recent_expenses->num_rows == 0): ?>
+                                    <tr>
+                                        <td colspan="4" style="text-align: center; color: #94a3b8; padding: 25px;">No daily expenses logged yet.</td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php while($exp = $recent_expenses->fetch_assoc()): ?>
+                                        <tr>
+                                            <td>
+                                                <div style="font-weight:700; color:#334155; font-size:0.82rem;"><?php echo date('d M, Y', strtotime($exp['expense_date'])); ?></div>
+                                            </td>
+                                            <td>
+                                                <strong style="color:var(--portal-dark); font-size:0.88rem;"><?php echo htmlspecialchars($exp['student_name']); ?></strong>
+                                                <?php if(!empty($exp['reg_no'])): ?>
+                                                    <div><small style="color:#94a3b8; font-family:monospace;"><?php echo htmlspecialchars($exp['reg_no']); ?></small></div>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <div style="font-weight:700; color:#1e293b; font-size:0.88rem;"><?php echo htmlspecialchars($exp['item_name']); ?></div>
+                                                <span class="amount-tag" style="background:#fef3c7; color:#b45309; padding:3px 8px; font-size:0.8rem;">₹ <?php echo number_format($exp['amount'], 2); ?></span>
+                                            </td>
+                                            <td>
+                                                <?php if($exp['status'] === 'billed'): ?>
+                                                    <span class="status-badge status-paid" style="background:#dcfce7; color:#15803d;"><i class="fas fa-check-circle"></i> Billed</span>
+                                                <?php else: ?>
+                                                    <div style="display:flex; align-items:center; gap:6px;">
+                                                        <span class="status-badge status-unpaid" style="background:#fef3c7; color:#b45309;"><i class="fas fa-clock"></i> Unbilled</span>
+                                                        <a href="fees.php?delete_expense_id=<?php echo $exp['id']; ?>" class="btn-quick-collect btn-action-delete" style="padding:3px 8px;" onclick="return confirm('Delete this unbilled expense?');" title="Delete Expense">
+                                                            <i class="fas fa-trash-alt"></i>
+                                                        </a>
+                                                    </div>
+                                                <?php endif; ?>
                                             </td>
                                         </tr>
                                     <?php endwhile; ?>

@@ -1,6 +1,64 @@
 <?php
 require_once 'includes/auth.php';
 
+// Helper function to sync approved expenses to unpaid salary invoices
+function syncTeacherExpenseDeduction($conn, $expense_id, $action = 'approve') {
+    $exp_q = $conn->query("SELECT * FROM teacher_expenses WHERE id = $expense_id");
+    if (!$exp_q || $exp_q->num_rows == 0) return;
+    $exp = $exp_q->fetch_assoc();
+    $teacher_id = (int)$exp['teacher_id'];
+    $amount = (float)$exp['amount'];
+
+    if ($action === 'approve') {
+        // If not already linked to an invoice, link to the latest unpaid invoice and deduct
+        if (empty($exp['invoice_id'])) {
+            $inv_res = $conn->query("SELECT id, amount FROM teacher_invoices WHERE teacher_id = $teacher_id AND status = 'unpaid' ORDER BY id DESC LIMIT 1");
+            if ($inv_res && $inv_res->num_rows > 0) {
+                $inv = $inv_res->fetch_assoc();
+                $new_amount = max(0, (float)$inv['amount'] - $amount);
+                $conn->query("UPDATE teacher_invoices SET amount = $new_amount WHERE id = " . $inv['id']);
+                $conn->query("UPDATE teacher_expenses SET invoice_id = " . $inv['id'] . ", status = 'approved' WHERE id = $expense_id");
+            } else {
+                $conn->query("UPDATE teacher_expenses SET status = 'approved' WHERE id = $expense_id");
+            }
+        } else {
+            $conn->query("UPDATE teacher_expenses SET status = 'approved' WHERE id = $expense_id");
+        }
+    } elseif ($action === 'reject' || $action === 'delete') {
+        // If linked to an unpaid invoice, restore the invoice amount
+        if (!empty($exp['invoice_id'])) {
+            $inv_id = (int)$exp['invoice_id'];
+            $inv_res = $conn->query("SELECT id, amount, status FROM teacher_invoices WHERE id = $inv_id AND status = 'unpaid'");
+            if ($inv_res && $inv_res->num_rows > 0) {
+                $inv = $inv_res->fetch_assoc();
+                $restored_amount = (float)$inv['amount'] + $amount;
+                $conn->query("UPDATE teacher_invoices SET amount = $restored_amount WHERE id = $inv_id");
+            }
+        }
+        if ($action === 'reject') {
+            $conn->query("UPDATE teacher_expenses SET status = 'rejected', invoice_id = NULL WHERE id = $expense_id");
+        } elseif ($action === 'delete') {
+            $conn->query("DELETE FROM teacher_expenses WHERE id = $expense_id");
+        }
+    }
+}
+
+// Handle Approve via GET
+if (isset($_GET['approve'])) {
+    $exp_id = (int)$_GET['approve'];
+    syncTeacherExpenseDeduction($conn, $exp_id, 'approve');
+    header("Location: teacher_expenses.php");
+    exit();
+}
+
+// Handle Reject via GET
+if (isset($_GET['reject'])) {
+    $exp_id = (int)$_GET['reject'];
+    syncTeacherExpenseDeduction($conn, $exp_id, 'reject');
+    header("Location: teacher_expenses.php");
+    exit();
+}
+
 // Handle Add/Edit Expense
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_expense'])) {
     $teacher_id = (int)$_POST['teacher_id'];
@@ -12,22 +70,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_expense'])) {
     $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
 
     if ($id > 0) {
-        // Fetch current status and invoice_id
-        $curr = $conn->query("SELECT status, invoice_id FROM teacher_expenses WHERE id = $id")->fetch_assoc();
-
         $stmt = $conn->prepare("UPDATE teacher_expenses SET teacher_id=?, expense_type=?, amount=?, expense_date=?, description=?, status=? WHERE id=?");
         $stmt->bind_param("isdsssi", $teacher_id, $expense_type, $amount, $expense_date, $description, $status, $id);
         $stmt->execute();
         
-        // If it just became approved and has no invoice
-        if ($curr['status'] !== 'approved' && $status === 'approved' && empty($curr['invoice_id'])) {
-            $inv_res = $conn->query("SELECT id, amount FROM teacher_invoices WHERE teacher_id = $teacher_id AND status = 'unpaid' ORDER BY issue_date DESC LIMIT 1");
-            if ($inv_res && $inv_res->num_rows > 0) {
-                $inv = $inv_res->fetch_assoc();
-                $new_amount = $inv['amount'] - $amount;
-                $conn->query("UPDATE teacher_invoices SET amount = $new_amount WHERE id = " . $inv['id']);
-                $conn->query("UPDATE teacher_expenses SET invoice_id = " . $inv['id'] . " WHERE id = $id");
-            }
+        if ($status === 'approved') {
+            syncTeacherExpenseDeduction($conn, $id, 'approve');
+        } elseif ($status === 'rejected') {
+            syncTeacherExpenseDeduction($conn, $id, 'reject');
         }
     } else {
         $stmt = $conn->prepare("INSERT INTO teacher_expenses (teacher_id, expense_type, amount, expense_date, description, status) VALUES (?, ?, ?, ?, ?, ?)");
@@ -35,14 +85,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_expense'])) {
         if ($stmt->execute()) {
             $new_expense_id = $stmt->insert_id;
             if ($status === 'approved') {
-                // Deduct from the existing unpaid invoice and link it
-                $inv_res = $conn->query("SELECT id, amount FROM teacher_invoices WHERE teacher_id = $teacher_id AND status = 'unpaid' ORDER BY issue_date DESC LIMIT 1");
-                if ($inv_res && $inv_res->num_rows > 0) {
-                    $inv = $inv_res->fetch_assoc();
-                    $new_amount = $inv['amount'] - $amount;
-                    $conn->query("UPDATE teacher_invoices SET amount = $new_amount WHERE id = " . $inv['id']);
-                    $conn->query("UPDATE teacher_expenses SET invoice_id = " . $inv['id'] . " WHERE id = $new_expense_id");
-                }
+                syncTeacherExpenseDeduction($conn, $new_expense_id, 'approve');
             }
         }
     }
@@ -51,10 +94,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_expense'])) {
     exit();
 }
 
-// Handle Delete
+// Handle Delete via GET
 if (isset($_GET['delete'])) {
     $id = (int)$_GET['delete'];
-    $conn->query("DELETE FROM teacher_expenses WHERE id = $id");
+    syncTeacherExpenseDeduction($conn, $id, 'delete');
     header("Location: teacher_expenses.php");
     exit();
 }
@@ -135,12 +178,22 @@ if($teachers){
                             <span class="status-badge status-<?php echo $row['status']; ?>"><?php echo $row['status']; ?></span>
                         </td>
                         <td>
-                            <button class="btn btn-sm btn-outline-primary" style="border:none; color:var(--portal-blue);" onclick='editExpense(<?php echo json_encode($row); ?>)' title="Edit">
-                                <i class="fas fa-edit"></i>
-                            </button>
-                            <a href="?delete=<?php echo $row['id']; ?>" class="btn btn-sm btn-outline-danger" style="border:none; color:#d32f2f;" onclick="return confirm('Are you sure?')" title="Delete">
-                                <i class="fas fa-trash"></i>
-                            </a>
+                            <div style="display:flex; align-items:center; gap:6px;">
+                                <?php if ($row['status'] === 'pending'): ?>
+                                    <a href="?approve=<?php echo $row['id']; ?>" class="btn btn-sm" style="background:#dcfce7; color:#15803d; font-weight:800; border-radius:8px; padding:4px 8px; text-decoration:none;" onclick="return confirm('Approve this expense claim of ₹<?php echo number_format($row['amount'],2); ?>? It will be deducted from the teacher\'s final salary invoice.');" title="Approve & Deduct from Salary Invoice">
+                                        <i class="fas fa-check"></i> Approve
+                                    </a>
+                                    <a href="?reject=<?php echo $row['id']; ?>" class="btn btn-sm" style="background:#fee2e2; color:#b91c1c; font-weight:800; border-radius:8px; padding:4px 8px; text-decoration:none;" onclick="return confirm('Reject this expense claim?');" title="Reject Expense">
+                                        <i class="fas fa-times"></i> Reject
+                                    </a>
+                                <?php endif; ?>
+                                <button class="btn btn-sm btn-outline-primary" style="border:none; color:var(--portal-blue);" onclick='editExpense(<?php echo json_encode($row); ?>)' title="Edit">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                                <a href="?delete=<?php echo $row['id']; ?>" class="btn btn-sm btn-outline-danger" style="border:none; color:#d32f2f;" onclick="return confirm('Are you sure you want to delete this expense?')" title="Delete">
+                                    <i class="fas fa-trash"></i>
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     <?php endwhile; else: ?>

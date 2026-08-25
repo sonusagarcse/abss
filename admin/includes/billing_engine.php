@@ -114,12 +114,51 @@ if ($due_students && $due_students->num_rows > 0) {
             $target_month = clone $last_billed;
             $target_month->modify('first day of next month');
             
-            if (!isset($force_student_id)) {
-                $today = new DateTime($engine_eval_date);
-                $today->setTime(0,0,0);
-                if ($today < $target_month) {
-                    continue; // Safeguard: Not due yet for next month
+            $today = new DateTime($engine_eval_date);
+            $today->setTime(0,0,0);
+            
+            if ($today < $target_month) {
+                // Safeguard: Not due yet for next month! Monthly tuition bills ONLY generate on the 1st of each month.
+                // Process any unbilled daily expenses immediately
+                $exp_query = $conn->query("SELECT id, item_name, amount FROM student_expenses WHERE student_id = $sid AND status = 'unbilled'");
+                if ($exp_query && $exp_query->num_rows > 0) {
+                    $exp_amount = 0;
+                    $exp_remarks = [];
+                    $exp_ids = [];
+                    while ($exp = $exp_query->fetch_assoc()) {
+                        $exp_amount += (float)$exp['amount'];
+                        $exp_ids[] = $exp['id'];
+                        $exp_remarks[] = $exp['item_name'] . " (Expense): ₹" . number_format($exp['amount'], 2);
+                    }
+                    if ($exp_amount > 0) {
+                        $exp_remark_str = implode(" | ", $exp_remarks);
+                        $existing_unpaid_res = $conn->query("SELECT id, amount, remark FROM fees_generated WHERE student_id = $sid AND status = 'unpaid' ORDER BY id DESC LIMIT 1");
+                        
+                        if ($existing_unpaid_res && $existing_unpaid_res->num_rows > 0) {
+                            // Option A: Append daily expense to existing unpaid invoice
+                            $existing_unpaid = $existing_unpaid_res->fetch_assoc();
+                            $new_total = (float)$existing_unpaid['amount'] + $exp_amount;
+                            $new_remark = $existing_unpaid['remark'] . " | " . $exp_remark_str;
+                            $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, remark = ? WHERE id = ?");
+                            $u_stmt->bind_param("dsi", $new_total, $new_remark, $existing_unpaid['id']);
+                            $u_stmt->execute();
+                        } else {
+                            // Option B: Generate 1 NEW bill containing ONLY this daily expense (NO tuition fee!)
+                            $curr_month_str = date('F Y', strtotime($engine_eval_date));
+                            $billing_date = date('Y-m-d', strtotime($engine_eval_date));
+                            $final_remark = "Daily Expense. " . $exp_remark_str;
+                            
+                            $stmt = $conn->prepare("INSERT INTO fees_generated (student_id, amount, month_for, billing_date, remark, status) VALUES (?, ?, ?, ?, ?, 'unpaid')");
+                            $stmt->bind_param("idsss", $sid, $exp_amount, $curr_month_str, $billing_date, $final_remark);
+                            $stmt->execute();
+                        }
+                        
+                        $ids_str = implode(",", $exp_ids);
+                        $conn->query("UPDATE student_expenses SET status = 'billed', billed_at = NOW() WHERE id IN ($ids_str)");
+                    }
                 }
+                // Do NOT generate next month's tuition bill early!
+                continue;
             }
             
             $bill_month_date = $target_month->format('Y-m-01');

@@ -111,11 +111,7 @@ $is_notif_page = (strpos($_SERVER['PHP_SELF'], 'notifications') !== false || $cu
                 <i class="fab fa-whatsapp" style="color: #22c55e;"></i> WhatsApp Hub
             </a>
         </li>
-        <li class="nav-item">
-            <a href="<?php echo $admin_url; ?>expenses.php" class="nav-link <?php echo $current_page == 'expenses.php' ? 'active' : ''; ?>">
-                <i class="fas fa-cart-plus"></i> Daily Expenses
-            </a>
-        </li>
+
         <li class="nav-item">
             <a href="<?php echo $admin_url; ?>results.php" class="nav-link <?php echo $current_page == 'results.php' ? 'active' : ''; ?>">
                 <i class="fas fa-award"></i> Test Results
