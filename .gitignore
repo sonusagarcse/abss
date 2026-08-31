@@ -3,3 +3,5 @@
 !.env.example
 config/service-account.json
 logs/*
+uploads/*
+!uploads/.gitkeep

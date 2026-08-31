@@ -827,7 +827,11 @@ if (!empty($site_settings['tuition_modes'])) {
                     <p style="font-size: 1.1rem; font-weight: 700; margin: 0;">No enrolled students registered yet.</p>
                 </div>
             <?php else: ?>
-                <?php foreach($students_data as $row): 
+                <?php 
+                $app_settings = function_exists('getAllSettings') ? getAllSettings() : [];
+                $tuition_modes = !empty($app_settings['tuition_modes']) ? json_decode($app_settings['tuition_modes'], true) : [];
+
+                foreach($students_data as $row): 
                     $mode = $row['scholar_mode'] ?? 'Day Scholar';
                     $scholar_class = 'scholar-day';
                     if (strcasecmp($mode, 'Hostler') === 0) $scholar_class = 'scholar-hostler';
@@ -840,6 +844,22 @@ if (!empty($site_settings['tuition_modes'])) {
                     if (empty($initials)) $initials = 'S';
                     
                     $phone_digits = preg_replace('/[^0-9]/', '', $row['phone'] ?? '');
+
+                    // Calculate Final Monthly Fee after discount
+                    $st_base = (float)($row['base_fee'] ?? 0);
+                    $st_disc = (float)($row['monthly_discount'] ?? 0);
+                    if ($st_base <= 0) {
+                        if (isset($tuition_modes[$mode]) && (float)$tuition_modes[$mode] > 0) {
+                            $st_base = (float)$tuition_modes[$mode];
+                        } elseif (strcasecmp($mode, 'Hostler') === 0) {
+                            $st_base = (float)($app_settings['fee_hostler'] ?? 5000);
+                        } elseif (strcasecmp($mode, 'Tuition') === 0) {
+                            $st_base = (float)($app_settings['fee_tuition'] ?? 1500);
+                        } else {
+                            $st_base = (float)($app_settings['fee_day_scholar'] ?? 3000);
+                        }
+                    }
+                    $st_final = max(0, $st_base - $st_disc);
                 ?>
                     <div class="student-profile-card student-item-card"
                          data-name="<?php echo strtolower(htmlspecialchars($row['name'])); ?>"
@@ -897,8 +917,13 @@ if (!empty($site_settings['tuition_modes'])) {
                                     <b><?php echo htmlspecialchars($row['parent_name'] ?: '—'); ?></b>
                                 </div>
                                 <div class="student-detail-item">
-                                    <span>Base Monthly Fee:</span>
-                                    <b style="color: var(--portal-blue);">₹<?php echo number_format((float)($row['base_fee'] ?? 0), 2); ?></b>
+                                    <span>Monthly Fee:</span>
+                                    <b style="color: #16a34a; font-weight: 800;">
+                                        ₹<?php echo number_format($st_final, 2); ?>
+                                        <?php if ($st_disc > 0): ?>
+                                            <small style="color: #64748b; font-weight: 600; font-size: 0.72rem; text-decoration: line-through; margin-left: 3px;">₹<?php echo number_format($st_base, 2); ?></small>
+                                        <?php endif; ?>
+                                    </b>
                                 </div>
                             </div>
 
