@@ -11,7 +11,8 @@ $bill_id = (int)$_GET['id'];
 
 // Fetch bill details with student scholar mode & class admitted
 $stmt = $conn->prepare("
-    SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, p.parent_name, p.phone
+    SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, s.guardian_email,
+           p.parent_name, p.phone, p.email as parent_email
     FROM fees_generated fg
     JOIN students s ON fg.student_id = s.id
     LEFT JOIN parents p ON s.parent_id = p.id
@@ -32,7 +33,8 @@ $school_phone = $settings['phone'] ?? '+91 9523012888';
 $school_email = $settings['email'] ?? 'abssimamganj@gmail.com';
 
 // Function to convert amount to words
-function amountToWords($number) {
+if (!function_exists('amountToWords')) {
+    function amountToWords($number) {
     $decimal = (int)round(($number - floor($number)) * 100);
     $no = (int)floor($number);
     $words = array(
@@ -82,6 +84,7 @@ function amountToWords($number) {
         return $paise . ' Only';
     }
     return 'Zero Rupees Only';
+    }
 }
 
 // Calculate dynamic late fine (if enabled in settings)
@@ -170,6 +173,15 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
             <button onclick="emailInvoicePdf(<?php echo $bill['student_id']; ?>)" class="btn-control" id="btnEmailInvoice" style="background:#eff6ff; color:#1d4ed8;">
                 <i class="fas fa-envelope-open-text"></i> Email Bill PDF
             </button>
+            <?php
+            $wa_phone = preg_replace('/[^0-9]/', '', $bill['phone'] ?? '');
+            if (!empty($wa_phone)) {
+                $wa_msg = urlencode("Dear " . ($bill['parent_name'] ?: 'Parent') . ",\n\nFee Invoice #" . $invoice_no . " for *" . $bill['student_name'] . "* has been generated.\n\nMonth: " . $bill['month_for'] . "\nAmount Due: ₹" . number_format($total_payable_amount, 2) . "\nStatus: " . strtoupper($bill['status']) . "\n\nPlease visit the Parent Portal to view and pay: " . (strpos(($_SERVER['HTTP_HOST'] ?? ''), 'localhost') !== false ? 'http://localhost/abss/parent/login.php' : 'https://' . ($_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in') . '/parent/login.php') . "\n\n- " . ($settings['school_name'] ?? 'ABSS'));
+            ?>
+            <a href="https://api.whatsapp.com/send?phone=<?php echo $wa_phone; ?>&text=<?php echo $wa_msg; ?>" target="_blank" class="btn-control" style="background:#dcfce7; color:#166534; text-decoration:none;">
+                <i class="fab fa-whatsapp"></i> WhatsApp Bill
+            </a>
+            <?php } ?>
             <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print</button>
         </div>
     </div>
@@ -406,7 +418,8 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
         });
 
         function emailInvoicePdf(studentId) {
-            const promptEmail = prompt("Enter parent/guardian email address to deliver this Bill PDF statement:", "");
+            const defaultEmail = <?php echo json_encode(trim($bill['parent_email'] ?: ($bill['guardian_email'] ?? ''))); ?>;
+            const promptEmail = prompt("Enter parent/guardian email address to deliver this Bill PDF statement:", defaultEmail);
             if (promptEmail === null) return;
             
             const cleanEmail = promptEmail.trim();

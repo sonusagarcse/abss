@@ -126,17 +126,38 @@ try {
         $portal_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss/parent/login.php" : "$protocol://$host/parent/login.php";
 
         $parent_name = $student['parent_name'] ?: ($student['p_name'] ?: 'Parent / Guardian');
-        $email_html = get_student_dues_email_template(
-            $student['name'],
-            $total_payable,
-            $due_months,
-            $unpaid_count,
-            $fine_amount,
-            $portal_url,
-            $parent_name
-        );
 
-        $subject = "Official Fee Due Statement & Bill - " . $student['name'] . " (ABSS)";
+        if ($bill_id > 0) {
+            $bill_query = $conn->query("SELECT * FROM fees_generated WHERE id = $bill_id");
+            $bill_row = ($bill_query && $bill_query->num_rows > 0) ? $bill_query->fetch_assoc() : null;
+            $bill_month = $bill_row ? $bill_row['month_for'] : $due_months;
+            $bill_amt = $bill_row ? (float)$bill_row['amount'] : $total_payable;
+            $bill_date = $bill_row ? $bill_row['billing_date'] : date('Y-m-d');
+            $bill_rem = $bill_row ? $bill_row['remark'] : '';
+            $bill_view_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss/parent/view_bill.php?id=$bill_id" : "$protocol://$host/parent/view_bill.php?id=$bill_id";
+
+            $email_html = get_fee_generated_template(
+                $student['name'],
+                $bill_amt,
+                $bill_month,
+                $bill_date,
+                $bill_rem,
+                $bill_view_url,
+                $parent_name
+            );
+            $subject = "Fee Invoice #" . str_pad($bill_id, 5, '0', STR_PAD_LEFT) . " (" . $bill_month . ") - " . $student['name'] . " - ABSS";
+        } else {
+            $email_html = get_student_dues_email_template(
+                $student['name'],
+                $total_payable,
+                $due_months,
+                $unpaid_count,
+                $fine_amount,
+                $portal_url,
+                $parent_name
+            );
+            $subject = "Official Fee Due Statement & Bill - " . $student['name'] . " (ABSS)";
+        }
         $attachments = [
             [
                 'filename' => $pdfFilename,

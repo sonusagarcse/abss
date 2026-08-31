@@ -83,13 +83,22 @@ function runAutoMigrator($conn) {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 student_id INT NOT NULL,
                 amount DECIMAL(10,2) NOT NULL,
-                month_for VARCHAR(20) NOT NULL,
+                month_for VARCHAR(255) NOT NULL,
                 billing_date DATE NOT NULL,
-                remark VARCHAR(255) DEFAULT NULL,
+                remark TEXT DEFAULT NULL,
                 status ENUM('unpaid', 'paid') DEFAULT 'unpaid',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX(student_id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+            
+            // Auto upgrade column sizes if legacy varchar(20) exists
+            $checkMonthFor = $conn->query("SHOW COLUMNS FROM fees_generated LIKE 'month_for'");
+            if ($checkMonthFor && $mf_row = $checkMonthFor->fetch_assoc()) {
+                if (stripos($mf_row['Type'], 'varchar(20)') !== false) {
+                    $conn->query("ALTER TABLE fees_generated MODIFY month_for VARCHAR(255) NOT NULL");
+                    $conn->query("ALTER TABLE fees_generated MODIFY remark TEXT DEFAULT NULL");
+                }
+            }
             
             // Create support_tickets table
             $conn->query("CREATE TABLE IF NOT EXISTS support_tickets (

@@ -9,6 +9,11 @@ require_once 'includes/billing_engine.php';
 $msg = '';
 $err = '';
 
+if (isset($billing_generated_count) && $billing_generated_count > 0) {
+    $display_month = isset($current_eval_name) ? $current_eval_name : date('F Y');
+    $msg = "Automated Monthly Billing: Fee invoices successfully generated/updated for <strong>$billing_generated_count</strong> student(s) for " . $display_month . ".";
+}
+
 // Handle Bulk Delete Generated Bills POST Request
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['bulk_delete_bills'])) {
     if (!empty($_POST['selected_bill_ids']) && is_array($_POST['selected_bill_ids'])) {
@@ -192,7 +197,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
                 $dt = DateTime::createFromFormat('d-F-Y', $date_str);
                 if ($dt) {
                     $end_of_month = $dt->format('Y-m-t');
-                    $conn->query("UPDATE students SET last_billed_date = '$end_of_month' WHERE id = $sid");
+                    $conn->query("UPDATE students SET last_billed_date = '$end_of_month' WHERE id = $sid AND (last_billed_date IS NULL OR last_billed_date < '$end_of_month')");
                 }
             }
 
@@ -470,9 +475,16 @@ if (!empty($settings['tuition_modes'])) {
     <?php include 'includes/sidebar.php'; ?>
 
     <main class="main-content">
-        <header style="margin-bottom: 25px;">
-            <h1 style="font-size: 1.8rem; margin-bottom: 4px;">Fee Management & Ledger</h1>
-            <p style="margin: 0; color:#64748b;">Collect payments, generate manual fees, and view real-time billing logs in 2-column view.</p>
+        <header style="margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div>
+                <h1 style="font-size: 1.8rem; margin-bottom: 4px;">Fee Management & Ledger</h1>
+                <p style="margin: 0; color:#64748b;">Collect payments, generate manual fees, and view real-time billing logs in 2-column view.</p>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <a href="billing_dry_run.php" class="btn" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 9px 16px; border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fas fa-shield-alt"></i> Billing Simulator (Dry Run)
+                </a>
+            </div>
         </header>
 
         <?php

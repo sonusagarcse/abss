@@ -28,4 +28,7 @@ if (defined('ENVIRONMENT') && ENVIRONMENT === 'development') {
     error_reporting(0);
     ini_set('display_errors', 0);
 }
+
+// Ensure Indian Standard Time (IST) globally for all dates, cron, and billing calculations
+date_default_timezone_set('Asia/Kolkata');
 ?>

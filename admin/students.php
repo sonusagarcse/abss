@@ -85,7 +85,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             $parent_id = $p_res->fetch_assoc()['id'];
             // Ensure phone is attached to parent account
             $u_stmt = $conn->prepare("UPDATE parents SET phone = ? WHERE id = ? AND (phone IS NULL OR phone = '')");
-            $u_stmt->bind_param("si", $parent_id);
+            $u_stmt->bind_param("si", $phone, $parent_id);
             $u_stmt->execute();
         } else {
             // Create a new parent account: BOTH ID & PASSWORD are the Mobile Number (phone)
