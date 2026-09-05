@@ -202,9 +202,12 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
 
     <!-- Control Panel -->
     <div class="control-bar">
-        <div style="display:flex; gap: 10px; flex-wrap:wrap; width:100%;">
+        <div style="display:flex; gap: 10px; flex-wrap:wrap; width:100%; align-items:center;">
             <a href="fees.php" class="btn-control btn-back"><i class="fas fa-chevron-left"></i> Back to Dues</a>
-            <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print / Download PDF</button>
+            <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print / PDF</button>
+            <button type="button" onclick="shareInvoiceWhatsAppDirect()" class="btn-control" id="btnShareWaImg" style="background:#25d366; color:#ffffff; font-weight:800; border:none; box-shadow: 0 4px 12px rgba(37,211,102,0.25);">
+                <i class="fab fa-whatsapp"></i> 📲 Share on WhatsApp
+            </button>
             <?php if ($bill['status'] === 'unpaid'): ?>
                 <button type="button" onclick="payWithRazorpay()" class="btn-control btn-pay-rzp" style="margin-left:auto;">
                     <i class="fas fa-credit-card"></i> Pay Online (Razorpay)
@@ -214,7 +217,7 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
     </div>
 
     <!-- Printable Invoice Container -->
-    <div class="receipt-container">
+    <div class="receipt-container" id="receiptContainer">
         
         <!-- Watermark -->
         <div class="watermark">
@@ -502,6 +505,19 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
             });
             rzp.open();
         }
+
+        function shareInvoiceWhatsAppDirect() {
+            shareInvoiceOnWhatsApp({
+                containerId: 'receiptContainer',
+                studentName: <?php echo json_encode($bill['student_name']); ?>,
+                invoiceNo: <?php echo json_encode($invoice_no); ?>,
+                amount: <?php echo json_encode(number_format($total_payable_amount, 2)); ?>,
+                date: <?php echo json_encode(date('d M, Y', strtotime($bill['billing_date']))); ?>,
+                phone: <?php echo json_encode($bill['phone'] ?? ''); ?>,
+                btnId: 'btnShareWaImg'
+            });
+        }
     </script>
+    <script src="../js/invoice-share-bridge.js"></script>
 </body>
 </html>

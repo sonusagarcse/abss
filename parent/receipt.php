@@ -168,11 +168,14 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
     <!-- Print Control Panel -->
     <div class="control-bar">
         <a href="fees.php" class="btn-control btn-back"><i class="fas fa-chevron-left"></i> Back to Ledger</a>
+        <button type="button" onclick="shareReceiptWhatsAppDirect()" class="btn-control" id="btnShareWaImg" style="background:#25d366; color:#ffffff; font-weight:800; border:none; box-shadow: 0 4px 12px rgba(37,211,102,0.25);">
+            <i class="fab fa-whatsapp"></i> 📲 Share Receipt
+        </button>
         <button onclick="window.print()" class="btn-control btn-print"><i class="fas fa-print"></i> Print / Save PDF</button>
     </div>
 
     <!-- Printable Receipt Container -->
-    <div class="receipt-container">
+    <div class="receipt-container" id="receiptContainer">
         
         <!-- Watermark -->
         <div class="watermark">
@@ -366,5 +369,19 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
 
     </div>
 
+    <script>
+        function shareReceiptWhatsAppDirect() {
+            shareInvoiceOnWhatsApp({
+                containerId: 'receiptContainer',
+                studentName: <?php echo json_encode($pay['student_name']); ?>,
+                invoiceNo: <?php echo json_encode($receipt_no); ?>,
+                amount: <?php echo json_encode(number_format((float)$pay['amount'], 2)); ?>,
+                date: <?php echo json_encode(date('d M, Y', strtotime($pay['payment_date']))); ?>,
+                phone: <?php echo json_encode($pay['phone'] ?? ''); ?>,
+                btnId: 'btnShareWaImg'
+            });
+        }
+    </script>
+    <script src="../js/invoice-share-bridge.js"></script>
 </body>
 </html>

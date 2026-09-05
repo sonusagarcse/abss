@@ -173,6 +173,9 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
             <button onclick="emailInvoicePdf(<?php echo $bill['student_id']; ?>)" class="btn-control" id="btnEmailInvoice" style="background:#eff6ff; color:#1d4ed8;">
                 <i class="fas fa-envelope-open-text"></i> Email Bill PDF
             </button>
+            <button type="button" onclick="shareInvoiceWhatsAppDirect()" class="btn-control" id="btnShareWaImg" style="background:#25d366; color:#ffffff; font-weight:800; border:none; box-shadow: 0 4px 12px rgba(37,211,102,0.25);">
+                <i class="fab fa-whatsapp"></i> 📲 Share on WhatsApp
+            </button>
             <?php
             $wa_phone = preg_replace('/[^0-9]/', '', $bill['phone'] ?? '');
             if (!empty($wa_phone)) {
@@ -181,7 +184,7 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
                 $wa_msg = urlencode("Dear " . ($bill['parent_name'] ?: 'Parent') . ",\n\nFee Invoice #" . $invoice_no . " for *" . $bill['student_name'] . "* has been generated.\n\nMonth: " . $bill['month_for'] . "\nAmount Due: ₹" . number_format($total_payable_amount, 2) . "\nStatus: " . strtoupper($bill['status']) . "\n\n⚠️ Late Fine Notice: A late fee of ₹" . $fine_rate_str . "/day applies on unpaid dues after the " . $grace_day_str . "th of each month.\n\nPlease visit the Parent Portal to view and pay: " . (strpos(($_SERVER['HTTP_HOST'] ?? ''), 'localhost') !== false ? 'http://localhost/abss/parent/login.php' : 'https://' . ($_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in') . '/parent/login.php') . "\n\n- " . ($settings['school_name'] ?? 'ABSS'));
             ?>
             <a href="https://api.whatsapp.com/send?phone=<?php echo $wa_phone; ?>&text=<?php echo $wa_msg; ?>" target="_blank" class="btn-control" style="background:#dcfce7; color:#166534; text-decoration:none;">
-                <i class="fab fa-whatsapp"></i> WhatsApp Bill
+                <i class="fab fa-whatsapp"></i> WhatsApp Text
             </a>
             <?php } ?>
             <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print</button>
@@ -486,6 +489,19 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
                 alert('Dispatch error: ' + err.message);
             });
         }
+
+        function shareInvoiceWhatsAppDirect() {
+            shareInvoiceOnWhatsApp({
+                containerId: 'receiptContainer',
+                studentName: <?php echo json_encode($bill['student_name']); ?>,
+                invoiceNo: <?php echo json_encode($invoice_no); ?>,
+                amount: <?php echo json_encode(number_format($total_payable_amount, 2)); ?>,
+                date: <?php echo json_encode(date('d M, Y', strtotime($bill['billing_date']))); ?>,
+                phone: <?php echo json_encode($bill['phone'] ?? ''); ?>,
+                btnId: 'btnShareWaImg'
+            });
+        }
     </script>
+    <script src="../js/invoice-share-bridge.js"></script>
 </body>
 </html>
