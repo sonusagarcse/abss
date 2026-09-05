@@ -102,94 +102,240 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fee Invoice - <?php echo $invoice_no; ?></title>
+    <title>Fee Invoice - <?php echo $invoice_no; ?> | ABSS Admin</title>
+    <?php if (!$is_embed) include 'includes/head_css.php'; ?>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<?php
+$logo_path = __DIR__ . '/../assets/logo.png';
+$logo_src = file_exists($logo_path) ? 'data:image/png;base64,' . base64_encode(file_get_contents($logo_path)) : '../assets/logo.png';
+?>
     <style>
-        body { font-family: 'Outfit', sans-serif; background: <?php echo $is_embed ? '#ffffff' : '#525659'; ?>; margin: 0; padding: <?php echo $is_embed ? '0' : '30px 0'; ?>; -webkit-print-color-adjust: exact; }
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            background: <?php echo $is_embed ? '#ffffff' : 'radial-gradient(circle at 10% 20%, rgba(59, 130, 246, 0.06) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(124, 58, 237, 0.06) 0%, transparent 40%), #f8fafc'; ?>; 
+            margin: 0; 
+            padding: 0;
+            -webkit-print-color-adjust: exact; 
+        }
         
-        .control-bar { max-width: 800px; margin: 0 auto 20px; background: #fff; padding: 15px 30px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        .btn-control { text-decoration: none; font-weight: 700; font-size: 0.9rem; padding: 10px 20px; border-radius: 8px; border: none; cursor: pointer; display: flex; align-items: center; gap: 8px; font-family: inherit; transition: 0.3s; }
-        .btn-back { background: #f0f4f8; color: #1a237e; }
-        .btn-back:hover { background: #e2ebf0; }
+        .view-bill-wrapper {
+            max-width: 880px;
+            margin: 0 auto;
+            width: 100%;
+        }
 
-        .receipt-container { max-width: 800px; margin: 0 auto; background: #fff; padding: 45px; border-radius: 4px; box-shadow: <?php echo $is_embed ? 'none' : '0 10px 30px rgba(0,0,0,0.15)'; ?>; box-sizing: border-box; position: relative; overflow: hidden; border: 1px solid #dcdcdc; }
+        .control-bar { 
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 14px 20px; 
+            border-radius: var(--radius-md, 16px); 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+            box-shadow: 0 4px 20px rgba(15, 23, 42, 0.06); 
+            border: 1px solid #e2e8f0;
+            margin-bottom: 20px;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .btn-control { 
+            text-decoration: none; 
+            font-weight: 700; 
+            font-size: 0.86rem; 
+            padding: 9px 16px; 
+            border-radius: 10px; 
+            border: 1px solid #cbd5e1; 
+            cursor: pointer; 
+            display: inline-flex; 
+            align-items: center; 
+            gap: 7px; 
+            font-family: inherit; 
+            transition: all 0.2s ease; 
+        }
+        .btn-control:hover {
+            transform: translateY(-1px);
+        }
+        .btn-back { background: #f8fafc; color: #1e293b; border-color: #cbd5e1; }
+        .btn-back:hover { background: #f1f5f9; color: var(--portal-blue, #2563eb); }
+
+        .receipt-container { 
+            background: #ffffff; 
+            padding: 40px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06); 
+            box-sizing: border-box; 
+            position: relative; 
+            overflow: hidden; 
+            border: 1px solid #e2e8f0; 
+            width: 100%;
+            margin-bottom: 30px;
+        }
         
-        .watermark { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg); font-size: 8rem; color: rgba(211, 47, 47, 0.04); font-weight: 800; pointer-events: none; text-align: center; width: 120%; z-index: 1; user-select: none; border: 15px double rgba(211, 47, 47, 0.04); padding: 20px; }
+        .watermark { 
+            position: absolute; 
+            top: 50%; 
+            left: 50%; 
+            transform: translate(-50%, -50%) rotate(-30deg); 
+            font-size: 6rem; 
+            color: rgba(211, 47, 47, 0.04); 
+            font-weight: 800; 
+            pointer-events: none; 
+            text-align: center; 
+            width: 100%; 
+            z-index: 1; 
+            user-select: none; 
+            padding: 20px; 
+        }
 
-        .receipt-header { display: flex; justify-content: space-between; border-bottom: 3px double #e0e0e0; padding-bottom: 25px; margin-bottom: 30px; position: relative; z-index: 2; }
-        .school-branding { display: flex; align-items: center; gap: 18px; }
-        .school-branding img { height: 70px; }
-        .school-info h2 { margin: 0 0 4px 0; color: #1a237e; font-size: 1.55rem; font-weight: 800; }
-        .school-info p { margin: 0; color: #555; font-size: 0.84rem; line-height: 1.4; font-weight: 500; }
+        .receipt-header { 
+            display: flex; 
+            justify-content: space-between; 
+            border-bottom: 2px solid #f1f5f9; 
+            padding-bottom: 22px; 
+            margin-bottom: 25px; 
+            position: relative; 
+            z-index: 2; 
+            gap: 20px;
+        }
+        .school-branding { display: flex; align-items: center; gap: 16px; }
+        .school-branding img { height: 64px; }
+        .school-info h2 { margin: 0 0 4px 0; color: #1e293b; font-size: 1.45rem; font-weight: 800; }
+        .school-info p { margin: 0; color: #64748b; font-size: 0.82rem; line-height: 1.4; font-weight: 500; }
         
-        .receipt-meta { text-align: right; }
-        .receipt-title { font-size: 1.3rem; font-weight: 800; color: #d32f2f; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em; }
-        .receipt-no { font-family: monospace; font-size: 0.95rem; font-weight: 700; color: #333; margin-bottom: 4px; }
-        .receipt-date { font-size: 0.84rem; color: #666; font-weight: 600; }
+        .receipt-meta { text-align: right; min-width: 180px; }
+        .receipt-title { font-size: 1.25rem; font-weight: 800; color: #dc2626; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+        .receipt-no { font-family: monospace; font-size: 0.92rem; font-weight: 700; color: #334155; margin-bottom: 3px; }
+        .receipt-date { font-size: 0.82rem; color: #64748b; font-weight: 600; }
 
-        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-bottom: 30px; position: relative; z-index: 2; }
-        .details-col h4 { margin: 0 0 10px 0; color: #1a237e; font-size: 0.82rem; text-transform: uppercase; border-bottom: 2px solid #f0f0f0; padding-bottom: 4px; letter-spacing: 0.05em; }
+        .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 25px; position: relative; z-index: 2; }
+        .details-col h4 { margin: 0 0 10px 0; color: #1e293b; font-size: 0.8rem; text-transform: uppercase; border-bottom: 2px solid #f1f5f9; padding-bottom: 5px; letter-spacing: 0.05em; font-weight: 800; }
         
         .kv-table { width: 100%; border-collapse: collapse; }
         .kv-table td { padding: 5px 0; font-size: 0.88rem; border: none; background: transparent; }
-        .kv-label { color: #666; font-weight: 500; width: 38%; }
-        .kv-value { color: #111; font-weight: 700; }
+        .kv-label { color: #64748b; font-weight: 600; width: 38%; }
+        .kv-value { color: #0f172a; font-weight: 700; }
 
         .item-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; position: relative; z-index: 2; }
-        .item-table th { background: #feeef2; color: #d32f2f; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; padding: 10px 12px; border-top: 1px solid #d32f2f; border-bottom: 2px solid #d32f2f; }
-        .item-table td { padding: 12px 14px; font-size: 0.9rem; border-bottom: 1px solid #e2e8f0; color: #333; }
+        .item-table th { background: #fef2f2; color: #b91c1c; font-size: 0.78rem; font-weight: 800; text-transform: uppercase; padding: 10px 12px; border-top: 1px solid #fecaca; border-bottom: 2px solid #fecaca; }
+        .item-table td { padding: 12px 14px; font-size: 0.9rem; border-bottom: 1px solid #f1f5f9; color: #334155; }
         .text-right { text-align: right; }
         .text-center { text-align: center; }
 
-        .total-strip { background: #feeef2; padding: 14px 25px; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; z-index: 2; border: 1px solid #ffcdd2; }
-        .total-label { font-size: 1.05rem; font-weight: 800; color: #b71c1c; }
-        .total-value { font-size: 1.35rem; font-weight: 800; color: #b71c1c; }
+        .total-strip { background: #fef2f2; padding: 14px 22px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; z-index: 2; border: 1px solid #fecaca; flex-wrap: wrap; gap: 10px; }
+        .total-label { font-size: 1.05rem; font-weight: 800; color: #991b1b; }
+        .total-value { font-size: 1.35rem; font-weight: 900; color: #991b1b; }
 
-        .words-block { font-size: 0.85rem; color: #555; margin-bottom: 40px; font-style: italic; border-left: 3px solid #d32f2f; padding-left: 14px; position: relative; z-index: 2; }
-        .words-block strong { color: #d32f2f; font-style: normal; font-weight: 700; }
+        .words-block { font-size: 0.84rem; color: #64748b; margin-bottom: 30px; font-style: italic; border-left: 3px solid #dc2626; padding-left: 12px; position: relative; z-index: 2; }
+        .words-block strong { color: #dc2626; font-style: normal; font-weight: 700; }
+
+        /* Android & Mobile Responsive Rules */
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 16px 10px !important;
+                margin-left: 0 !important;
+                width: 100% !important;
+            }
+            .control-bar {
+                padding: 12px 14px;
+                flex-direction: column;
+                gap: 10px;
+            }
+            .control-bar > div {
+                width: 100%;
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+            }
+            .btn-control {
+                flex: 1 1 auto;
+                justify-content: center;
+                font-size: 0.82rem;
+                padding: 10px 14px;
+            }
+            .receipt-container {
+                padding: 24px 16px !important;
+                border-radius: 14px;
+            }
+            .receipt-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 14px;
+            }
+            .school-branding {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            .school-branding img {
+                height: 50px;
+            }
+            .school-info h2 {
+                font-size: 1.22rem;
+            }
+            .receipt-meta {
+                text-align: left;
+                width: 100%;
+                border-top: 1px dashed #e2e8f0;
+                padding-top: 10px;
+            }
+            .details-grid {
+                grid-template-columns: 1fr;
+                gap: 16px;
+            }
+            .item-table th, .item-table td {
+                padding: 8px 10px;
+                font-size: 0.82rem;
+            }
+            .total-strip {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+            .total-value {
+                font-size: 1.25rem;
+            }
+            .watermark {
+                font-size: 3.5rem;
+            }
+        }
 
         @media print {
-            body { background: #fff; padding: 0; }
-            .control-bar { display: none; }
-            .receipt-container { box-shadow: none; border: none; padding: 10px; max-width: 100%; }
+            body { background: #fff !important; padding: 0 !important; }
+            .sidebar, .mobile-header, .sidebar-overlay, .control-bar { display: none !important; }
+            .main-content { margin-left: 0 !important; padding: 0 !important; width: 100% !important; max-width: 100% !important; }
+            .receipt-container { box-shadow: none !important; border: none !important; padding: 10px !important; max-width: 100% !important; }
         }
     </style>
 </head>
 <body>
 
 <?php if (!$is_embed): ?>
-    <!-- Control Panel -->
-    <div class="control-bar">
-        <div style="display:flex; gap: 10px; flex-wrap: wrap;">
-            <a href="fees.php" class="btn-control btn-back"><i class="fas fa-chevron-left"></i> Back to Ledger</a>
-            <a href="student_dues.php" class="btn-control btn-back"><i class="fas fa-file-invoice-dollar"></i> Student Dues Statement</a>
-        </div>
-        <div style="display:flex; gap: 10px; flex-wrap: wrap;">
-            <button onclick="downloadInvoicePDF()" class="btn-control" id="btnDownloadInvoice" style="background:#fee2e2; color:#b91c1c;">
-                <i class="fas fa-file-pdf"></i> Download PDF
-            </button>
-            <button onclick="emailInvoicePdf(<?php echo $bill['student_id']; ?>)" class="btn-control" id="btnEmailInvoice" style="background:#eff6ff; color:#1d4ed8;">
-                <i class="fas fa-envelope-open-text"></i> Email Bill PDF
-            </button>
-            <button type="button" onclick="shareInvoiceWhatsAppDirect()" class="btn-control" id="btnShareWaImg" style="background:#25d366; color:#ffffff; font-weight:800; border:none; box-shadow: 0 4px 12px rgba(37,211,102,0.25);">
-                <i class="fab fa-whatsapp"></i> 📲 Share on WhatsApp
-            </button>
-            <?php
-            $wa_phone = preg_replace('/[^0-9]/', '', $bill['phone'] ?? '');
-            if (!empty($wa_phone)) {
-                $fine_rate_str = number_format((float)($settings['fine_rate_per_day'] ?? 5), 2);
-                $grace_day_str = (int)($settings['fine_grace_days'] ?? 5);
-                $wa_msg = urlencode("Dear " . ($bill['parent_name'] ?: 'Parent') . ",\n\nFee Invoice #" . $invoice_no . " for *" . $bill['student_name'] . "* has been generated.\n\nMonth: " . $bill['month_for'] . "\nAmount Due: ₹" . number_format($total_payable_amount, 2) . "\nStatus: " . strtoupper($bill['status']) . "\n\n⚠️ Late Fine Notice: A late fee of ₹" . $fine_rate_str . "/day applies on unpaid dues after the " . $grace_day_str . "th of each month.\n\nPlease visit the Parent Portal to view and pay: " . (strpos(($_SERVER['HTTP_HOST'] ?? ''), 'localhost') !== false ? 'http://localhost/abss/parent/login.php' : 'https://' . ($_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in') . '/parent/login.php') . "\n\n- " . ($settings['school_name'] ?? 'ABSS'));
-            ?>
-            <a href="https://api.whatsapp.com/send?phone=<?php echo $wa_phone; ?>&text=<?php echo $wa_msg; ?>" target="_blank" class="btn-control" style="background:#dcfce7; color:#166534; text-decoration:none;">
-                <i class="fab fa-whatsapp"></i> WhatsApp Text
-            </a>
-            <?php } ?>
-            <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print</button>
-        </div>
-    </div>
+    <?php include 'includes/sidebar.php'; ?>
+    <main class="main-content">
+        <div class="view-bill-wrapper">
+            <!-- Control Panel -->
+            <div class="control-bar">
+                <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+                    <a href="fees.php" class="btn-control btn-back"><i class="fas fa-chevron-left"></i> Fees Ledger</a>
+                    <a href="student_dues.php" class="btn-control btn-back"><i class="fas fa-file-invoice-dollar"></i> Student Dues</a>
+                </div>
+                <div style="display:flex; gap: 8px; flex-wrap: wrap;">
+                    <button onclick="downloadInvoicePDF()" class="btn-control" id="btnDownloadInvoice" style="background:#fee2e2; color:#b91c1c; border-color:#fecaca;">
+                        <i class="fas fa-file-pdf"></i> Download PDF
+                    </button>
+                    <button onclick="emailInvoicePdf(<?php echo $bill['student_id']; ?>)" class="btn-control" id="btnEmailInvoice" style="background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;">
+                        <i class="fas fa-envelope-open-text"></i> Email Bill PDF
+                    </button>
+                    <button type="button" onclick="shareInvoiceWhatsAppDirect()" class="btn-control" id="btnShareWaImg" style="background:#25d366; color:#ffffff; font-weight:800; border:none; box-shadow: 0 4px 12px rgba(37,211,102,0.25);">
+                        <i class="fab fa-whatsapp"></i> 📲 Share on WhatsApp
+                    </button>
+                    <button onclick="window.print()" class="btn-control btn-back"><i class="fas fa-print"></i> Print</button>
+                </div>
+            </div>
 <?php endif; ?>
 
     <!-- Printable Invoice Container -->
@@ -203,7 +349,7 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
         <!-- Header -->
         <div class="receipt-header">
             <div class="school-branding">
-                <img src="../assets/logo.png" alt="ABSS School Logo">
+                <img src="<?php echo $logo_src; ?>" alt="ABSS School Logo">
                 <div class="school-info">
                     <h2><?php echo htmlspecialchars($school_name); ?></h2>
                     <p><i class="fas fa-map-marker-alt"></i> <?php echo htmlspecialchars($school_address); ?></p>
@@ -376,7 +522,12 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
             Amount due in words: <strong><?php echo $words_payable; ?></strong>
         </div>
 
-    </div>
+    </div> <!-- Close #receiptContainer -->
+
+<?php if (!$is_embed): ?>
+        </div> <!-- Close .view-bill-wrapper -->
+    </main> <!-- Close .main-content -->
+<?php endif; ?>
 
     <script>
         function downloadInvoicePDF() {
@@ -502,6 +653,6 @@ $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
             });
         }
     </script>
-    <script src="../js/invoice-share-bridge.js"></script>
+    <script src="../js/invoice-share-bridge.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

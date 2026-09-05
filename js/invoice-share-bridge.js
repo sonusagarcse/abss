@@ -79,7 +79,7 @@
         const receiptUrl  = options.receiptUrl || window.location.href;
 
         // Pre-filled structured WhatsApp message
-        let shareMessage = 
+        const shareMessage = 
 `*ABSS – Fee Invoice / Payment Receipt*
 
 Dear Parent,
@@ -88,13 +88,10 @@ Please find attached the official Fee Invoice / Payment Receipt of *${studentNam
 
 📋 *Receipt No:* ${invoiceNo}
 💰 *Total Amount:* ₹${amount}
-📅 *Date:* ${dateStr}`;
+📅 *Date:* ${dateStr}
 
-        if (receiptUrl && !receiptUrl.includes('localhost')) {
-            shareMessage += `\n🔗 *View/Download Receipt Online:* ${receiptUrl}`;
-        }
-
-        shareMessage += `\n\nThank you,\n*Aawasiye Bal Sikshan Sansthan (ABSS)*`;
+Thank you,
+*Aawasiye Bal Sikshan Sansthan (ABSS)*`;
 
         const btn = options.btnId ? document.getElementById(options.btnId) : null;
         let originalBtnHtml = '';
@@ -120,7 +117,7 @@ Please find attached the official Fee Invoice / Payment Receipt of *${studentNam
             const canvas = await html2canvas(container, {
                 scale: 2.5, // Ultra sharp 2.5x retina resolution
                 useCORS: true,
-                allowTaint: true,
+                allowTaint: false,
                 backgroundColor: '#ffffff',
                 logging: false,
                 scrollX: 0,
@@ -139,7 +136,7 @@ Please find attached the official Fee Invoice / Payment Receipt of *${studentNam
             const fileName = `ABSS_Receipt_${invoiceNo.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`;
             const base64Data = canvas.toDataURL('image/png', 0.95);
             const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.95));
-            const file = new File([blob], fileName, { type: 'image/png' });
+            const file = new File([blob], fileName, { type: 'image/png', lastModified: Date.now() });
 
             // Clean & format parent phone number
             const cleanPhone = parentPhone.length === 10 ? '91' + parentPhone : parentPhone;
@@ -174,17 +171,32 @@ Please find attached the official Fee Invoice / Payment Receipt of *${studentNam
                 }
             }
 
+            // Try copying image to system clipboard (allows instant paste directly into WhatsApp)
+            if (navigator.clipboard && window.ClipboardItem) {
+                try {
+                    navigator.clipboard.write([
+                        new ClipboardItem({ 'image/png': blob })
+                    ]);
+                } catch (clipErr) {
+                    // Clipboard write may require user gesture or focus, silently continue
+                }
+            }
+
             // ── Priority 3: Auto-Save Image + Direct WhatsApp Chat Fallback ──
             showToast('Saving Image & Opening WhatsApp...', 'fab fa-whatsapp');
 
-            // Download image to phone gallery / downloads
+            // Download image to phone gallery / downloads using Object URL
             try {
+                const blobUrl = URL.createObjectURL(blob);
                 const downloadLink = document.createElement('a');
-                downloadLink.href = base64Data;
+                downloadLink.href = blobUrl;
                 downloadLink.download = fileName;
                 document.body.appendChild(downloadLink);
                 downloadLink.click();
-                document.body.removeChild(downloadLink);
+                setTimeout(() => {
+                    document.body.removeChild(downloadLink);
+                    URL.revokeObjectURL(blobUrl);
+                }, 2000);
             } catch (dlErr) {
                 console.warn('[InvoiceShare] Auto-download error:', dlErr);
             }

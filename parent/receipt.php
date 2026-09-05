@@ -73,6 +73,8 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Official Receipt - <?php echo $receipt_no; ?></title>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body { font-family: 'Outfit', sans-serif; background: #525659; margin: 0; padding: 30px 0; -webkit-print-color-adjust: exact; }
         
@@ -382,6 +384,6 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
             });
         }
     </script>
-    <script src="../js/invoice-share-bridge.js"></script>
+    <script src="../js/invoice-share-bridge.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

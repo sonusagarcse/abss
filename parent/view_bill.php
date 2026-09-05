@@ -127,6 +127,7 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <style>
         body { font-family: 'Outfit', sans-serif; background: #525659; margin: 0; padding: 20px 10px; -webkit-print-color-adjust: exact; }
         
@@ -518,6 +519,6 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
             });
         }
     </script>
-    <script src="../js/invoice-share-bridge.js"></script>
+    <script src="../js/invoice-share-bridge.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>
