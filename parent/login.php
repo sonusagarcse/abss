@@ -12,6 +12,9 @@ if (isset($_SESSION['parent_id']) && (int)$_SESSION['parent_id'] > 0) {
 }
 
 $error = '';
+if (isset($_GET['error']) && $_GET['error'] === 'inactive') {
+    $error = 'Your student account is currently inactive. Please contact the school administration.';
+}
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (!isset($_POST['csrf_token']) || !validate_csrf_token($_POST['csrf_token'])) {

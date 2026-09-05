@@ -593,10 +593,11 @@ if (isset($settings['plan_features'])) {
                                 <?php echo is_fine_system_enabled($settings) ? '● ACTIVE' : '○ DISABLED'; ?>
                             </span>
                         </h3>
-                        <p style="font-size:0.82rem; color:#64748b; margin-top:-10px; margin-bottom:15px;">
-                            Automatic fine calculation on monthly tuition bills unpaid past the 5th of the month.
+                        <p style="font-size:0.82rem; color:#64748b; margin-top:-10px; margin-bottom:18px;">
+                            Automatic fine calculation on monthly tuition bills unpaid past the grace deadline.
                         </p>
-                        
+
+                        <!-- Row 1: System Toggle + Grace Days -->
                         <div class="portal-form-row" style="margin-bottom: 15px;">
                             <div class="portal-input-group" style="margin-bottom: 0;">
                                 <label><i class="fas fa-toggle-on" style="color:#ea580c;"></i> Fine System Status</label>
@@ -608,16 +609,74 @@ if (isset($settings['plan_features'])) {
                             <div class="portal-input-group" style="margin-bottom: 0;">
                                 <label><i class="fas fa-calendar-check" style="color:#2563eb;"></i> Grace Days (From 1st)</label>
                                 <input type="number" name="settings[fine_grace_days]" value="<?php echo htmlspecialchars($settings['fine_grace_days'] ?? '5'); ?>" min="1" max="28" placeholder="5" required>
-                                <small style="color:#64748b; font-size:0.72rem; display:block; margin-top:2px;">1st to 5th of month is fine-free</small>
+                                <small style="color:#64748b; font-size:0.72rem; display:block; margin-top:2px;">1st to Nth of month is fine-free</small>
                             </div>
                         </div>
 
-                        <div class="portal-input-group" style="margin-bottom: 0;">
-                            <label><i class="fas fa-coins" style="color:#16a34a;"></i> Late Fine Rate Per Day (₹)</label>
-                            <input type="number" name="settings[fine_rate_per_day]" value="<?php echo htmlspecialchars($settings['fine_rate_per_day'] ?? '5.00'); ?>" step="0.01" min="0" placeholder="5.00" required>
-                            <small style="color:#64748b; font-size:0.72rem; display:block; margin-top:2px;">Charged per overdue day starting 6th onwards (₹5/day)</small>
+                        <!-- Row 2: Rate Per Day + Fine Start Month -->
+                        <div class="portal-form-row" style="margin-bottom: 18px;">
+                            <div class="portal-input-group" style="margin-bottom: 0;">
+                                <label><i class="fas fa-coins" style="color:#16a34a;"></i> Late Fine Rate Per Day (₹)</label>
+                                <input type="number" name="settings[fine_rate_per_day]" value="<?php echo htmlspecialchars($settings['fine_rate_per_day'] ?? '5.00'); ?>" step="0.01" min="0" placeholder="5.00" required>
+                                <small style="color:#64748b; font-size:0.72rem; display:block; margin-top:2px;">Charged per overdue day (e.g. ₹5/day)</small>
+                            </div>
+                            <div class="portal-input-group" style="margin-bottom: 0;">
+                                <label><i class="fas fa-calendar-alt" style="color:#7c3aed;"></i> Fine Start Month <span style="background:#f5f3ff; color:#7c3aed; font-size:0.68rem; padding:1px 7px; border-radius:6px; font-weight:800; margin-left:4px;">NEW</span></label>
+                                <input type="month" name="settings[fine_start_month]"
+                                    value="<?php echo htmlspecialchars($settings['fine_start_month'] ?? ''); ?>"
+                                    style="font-weight:700;"
+                                    placeholder="YYYY-MM">
+                                <small style="color:#64748b; font-size:0.72rem; display:block; margin-top:2px;">
+                                    Fine counts <strong>only from this month onwards</strong>. Bills before this month = ₹0 fine. Leave blank for no restriction.
+                                </small>
+                            </div>
+                        </div>
+
+                        <!-- Divider: Escalating Fine Section -->
+                        <div style="border-top: 2px dashed #fed7aa; padding-top: 18px; margin-top: 4px;">
+                            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 14px; flex-wrap: wrap;">
+                                <div style="background: linear-gradient(135deg, #ea580c, #dc2626); color: #fff; border-radius: 10px; padding: 8px 12px; font-size: 0.88rem; font-weight: 800; flex-shrink: 0;">
+                                    <i class="fas fa-layer-group"></i> +₹Rate/mo
+                                </div>
+                                <div>
+                                    <div style="font-weight: 800; color: #1e1b4b; font-size: 0.92rem;">Escalating Fine (Additive Stacking for Old Pending Bills)</div>
+                                    <div style="font-size: 0.78rem; color: #64748b; font-weight: 600; margin-top: 2px;">
+                                        If <strong>older bills remain unpaid</strong> in current month past grace day, daily rate increases by +₹Rate for each pending month (e.g. ₹5, ₹5+₹5, ₹5+₹5+₹5...).
+                                    </div>
+                                </div>
+                                <!-- Tooltip -->
+                                <div style="margin-left: auto; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 8px 12px; font-size: 0.76rem; color: #92400e; font-weight: 700; max-width: 240px; line-height: 1.5;">
+                                    <i class="fas fa-info-circle"></i> <strong>Example (@ ₹5/day):</strong><br>
+                                    • Current month bill → ₹5/day<br>
+                                    • 1 month old unpaid → ₹10/day (5+5)<br>
+                                    • 2 months old unpaid → ₹15/day (5+5+5)
+                                </div>
+                            </div>
+
+                            <div class="portal-form-row">
+                                <div class="portal-input-group" style="margin-bottom: 0;">
+                                    <label><i class="fas fa-toggle-on" style="color:#dc2626;"></i> Escalation Status <span style="background:#fef2f2; color:#dc2626; font-size:0.68rem; padding:1px 7px; border-radius:6px; font-weight:800; margin-left:4px;">NEW</span></label>
+                                    <select name="settings[fine_escalation_enabled]" id="escalationToggle" onchange="toggleEscalationMonth()">
+                                        <option value="0" <?php echo !is_fine_escalation_enabled($settings) ? 'selected' : ''; ?>>Disabled (Flat Normal Rate)</option>
+                                        <option value="1" <?php echo is_fine_escalation_enabled($settings) ? 'selected' : ''; ?>>Enabled (Stacking Rate for Old Bills)</option>
+                                    </select>
+                                    <small style="color:#64748b; font-size:0.72rem; display:block; margin-top:2px;">
+                                        When enabled: pending bills from previous months accrue stacked daily fine after hitting the current month's grace day.
+                                    </small>
+                                </div>
+                                <div class="portal-input-group" style="margin-bottom: 0;" id="escalationStartMonthWrap" <?php echo !is_fine_escalation_enabled($settings) ? 'style="display:none;"' : ''; ?>>
+                                    <label><i class="fas fa-calendar-day" style="color:#dc2626;"></i> Escalation Applies From Month</label>
+                                    <input type="month" name="settings[fine_escalation_start_month]"
+                                        value="<?php echo htmlspecialchars($settings['fine_escalation_start_month'] ?? ''); ?>"
+                                        style="font-weight:700;">
+                                    <small style="color:#64748b; font-size:0.72rem; display:block; margin-top:2px;">
+                                        Escalated rate only kicks in from this month onwards. Leave blank to apply immediately.
+                                    </small>
+                                </div>
+                            </div>
                         </div>
                     </div>
+
 
                     <!-- Dynamic Tuition Modes -->
                     <div class="settings-card">
@@ -711,6 +770,14 @@ if (isset($settings['plan_features'])) {
     </main>
 
     <script>
+        // Toggle visibility of Escalation Start Month field
+        function toggleEscalationMonth() {
+            const toggle = document.getElementById('escalationToggle');
+            const wrap   = document.getElementById('escalationStartMonthWrap');
+            if (!toggle || !wrap) return;
+            wrap.style.display = (toggle.value === '1') ? '' : 'none';
+        }
+
         function addExtraFeeRow() {
             const container = document.getElementById('extra-fees-container');
             const row = document.createElement('div');

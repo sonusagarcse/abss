@@ -9,6 +9,9 @@ if (isset($_SESSION['teacher_id'])) {
 }
 
 $error = '';
+if (isset($_GET['error']) && $_GET['error'] === 'inactive') {
+    $error = 'Your teacher account is currently inactive. Please contact the administration office.';
+}
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     if (!isset($_POST['csrf_token']) || !validate_csrf_token($_POST['csrf_token'])) {

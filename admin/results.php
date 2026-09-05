@@ -26,10 +26,11 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_result'])) {
     $total = (float)($_POST['total_marks'] ?? 100);
     $rank = !empty($_POST['rank']) ? (int)$_POST['rank'] : null;
     $date = !empty($_POST['exam_date']) ? $_POST['exam_date'] : date('Y-m-d');
+    $remarks_admin = trim($_POST['remarks'] ?? '');
 
     if ($sid > 0 && !empty($exam) && $total > 0) {
-        $stmt = $conn->prepare("INSERT INTO results (student_id, exam_name, score, total_marks, rank, exam_date) VALUES (?, ?, ?, ?, ?, ?)");
-        $stmt->bind_param("isdiis", $sid, $exam, $score, $total, $rank, $date);
+        $stmt = $conn->prepare("INSERT INTO results (student_id, exam_name, score, total_marks, rank, exam_date, remarks) VALUES (?, ?, ?, ?, ?, ?, ?)");
+        $stmt->bind_param("isdiiss", $sid, $exam, $score, $total, $rank, $date, $remarks_admin);
         
         if ($stmt->execute()) {
             $msg = "Examination result recorded and published successfully.";
@@ -241,7 +242,7 @@ $results = $conn->query("
     SELECT r.*, s.name, s.reg_no, s.academic_group 
     FROM results r 
     JOIN students s ON r.student_id = s.id 
-    ORDER BY r.exam_date DESC, r.id DESC LIMIT 100
+    ORDER BY COALESCE(r.exam_date, DATE(r.created_at)) DESC, r.id DESC LIMIT 100
 ");
 ?>
 <!DOCTYPE html>
@@ -734,6 +735,11 @@ $results = $conn->query("
                             </div>
                         </div>
 
+                        <div class="portal-input-group">
+                            <label for="remarksInput"><i class="fas fa-comment-alt"></i> Remarks (Optional)</label>
+                            <input type="text" name="remarks" id="remarksInput" placeholder="e.g. Excellent performance, Needs improvement in Maths" style="padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1; font-weight: 600; width: 100%;">
+                        </div>
+
                         <button type="submit" name="save_result" class="btn-portal" style="width: 100%; margin-top: 10px; padding: 12px; font-weight: 800; font-size: 0.92rem; border-radius: 12px; background: #2563eb; color: #ffffff; border: none; cursor: pointer;">
                             <i class="fas fa-paper-plane"></i> Publish & Notify Result
                         </button>
@@ -801,7 +807,11 @@ $results = $conn->query("
                                                     <?php echo htmlspecialchars($r['exam_name']); ?>
                                                 </div>
                                                 <div style="font-size: 0.76rem; color: #64748b; margin-top: 2px; display: flex; align-items: center; gap: 5px;">
-                                                    <i class="far fa-calendar-alt"></i> <?php echo date('d M, Y', strtotime($r['exam_date'])); ?>
+                                                    <i class="far fa-calendar-alt"></i>
+                                                    <?php 
+                                                    $disp_date = !empty($r['exam_date']) ? $r['exam_date'] : (isset($r['created_at']) ? $r['created_at'] : null);
+                                                    echo $disp_date ? date('d M, Y', strtotime($disp_date)) : 'N/A';
+                                                    ?>
                                                 </div>
                                             </td>
 

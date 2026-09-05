@@ -38,9 +38,15 @@ $students_list = [];
 $students_with_dues = [];
 $total_due_amount = 0;
 
+$settings = function_exists('getAllSettings') ? getAllSettings() : [];
+
 if ($students_res) {
     while ($st = $students_res->fetch_assoc()) {
-        $st['due_fee'] = (float)$st['due_fee'];
+        $sid_val = (int)$st['id'];
+        $fine_info = function_exists('get_student_total_fine') ? get_student_total_fine($sid_val, $conn, $settings) : ['total_fine' => 0.00];
+        $st['fine_amount'] = (float)$fine_info['total_fine'];
+        $st['base_due'] = (float)$st['due_fee'];
+        $st['due_fee'] = $st['base_due'] + $st['fine_amount'];
         $students_list[] = $st;
         if ($st['due_fee'] > 0) {
             $students_with_dues[] = $st;

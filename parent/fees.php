@@ -48,7 +48,14 @@ if (!empty($settings['tuition_modes'])) {
     <link href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600&display=swap" rel="stylesheet">
     <?php include 'includes/head_css.php'; ?>
     <style>
-        body, input, select, textarea, button, h1, h2, h3, h4, h5, h6, p, span:not(.fas):not(.far):not(.fab):not(.fa), a, table, th, td, summary, details, label, strong, small {
+        /* Scope Poppins font to main-content only — do NOT touch sidebar */
+        .main-content, .main-content input, .main-content select,
+        .main-content textarea, .main-content button, .main-content h1,
+        .main-content h2, .main-content h3, .main-content h4, .main-content h5,
+        .main-content h6, .main-content p, .main-content span:not(.fas):not(.far):not(.fab):not(.fa),
+        .main-content a, .main-content table, .main-content th, .main-content td,
+        .main-content summary, .main-content details, .main-content label,
+        .main-content strong, .main-content small {
             font-family: 'Poppins', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
 
@@ -266,7 +273,7 @@ if (!empty($settings['tuition_modes'])) {
                 if ($bills_query) {
                     while ($b = $bills_query->fetch_assoc()) {
                         if ($b['status'] === 'unpaid') {
-                            $fine_info = function_exists('calculate_bill_fine') ? calculate_bill_fine($b['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
+                            $fine_info = function_exists('calculate_bill_fine') ? calculate_bill_fine($b, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
                             $b['fine_amount'] = (float)$fine_info['fine_amount'];
                             $b['overdue_days'] = (int)$fine_info['overdue_days'];
                             $b['total_payable'] = (float)$b['amount'] + $b['fine_amount'];

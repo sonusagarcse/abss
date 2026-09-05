@@ -72,7 +72,7 @@ function amountToWords($number) {
 }
 
 // Calculate dynamic late fine
-$fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0, 'rate_per_day' => 5.00];
+$fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0, 'rate_per_day' => 5.00];
 $fine_amount = ($bill['status'] === 'unpaid') ? $fine_calc['fine_amount'] : 0.00;
 $total_payable_amount = (float)$bill['amount'] + $fine_amount;
 

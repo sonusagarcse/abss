@@ -18,10 +18,15 @@ $fees_total = $conn->query("SELECT SUM(amount) as total FROM fee_payments WHERE 
 $fees_lifetime = $conn->query("SELECT SUM(amount) as total FROM fee_payments")->fetch_assoc()['total'];
 $results_latest = $conn->query("SELECT COUNT(*) as count FROM results")->fetch_assoc()['count'];
 
-// 1. Unpaid Bills Metrics (Total amount & Count)
-$unpaid_query = $conn->query("SELECT COUNT(*) as count, COALESCE(SUM(amount), 0) as total FROM fees_generated WHERE status = 'unpaid'")->fetch_assoc();
-$unpaid_total = (float)$unpaid_query['total'];
-$unpaid_count = (int)$unpaid_query['count'];
+// 1. Unpaid Bills Metrics (Total amount & Count for active students)
+$unpaid_query = $conn->query("
+    SELECT COUNT(fg.id) as count, COALESCE(SUM(fg.amount), 0) as total 
+    FROM fees_generated fg 
+    JOIN students s ON fg.student_id = s.id 
+    WHERE fg.status = 'unpaid' AND s.status = 'active'
+")->fetch_assoc();
+$unpaid_base_total = (float)($unpaid_query['total'] ?? 0);
+$unpaid_count = (int)($unpaid_query['count'] ?? 0);
 
 // 2. Previous Month Metrics (Collection & Billed)
 $prev_month_name = date('F Y', strtotime('-1 month'));
@@ -57,6 +62,10 @@ $admission_fee_total = (float)($adm_fee_res ? $adm_fee_res->fetch_assoc()['total
 // 4. Calculate total dynamic late fine across all unpaid bills
 $settings = function_exists('getAllSettings') ? getAllSettings() : [];
 $total_fine_amount = function_exists('get_all_unpaid_total_fine') ? get_all_unpaid_total_fine($conn, $settings) : 0.00;
+
+// Total Unified Outstanding Dues (Base Unpaid + Late Fine)
+$total_unpaid_due = $unpaid_base_total + $total_fine_amount;
+$unpaid_total = $total_unpaid_due;
 ?>
 
 <!DOCTYPE html>
@@ -166,9 +175,14 @@ $total_fine_amount = function_exists('get_all_unpaid_total_fine') ? get_all_unpa
             <a href="student_dues.php" class="stat-card" style="text-decoration:none; color:inherit; border-left: 4px solid #dc2626;" title="Click to view all student dues & arrears statement">
                 <div class="stat-icon icon-red"><i class="fas fa-exclamation-circle"></i></div>
                 <div class="stat-info">
-                    <h3 style="color:#dc2626;">₹ <?php echo number_format($unpaid_total); ?></h3>
+                    <h3 style="color:#dc2626;">₹ <?php echo number_format($total_unpaid_due, 2); ?></h3>
                     <p style="font-weight:700;">Total Unpaid Dues</p>
-                    <small style="color:#dc2626; font-weight:800; font-size:0.75rem;"><i class="fas fa-file-invoice-dollar"></i> <?php echo number_format($unpaid_count); ?> Invoices Due (Open Dues →)</small>
+                    <small style="color:#dc2626; font-weight:800; font-size:0.75rem;">
+                        <i class="fas fa-file-invoice-dollar"></i> <?php echo number_format($unpaid_count); ?> Invoices Due
+                        <?php if ($total_fine_amount > 0): ?>
+                            • <span style="color:#64748b; font-weight:700;">(Base: ₹<?php echo number_format($unpaid_base_total, 2); ?> + Fine: ₹<?php echo number_format($total_fine_amount, 2); ?>)</span>
+                        <?php endif; ?>
+                    </small>
                 </div>
             </a>
 

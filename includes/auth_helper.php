@@ -221,6 +221,14 @@ function verify_and_restore_parent_session() {
                     $legacy_hash = hash_hmac('sha256', $parent['id'] . '|' . $parent['email'], $legacy_secret);
 
                     if (hash_equals($expected_hash, $provided_hash) || hash_equals($legacy_hash, $provided_hash)) {
+                        // Check if parent has at least one active student
+                        $active_check = $conn->query("SELECT COUNT(*) AS active_count FROM students WHERE parent_id = " . (int)$parent['id'] . " AND status = 'active'");
+                        $active_count = ($active_check && $active_check->num_rows > 0) ? (int)$active_check->fetch_assoc()['active_count'] : 0;
+                        if ($active_count === 0) {
+                            clear_parent_remember_cookie();
+                            return false;
+                        }
+
                         // Restore parent session
                         $_SESSION['parent_id'] = (int)$parent['id'];
                         $_SESSION['parent_name'] = $parent['parent_name'];
@@ -281,6 +289,16 @@ function authenticate_parent($username, $password) {
         }
 
         if ($is_valid) {
+            // Verify that this parent has at least one active student
+            $active_check = $conn->query("SELECT COUNT(*) AS active_count FROM students WHERE parent_id = " . (int)$parent['id'] . " AND status = 'active'");
+            $active_count = ($active_check && $active_check->num_rows > 0) ? (int)$active_check->fetch_assoc()['active_count'] : 0;
+            if ($active_count === 0) {
+                if (function_exists('log_activity')) {
+                    log_activity('login_failed', "Failed parent login: inactive student account for " . $username);
+                }
+                return ['success' => false, 'error' => 'Your student account is currently inactive. Please contact the school administration.'];
+            }
+
             session_regenerate_id(false);
             $_SESSION['parent_id'] = (int)$parent['id'];
             $_SESSION['parent_name'] = $parent['parent_name'];

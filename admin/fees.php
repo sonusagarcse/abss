@@ -82,21 +82,45 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
         $pay_id = $conn->insert_id;
         $msg = "Payment recorded successfully.";
 
-        // Sync with generated bills: handle partial or full payment
-        $bill_q = $conn->prepare("SELECT id, amount, remark FROM fees_generated WHERE student_id = ? AND status = 'unpaid' LIMIT 1");
-        $bill_q->bind_param("i", $sid);
-        $bill_q->execute();
-        $bill_res = $bill_q->get_result();
-        
-        if ($bill_res && $bill_res->num_rows > 0) {
-            $bill = $bill_res->fetch_assoc();
-            $new_amount = max(0, round((float)$bill['amount'] - $amount, 2));
-            $new_status = ($new_amount <= 0) ? 'paid' : 'unpaid';
-            $new_remark = $bill['remark'] . " | Payment received on $date (-₹" . number_format($amount, 2) . ")";
-            
-            $update_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = ?, remark = ? WHERE id = ?");
-            $update_stmt->bind_param("dssi", $new_amount, $new_status, $new_remark, $bill['id']);
-            $update_stmt->execute();
+        // Sequentially allocate payment across unpaid generated bills (oldest to newest)
+        $rem_pay = (float)$amount;
+        $unpaid_bills_stmt = $conn->prepare("
+            SELECT id, amount, remark, billing_date 
+            FROM fees_generated 
+            WHERE student_id = ? AND status = 'unpaid' 
+            ORDER BY billing_date ASC, id ASC
+        ");
+        $unpaid_bills_stmt->bind_param("i", $sid);
+        $unpaid_bills_stmt->execute();
+        $unpaid_bills_res = $unpaid_bills_stmt->get_result();
+
+        while ($rem_pay > 0 && ($bill = $unpaid_bills_res->fetch_assoc())) {
+            $bill_id = (int)$bill['id'];
+            $bill_amt = (float)$bill['amount'];
+            $existing_rem = trim($bill['remark'] ?? '');
+
+            if ($rem_pay >= $bill_amt) {
+                // Fully cleared this bill
+                $payment_tag = "Paid ₹" . number_format($bill_amt, 2) . " on $date (Rcpt #$pay_id)";
+                $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $payment_tag) : $payment_tag;
+                
+                $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = 0, status = 'paid', remark = ? WHERE id = ?");
+                $u_stmt->bind_param("si", $new_remark, $bill_id);
+                $u_stmt->execute();
+                
+                $rem_pay = round($rem_pay - $bill_amt, 2);
+            } else {
+                // Partial payment towards this bill
+                $new_bill_amt = round($bill_amt - $rem_pay, 2);
+                $payment_tag = "Partial payment of ₹" . number_format($rem_pay, 2) . " on $date (Rcpt #$pay_id)";
+                $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $payment_tag) : $payment_tag;
+                
+                $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = 'unpaid', remark = ? WHERE id = ?");
+                $u_stmt->bind_param("dsi", $new_bill_amt, $new_remark, $bill_id);
+                $u_stmt->execute();
+                
+                $rem_pay = 0;
+            }
         }
 
         // Fetch parent email if linked for billing receipt
@@ -298,7 +322,7 @@ if (isset($_GET['collect_offline'])) {
     if ($bill) {
         $sid = $bill['student_id'];
         $settings = function_exists('getAllSettings') ? getAllSettings() : [];
-        $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
+        $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
         $fine_amount = (float)$fine_calc['fine_amount'];
         $total_amount = (float)$bill['amount'] + $fine_amount;
         $date = date('Y-m-d');
@@ -313,9 +337,9 @@ if (isset($_GET['collect_offline'])) {
             $stmt = $conn->prepare("INSERT INTO fee_payments (student_id, amount, payment_date, month_for, payment_method) VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param("idsss", $sid, $total_amount, $date, $month, $method);
             $stmt->execute();
-            $pay_id = $conn->insert_id;
-
-            $conn->query("UPDATE fees_generated SET status = 'paid' WHERE id = $bill_id");
+            $payment_tag = "Paid ₹" . number_format($total_amount, 2) . " on $date (Rcpt #$pay_id)";
+            $new_remark = !empty($bill['remark']) ? ($bill['remark'] . " | " . $payment_tag) : $payment_tag;
+            $conn->query("UPDATE fees_generated SET amount = 0, status = 'paid', remark = '" . $conn->real_escape_string($new_remark) . "' WHERE id = $bill_id");
             $conn->commit();
 
             $msg = "Successfully collected ₹" . number_format($total_amount, 2) . " cash payment for " . htmlspecialchars($bill['name']) . " (Base: ₹" . number_format($bill['amount'], 2) . ($fine_amount > 0 ? " + Fine: ₹" . number_format($fine_amount, 2) : "") . "). Invoice #$bill_id marked as PAID.";
@@ -755,7 +779,7 @@ if (!empty($settings['tuition_modes'])) {
                                         </tr>
                                     <?php else: ?>
                                         <?php while($b = $bills->fetch_assoc()): 
-                                            $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($b['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
+                                            $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($b, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
                                             $fine_amount = ($b['status'] === 'unpaid') ? (float)$fine_calc['fine_amount'] : 0.00;
                                             $total_payable = (float)$b['amount'] + $fine_amount;
                                         ?>

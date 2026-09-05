@@ -61,7 +61,7 @@ if ($http_status === 200) {
         $paid_amount = (float)($data['amount'] / 100); // Convert subunit to INR
         
         // Calculate expected amount including dynamic late fine
-        $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
+        $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
         $fine_amount = (float)$fine_calc['fine_amount'];
         $expected_with_fine = (float)$bill['amount'] + $fine_amount;
         $expected_base = (float)$bill['amount'];

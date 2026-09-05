@@ -54,6 +54,8 @@ $dues_query = $conn->query("
 
 $dues_list = [];
 $total_due_amount = 0.0;
+$total_base_due = 0.0;
+$total_fine_due = 0.0;
 $total_defaulters = 0;
 $total_unpaid_invoices = 0;
 
@@ -79,6 +81,8 @@ if ($dues_query) {
         $row['full_address'] = !empty($addr_parts) ? implode(', ', $addr_parts) : 'Address not specified';
         
         $dues_list[] = $row;
+        $total_base_due += $row['base_due'];
+        $total_fine_due += $row['fine_amount'];
         $total_due_amount += $row['total_due'];
         $total_defaulters++;
         $total_unpaid_invoices += $row['unpaid_count'];
@@ -491,7 +495,12 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                 <div class="stat-info">
                     <h3 style="color: #dc2626;">₹ <?php echo number_format($total_due_amount, 2); ?></h3>
                     <p style="font-weight: 700;">Total Outstanding Dues</p>
-                    <small style="color: #dc2626; font-weight: 800; font-size: 0.75rem;"><?php echo number_format($total_unpaid_invoices); ?> Unpaid Invoices</small>
+                    <small style="color: #dc2626; font-weight: 800; font-size: 0.75rem;">
+                        <?php echo number_format($total_unpaid_invoices); ?> Unpaid Invoices
+                        <?php if ($total_fine_due > 0): ?>
+                            • <span style="color: #64748b; font-weight: 700;">(Base: ₹<?php echo number_format($total_base_due, 2); ?> + Fine: ₹<?php echo number_format($total_fine_due, 2); ?>)</span>
+                        <?php endif; ?>
+                    </small>
                 </div>
             </div>
 
@@ -670,7 +679,12 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                         <div class="due-amount-pill">
                                             ₹ <?php echo number_format($row['total_due'], 2); ?>
                                         </div>
-                                        <small style="color: #64748b; font-size: 0.72rem; display: block; font-weight: 600;">
+                                        <?php if ($row['fine_amount'] > 0): ?>
+                                            <div style="font-size: 0.72rem; color: #ea580c; font-weight: 700; margin-top: 2px;">
+                                                (Base: ₹<?php echo number_format($row['base_due'], 2); ?> + Fine: ₹<?php echo number_format($row['fine_amount'], 2); ?>)
+                                            </div>
+                                        <?php endif; ?>
+                                        <small style="color: #64748b; font-size: 0.72rem; display: block; font-weight: 600; margin-top: 2px;">
                                             <?php echo $row['unpaid_count']; ?> Bill(s)
                                         </small>
                                     </td>

@@ -375,7 +375,7 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
     $school_email = $settings['email'] ?? 'abssimamganj@gmail.com';
 
     // Calculate dynamic late fine
-    $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill['billing_date'], $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0, 'rate_per_day' => 5.00];
+    $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0, 'rate_per_day' => 5.00];
     $fine_amount = ($bill['status'] === 'unpaid') ? (float)$fine_calc['fine_amount'] : 0.00;
     $total_payable_amount = (float)$bill['amount'] + $fine_amount;
 
