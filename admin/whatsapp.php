@@ -496,6 +496,8 @@ $portal_url = "$base_app_url/parent/login.php";
                         <span class="tag-pill" onclick="insertTag('{father_name}')"><i class="fas fa-plus"></i> {father_name}</span>
                         <span class="tag-pill" onclick="insertTag('{due_fee}')"><i class="fas fa-plus"></i> {due_fee}</span>
                         <span class="tag-pill" onclick="insertTag('{month}')"><i class="fas fa-plus"></i> {month}</span>
+                        <span class="tag-pill" onclick="insertTag('{fine_rate}')" style="background:#fff7ed; color:#ea580c; border-color:#fed7aa;"><i class="fas fa-plus"></i> {fine_rate}</span>
+                        <span class="tag-pill" onclick="insertTag('{grace_day}')" style="background:#fff7ed; color:#ea580c; border-color:#fed7aa;"><i class="fas fa-plus"></i> {grace_day}</span>
                         <span class="tag-pill" onclick="insertTag('{reg_no}')"><i class="fas fa-plus"></i> {reg_no}</span>
                         <span class="tag-pill" onclick="insertTag('{class}')"><i class="fas fa-plus"></i> {class}</span>
                         <span class="tag-pill" onclick="insertTag('{target_school}')"><i class="fas fa-plus"></i> {target_school}</span>
@@ -646,6 +648,8 @@ $portal_url = "$base_app_url/parent/login.php";
     <script>
         const studentsData = <?php echo json_encode($students_list); ?>;
         const portalUrl = <?php echo json_encode($portal_url); ?>;
+        const fineRatePerDay = <?php echo json_encode(number_format((float)($settings['fine_rate_per_day'] ?? 5.00), 2)); ?>;
+        const fineGraceDays = <?php echo json_encode((int)($settings['fine_grace_days'] ?? 5)); ?>;
 
         // Predefined Multi-type Message Templates
         const templates = {
@@ -663,6 +667,9 @@ This is a gentle reminder that an outstanding academic fee of *₹{due_fee}* is 
 🏫 *Institution:* ABSS Imamganj
 
 Kindly clear the outstanding dues at the earliest via online payment or at the school fee counter.
+
+⚠️ *Late Fine Notice (विलंब शुल्क):*
+Please note that a late fee of *₹{fine_rate} per day* is applicable on unpaid dues after the grace deadline ({grace_day}th of each month).
 
 🔗 *Parent Portal URL:* {portal_url}
 📞 *Helpline / Inquiry:* +91 9523012888
@@ -815,7 +822,9 @@ Regarding student *{name}* (Reg No: *{reg_no}*, Class: *{class}*):
                 .replace(/\{scholar_mode\}/g, student.scholar_mode || 'Day Scholar')
                 .replace(/\{target_school\}/g, student.target_school || 'Sainik School')
                 .replace(/\{phone\}/g, student.phone || '')
-                .replace(/\{portal_url\}/g, portalUrl);
+                .replace(/\{portal_url\}/g, portalUrl)
+                .replace(/\{fine_rate\}/g, fineRatePerDay)
+                .replace(/\{grace_day\}/g, fineGraceDays);
         }
 
         function updateLiveMockup() {

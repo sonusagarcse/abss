@@ -624,6 +624,7 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                          . "📅 *Due For Months:* " . addslashes($d_months) . "\n"
                                          . "🏫 *Institution:* ABSS Imamganj\n\n"
                                          . "Kindly clear the outstanding amount at the earliest.\n\n"
+                                         . "⚠️ *Late Fine Notice (विलंब शुल्क):* Please note that a late fee of *₹" . number_format((float)($settings['fine_rate_per_day'] ?? 5), 2) . " per day* is applicable on unpaid dues after the " . (int)($settings['fine_grace_days'] ?? 5) . "th of each month.\n\n"
                                          . "🔗 *Parent Portal Link:* " . $parent_portal_url . "\n"
                                          . "📞 *Accounts Desk:* +91 9523012888\n\n"
                                          . "_ABSS Administration_";
