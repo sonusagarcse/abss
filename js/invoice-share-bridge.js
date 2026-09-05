@@ -76,19 +76,25 @@
         const amount      = options.amount || '0.00';
         const dateStr     = options.date || new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
         const parentPhone = (options.phone || '').replace(/[^0-9]/g, '');
+        const receiptUrl  = options.receiptUrl || window.location.href;
 
-        // Pre-filled WhatsApp message matching requirement
-        const shareMessage = 
-`Dear Parent,
+        // Pre-filled structured WhatsApp message
+        let shareMessage = 
+`*ABSS – Fee Invoice / Payment Receipt*
 
-Please find attached the Fee Invoice/Payment Receipt of ${studentName}.
+Dear Parent,
 
-Receipt No: ${invoiceNo}
-Amount: ₹${amount}
-Date: ${dateStr}
+Please find attached the official Fee Invoice / Payment Receipt of *${studentName}*.
 
-Thank you,
-ABSS – Aawasiye Bal Sikshan Sansthan`;
+📋 *Receipt No:* ${invoiceNo}
+💰 *Total Amount:* ₹${amount}
+📅 *Date:* ${dateStr}`;
+
+        if (receiptUrl && !receiptUrl.includes('localhost')) {
+            shareMessage += `\n🔗 *View/Download Receipt Online:* ${receiptUrl}`;
+        }
+
+        shareMessage += `\n\nThank you,\n*Aawasiye Bal Sikshan Sansthan (ABSS)*`;
 
         const btn = options.btnId ? document.getElementById(options.btnId) : null;
         let originalBtnHtml = '';
@@ -132,21 +138,23 @@ ABSS – Aawasiye Bal Sikshan Sansthan`;
 
             const fileName = `ABSS_Receipt_${invoiceNo.replace(/[^a-zA-Z0-9_-]/g, '_')}.png`;
             const base64Data = canvas.toDataURL('image/png', 0.95);
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.95));
+            const file = new File([blob], fileName, { type: 'image/png' });
 
-            // ── 1. Android Native Web-to-App Bridge (if present) ──
+            // Clean & format parent phone number
+            const cleanPhone = parentPhone.length === 10 ? '91' + parentPhone : parentPhone;
+
+            // ── Priority 1: Android Native Web-to-App Bridge (if exposed by wrapper) ──
             if (window.AndroidBridge && typeof window.AndroidBridge.shareInvoiceImage === 'function') {
                 showToast('Launching WhatsApp...', 'fab fa-whatsapp');
-                window.AndroidBridge.shareInvoiceImage(base64Data, fileName, shareMessage, 'image/png');
+                window.AndroidBridge.shareInvoiceImage(base64Data, fileName, shareMessage, cleanPhone);
                 restoreButton(btn, originalBtnHtml);
                 return;
             }
 
-            // ── 2. Web-to-App & Mobile Web Share API (Level 2 with File) ──
-            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/png', 0.95));
-            const file = new File([blob], fileName, { type: 'image/png' });
-
+            // ── Priority 2: PhonePe / Google Pay Style (Web Share API - Image + Caption Attached) ──
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                showToast('Opening Share Menu...', 'fas fa-share-alt');
+                showToast('Opening WhatsApp Share...', 'fab fa-whatsapp');
                 try {
                     await navigator.share({
                         title: `Fee Receipt - ${studentName}`,
@@ -157,29 +165,32 @@ ABSS – Aawasiye Bal Sikshan Sansthan`;
                     restoreButton(btn, originalBtnHtml);
                     return;
                 } catch (shareErr) {
-                    // User cancelled share dialog
+                    // If user manually pressed back / cancelled, smoothly exit
                     if (shareErr.name === 'AbortError') {
                         restoreButton(btn, originalBtnHtml);
                         return;
                     }
-                    console.warn('[InvoiceShare] Web Share File failed, falling to web fallback:', shareErr);
+                    console.warn('[InvoiceShare] Web Share Level 2 File failed, falling back:', shareErr);
                 }
             }
 
-            // ── 3. Universal Web Fallback (Auto-save Image + WhatsApp Direct) ──
-            showToast('Invoice image downloaded! Opening WhatsApp...', 'fab fa-whatsapp');
-            
-            // Download image to phone storage / gallery
-            const downloadLink = document.createElement('a');
-            downloadLink.href = base64Data;
-            downloadLink.download = fileName;
-            document.body.appendChild(downloadLink);
-            downloadLink.click();
-            document.body.removeChild(downloadLink);
+            // ── Priority 3: Auto-Save Image + Direct WhatsApp Chat Fallback ──
+            showToast('Saving Image & Opening WhatsApp...', 'fab fa-whatsapp');
 
-            // Launch WhatsApp with pre-filled message
-            const cleanPhone = parentPhone.length === 10 ? '91' + parentPhone : parentPhone;
-            const waUrl = cleanPhone 
+            // Download image to phone gallery / downloads
+            try {
+                const downloadLink = document.createElement('a');
+                downloadLink.href = base64Data;
+                downloadLink.download = fileName;
+                document.body.appendChild(downloadLink);
+                downloadLink.click();
+                document.body.removeChild(downloadLink);
+            } catch (dlErr) {
+                console.warn('[InvoiceShare] Auto-download error:', dlErr);
+            }
+
+            // Launch WhatsApp
+            const waUrl = (cleanPhone && cleanPhone.length >= 10)
                 ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(shareMessage)}`
                 : `https://api.whatsapp.com/send?text=${encodeURIComponent(shareMessage)}`;
 

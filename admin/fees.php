@@ -442,22 +442,27 @@ if (!empty($settings['tuition_modes'])) {
         .btn-quick-collect {
             background: #f1f5f9;
             color: #334155;
-            padding: 5px 12px;
+            padding: 7px 12px;
             border-radius: 8px;
-            font-size: 0.78rem;
+            font-size: 0.82rem;
             font-weight: 700;
             text-decoration: none;
             display: inline-flex;
             align-items: center;
-            gap: 5px;
-            transition: all 0.25s ease;
+            gap: 6px;
+            transition: all 0.2s ease;
             border: 1px solid #cbd5e1;
+            min-height: 36px;
+            cursor: pointer;
         }
         .btn-quick-collect:hover {
             background: var(--portal-blue);
             color: #ffffff;
             border-color: var(--portal-blue);
             transform: translateY(-1px);
+        }
+        .btn-quick-collect:active {
+            transform: scale(0.96);
         }
 
         .btn-action-edit { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
@@ -466,31 +471,178 @@ if (!empty($settings['tuition_modes'])) {
         .btn-action-delete { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
         .btn-action-delete:hover { background: #dc2626; color: #ffffff; }
 
+        /* Mobile Segmented Tab Navigation for Android */
+        .fees-mobile-nav-tabs {
+            display: none;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            padding: 6px;
+            border-radius: 14px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 15px rgba(15, 23, 42, 0.05);
+            gap: 6px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .fees-tab-btn {
+            flex: 1;
+            min-width: 130px;
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: none;
+            background: transparent;
+            color: #64748b;
+            font-weight: 700;
+            font-size: 0.88rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        .fees-tab-btn.active {
+            background: var(--portal-blue);
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
+        }
+
+        /* Top Metric Cards Strip */
+        .top-metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 25px;
+        }
+
+        .form-grid-2col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
         /* Modal Styles */
         .modal-backdrop {
             display: none;
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(15, 23, 42, 0.5);
-            backdrop-filter: blur(4px);
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
             z-index: 2500;
             align-items: center;
             justify-content: center;
+            padding: 16px;
         }
         .modal-backdrop.active { display: flex; }
         .edit-modal-box {
             background: #ffffff;
-            padding: 30px;
+            padding: 24px;
             border-radius: var(--radius-lg);
             width: 100%;
             max-width: 500px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            box-sizing: border-box;
         }
 
-        @media (max-width: 1100px) {
+        /* Android and Mobile Responsive Layouts */
+        @media (max-width: 1024px) {
+            .fees-mobile-nav-tabs {
+                display: flex;
+            }
             .fees-main-2col {
                 grid-template-columns: 1fr;
                 gap: 20px;
+            }
+            .fees-col-forms, .fees-col-invoices, .fees-col-logs {
+                display: none;
+            }
+            .fees-col-forms.tab-visible, .fees-col-invoices.tab-visible, .fees-col-logs.tab-visible {
+                display: block;
+            }
+        }
+
+        @media (min-width: 1025px) {
+            .fees-col-forms, .fees-col-invoices, .fees-col-logs {
+                display: block !important;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .top-metrics-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                margin-bottom: 20px;
+            }
+            .top-metrics-grid .portal-card {
+                padding: 12px 14px !important;
+                gap: 10px !important;
+                border-left-width: 3px !important;
+            }
+            .top-metrics-grid .stat-metric-icon {
+                width: 36px !important;
+                height: 36px !important;
+                font-size: 1rem !important;
+                border-radius: 8px !important;
+            }
+            .top-metrics-grid h3 {
+                font-size: 1.05rem !important;
+            }
+            .top-metrics-grid span {
+                font-size: 0.65rem !important;
+                line-height: 1.1;
+                display: block;
+            }
+
+            .form-grid-2col {
+                grid-template-columns: 1fr !important;
+                gap: 8px !important;
+            }
+
+            .portal-card {
+                padding: 16px 14px !important;
+                margin-bottom: 18px !important;
+            }
+
+            .header-action-wrap {
+                width: 100%;
+            }
+            .header-action-wrap a {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .table-header-controls {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 10px !important;
+            }
+            .table-search-row {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                width: 100%;
+            }
+            .table-search-row input, .table-search-row select, .table-search-row button {
+                width: 100% !important;
+            }
+
+            /* Touch-friendly table adjustments on small devices */
+            #billsTable td, #billsTable th {
+                padding: 12px 10px;
+            }
+            .bill-action-group {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 6px;
+            }
+            .btn-quick-collect {
+                padding: 8px 12px;
+                font-size: 0.85rem;
             }
         }
     </style>
@@ -499,12 +651,12 @@ if (!empty($settings['tuition_modes'])) {
     <?php include 'includes/sidebar.php'; ?>
 
     <main class="main-content">
-        <header style="margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+        <header style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
             <div>
-                <h1 style="font-size: 1.8rem; margin-bottom: 4px;">Fee Management & Ledger</h1>
-                <p style="margin: 0; color:#64748b;">Collect payments, generate manual fees, and view real-time billing logs in 2-column view.</p>
+                <h1 style="font-size: 1.65rem; margin-bottom: 4px;">Fee Management & Ledger</h1>
+                <p style="margin: 0; color:#64748b; font-size: 0.9rem;">Collect payments, generate manual fees, and view real-time billing logs.</p>
             </div>
-            <div style="display: flex; gap: 10px;">
+            <div class="header-action-wrap" style="display: flex; gap: 10px;">
                 <a href="billing_dry_run.php" class="btn" style="background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; padding: 9px 16px; border-radius: 8px; font-weight: 700; text-decoration: none; font-size: 0.88rem; display: inline-flex; align-items: center; gap: 6px;">
                     <i class="fas fa-shield-alt"></i> Billing Simulator (Dry Run)
                 </a>
@@ -521,45 +673,45 @@ if (!empty($settings['tuition_modes'])) {
         ?>
 
         <!-- Admin Top Fee Structure & Deposit Metric Strip -->
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 25px;">
+        <div class="top-metrics-grid">
             <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #7c3aed; background: #faf5ff;">
-                <div style="width: 44px; height: 44px; border-radius: 12px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                <div class="stat-metric-icon" style="width: 44px; height: 44px; border-radius: 12px; background: #ede9fe; color: #7c3aed; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
                     <i class="fas fa-shield-alt"></i>
                 </div>
-                <div>
-                    <h3 style="margin: 0; font-size: 1.3rem; color: #581c87; font-weight: 800;">₹ <?php echo number_format($total_sec_held, 2); ?></h3>
-                    <span style="font-size: 0.72rem; color: #7c3aed; font-weight: 800; text-transform: uppercase;">Total Security Deposit</span>
+                <div style="min-width: 0;">
+                    <h3 style="margin: 0; font-size: 1.25rem; color: #581c87; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">₹ <?php echo number_format($total_sec_held, 2); ?></h3>
+                    <span style="font-size: 0.72rem; color: #7c3aed; font-weight: 800; text-transform: uppercase;">Security Deposit</span>
                 </div>
             </div>
 
-            <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #2563eb; background: #f0fdf4;">
-                <div style="width: 44px; height: 44px; border-radius: 12px; background: #dbeafe; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+            <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #2563eb; background: #eff6ff;">
+                <div class="stat-metric-icon" style="width: 44px; height: 44px; border-radius: 12px; background: #dbeafe; color: #2563eb; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
                     <i class="fas fa-id-card"></i>
                 </div>
-                <div>
-                    <h3 style="margin: 0; font-size: 1.3rem; color: #1e3a8a; font-weight: 800;">₹ <?php echo number_format($total_reg_fee, 2); ?></h3>
-                    <span style="font-size: 0.72rem; color: #2563eb; font-weight: 800; text-transform: uppercase;">Total Registration Fees</span>
+                <div style="min-width: 0;">
+                    <h3 style="margin: 0; font-size: 1.25rem; color: #1e3a8a; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">₹ <?php echo number_format($total_reg_fee, 2); ?></h3>
+                    <span style="font-size: 0.72rem; color: #2563eb; font-weight: 800; text-transform: uppercase;">Registration Fees</span>
                 </div>
             </div>
 
             <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #16a34a; background: #f0fdf4;">
-                <div style="width: 44px; height: 44px; border-radius: 12px; background: #dcfce7; color: #16a34a; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                <div class="stat-metric-icon" style="width: 44px; height: 44px; border-radius: 12px; background: #dcfce7; color: #16a34a; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
                     <i class="fas fa-file-invoice-dollar"></i>
                 </div>
-                <div>
-                    <h3 style="margin: 0; font-size: 1.3rem; color: #14532d; font-weight: 800;">₹ <?php echo number_format($total_adm_fee, 2); ?></h3>
-                    <span style="font-size: 0.72rem; color: #16a34a; font-weight: 800; text-transform: uppercase;">Total Admission Fees</span>
+                <div style="min-width: 0;">
+                    <h3 style="margin: 0; font-size: 1.25rem; color: #14532d; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">₹ <?php echo number_format($total_adm_fee, 2); ?></h3>
+                    <span style="font-size: 0.72rem; color: #16a34a; font-weight: 800; text-transform: uppercase;">Admission Fees</span>
                 </div>
             </div>
 
             <?php if ($total_adv_held > 0): ?>
             <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #ea580c; background: #fff7ed;">
-                <div style="width: 44px; height: 44px; border-radius: 12px; background: #ffedd5; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;">
+                <div class="stat-metric-icon" style="width: 44px; height: 44px; border-radius: 12px; background: #ffedd5; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
                     <i class="fas fa-hand-holding-usd"></i>
                 </div>
-                <div>
-                    <h3 style="margin: 0; font-size: 1.3rem; color: #7c2d12; font-weight: 800;">₹ <?php echo number_format($total_adv_held, 2); ?></h3>
-                    <span style="font-size: 0.72rem; color: #ea580c; font-weight: 800; text-transform: uppercase;">Total Advance Credits</span>
+                <div style="min-width: 0;">
+                    <h3 style="margin: 0; font-size: 1.25rem; color: #7c2d12; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">₹ <?php echo number_format($total_adv_held, 2); ?></h3>
+                    <span style="font-size: 0.72rem; color: #ea580c; font-weight: 800; text-transform: uppercase;">Advance Credits</span>
                 </div>
             </div>
             <?php endif; ?>
@@ -576,11 +728,24 @@ if (!empty($settings['tuition_modes'])) {
             </div>
         <?php endif; ?>
 
-        <!-- 2-COLUMN SIDE-BY-SIDE GRID LAYOUT -->
+        <!-- MOBILE SEGMENTED APP TABS (Visible on Android & Mobile) -->
+        <div class="fees-mobile-nav-tabs">
+            <button type="button" class="fees-tab-btn active" id="tabBtnForms" onclick="switchFeesTab('forms')">
+                <i class="fas fa-hand-holding-usd"></i> Collect / Forms
+            </button>
+            <button type="button" class="fees-tab-btn" id="tabBtnInvoices" onclick="switchFeesTab('invoices')">
+                <i class="fas fa-file-invoice"></i> Invoices
+            </button>
+            <button type="button" class="fees-tab-btn" id="tabBtnLogs" onclick="switchFeesTab('logs')">
+                <i class="fas fa-history"></i> Logs & Expenses
+            </button>
+        </div>
+
+        <!-- 2-COLUMN SIDE-BY-SIDE GRID LAYOUT (Adapts seamlessly on Android) -->
         <div class="fees-main-2col">
             
             <!-- LEFT COLUMN: CONTROLS & FORMS -->
-            <div>
+            <div class="fees-col-forms tab-visible" id="feesColForms">
                 <!-- Form 1: Collect Fee -->
                 <div class="portal-card" style="margin-bottom: 25px;">
                     <h3 style="margin-bottom: 20px; font-size: 1.15rem; color:var(--portal-dark); font-weight:800; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">
@@ -589,7 +754,7 @@ if (!empty($settings['tuition_modes'])) {
                     <form action="" method="POST">
                         <input type="hidden" name="record_payment" value="1">
                         <div class="portal-input-group">
-                            <label style="display:flex; justify-content:space-between;">
+                            <label style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px;">
                                 <span>Select Student</span>
                                 <span id="display_total_due" style="font-weight:800; display:none;"></span>
                             </label>
@@ -600,7 +765,7 @@ if (!empty($settings['tuition_modes'])) {
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-grid-2col">
                             <div class="portal-input-group">
                                 <label>Amount Paid (₹)</label>
                                 <input type="number" step="0.01" name="amount" placeholder="3000" required>
@@ -618,7 +783,7 @@ if (!empty($settings['tuition_modes'])) {
                                 </select>
                             </div>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-grid-2col">
                             <div class="portal-input-group">
                                 <label>Method</label>
                                 <select name="payment_method" required>
@@ -659,7 +824,7 @@ if (!empty($settings['tuition_modes'])) {
                                 <?php endforeach; ?>
                             </select>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-grid-2col">
                             <div class="portal-input-group">
                                 <label>Category</label>
                                 <select name="fee_type" id="manual_fee_type" required>
@@ -718,7 +883,7 @@ if (!empty($settings['tuition_modes'])) {
                             <label>Expense Item Title / Description</label>
                             <input type="text" name="item_name" placeholder="e.g. Mess Charges, Books, Medical, Transport" required>
                         </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div class="form-grid-2col">
                             <div class="portal-input-group">
                                 <label>Amount (₹)</label>
                                 <input type="number" step="0.01" name="expense_amount" placeholder="250.00" required>
@@ -736,23 +901,23 @@ if (!empty($settings['tuition_modes'])) {
             </div>
 
             <!-- RIGHT COLUMN: MASTER LEDGER & INVOICES TABLES -->
-            <div>
+            <div style="display:flex; flex-direction:column; gap:25px;">
                 <!-- List 1: Billed Invoices -->
-                <div class="portal-card" style="margin-bottom: 25px;">
+                <div class="portal-card fees-col-invoices tab-visible" id="feesColInvoices" style="margin-bottom: 0;">
                     <form id="bulkDeleteForm" method="POST">
                         <input type="hidden" name="bulk_delete_bills" value="1">
                         
-                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; border-bottom:2px solid #f1f5f9; padding-bottom:12px;">
+                        <div class="table-header-controls" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; border-bottom:2px solid #f1f5f9; padding-bottom:12px;">
                             <h3 style="font-size: 1.15rem; margin:0; font-weight:800;"><i class="fas fa-file-invoice" style="color:var(--portal-blue); margin-right:8px;"></i> Generated Invoices</h3>
                             
-                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <div class="table-search-row" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                                 <button type="button" id="btnBulkDelete" onclick="submitBulkDelete()" class="btn-quick-collect btn-action-delete" style="display:none; padding:6px 12px; font-weight:800;">
                                     <i class="fas fa-trash-alt"></i> Delete Selected (<span id="selectedCount">0</span>)
                                 </button>
 
-                                <input type="text" id="search_bills_input" onkeyup="filterBillsTable()" placeholder="🔍 Search student..." style="padding:7px 12px; border-radius:10px; border:1px solid #cbd5e1; font-size:0.82rem; width:150px;">
+                                <input type="text" id="search_bills_input" onkeyup="filterBillsTable()" placeholder="🔍 Search student..." style="padding:8px 12px; border-radius:10px; border:1px solid #cbd5e1; font-size:0.85rem; min-width:140px;">
                                 
-                                <select name="filter" onchange="window.location.href='fees.php?filter=' + this.value" style="padding: 7px 10px; border-radius: 10px; border: 1px solid #cbd5e1; font-size:0.82rem;">
+                                <select name="filter" onchange="window.location.href='fees.php?filter=' + this.value" style="padding: 8px 10px; border-radius: 10px; border: 1px solid #cbd5e1; font-size:0.85rem;">
                                     <option value="all" <?php echo ($filter=='all')?'selected':''; ?>>All Invoices</option>
                                     <option value="unpaid" <?php echo ($filter=='unpaid')?'selected':''; ?>>Unpaid Only</option>
                                     <option value="paid" <?php echo ($filter=='paid')?'selected':''; ?>>Paid Only</option>
@@ -765,7 +930,7 @@ if (!empty($settings['tuition_modes'])) {
                                 <thead>
                                     <tr>
                                         <th style="width: 35px; text-align: center;">
-                                            <input type="checkbox" id="selectAllBills" onclick="toggleSelectAllBills(this)" style="cursor:pointer; width:15px; height:15px;">
+                                            <input type="checkbox" id="selectAllBills" onclick="toggleSelectAllBills(this)" style="cursor:pointer; width:16px; height:16px;">
                                         </th>
                                         <th>Student</th>
                                         <th>Amount</th>
@@ -779,16 +944,16 @@ if (!empty($settings['tuition_modes'])) {
                                         </tr>
                                     <?php else: ?>
                                         <?php while($b = $bills->fetch_assoc()): 
-                                            $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($b, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
-                                            $fine_amount = ($b['status'] === 'unpaid') ? (float)$fine_calc['fine_amount'] : 0.00;
-                                            $total_payable = (float)$b['amount'] + $fine_amount;
+                                             $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($b, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
+                                             $fine_amount = ($b['status'] === 'unpaid') ? (float)$fine_calc['fine_amount'] : 0.00;
+                                             $total_payable = (float)$b['amount'] + $fine_amount;
                                         ?>
                                             <tr class="bill-row">
                                                 <td style="text-align: center;">
-                                                    <input type="checkbox" name="selected_bill_ids[]" value="<?php echo $b['id']; ?>" class="bill-checkbox" onclick="updateBulkDeleteState()" style="cursor:pointer; width:15px; height:15px;">
+                                                    <input type="checkbox" name="selected_bill_ids[]" value="<?php echo $b['id']; ?>" class="bill-checkbox" onclick="updateBulkDeleteState()" style="cursor:pointer; width:16px; height:16px;">
                                                 </td>
                                                 <td>
-                                                    <strong class="bill-student-name" style="color:var(--portal-dark); font-size:0.9rem;"><?php echo htmlspecialchars($b['name']); ?></strong><br>
+                                                    <strong class="bill-student-name" style="color:var(--portal-dark); font-size:0.92rem;"><?php echo htmlspecialchars($b['name']); ?></strong><br>
                                                     <small style="color:#64748b; font-weight:600;">Inv #<?php echo $b['id']; ?> • <?php echo date('d M, Y', strtotime($b['billing_date'])); ?></small>
                                                 </td>
                                                 <td>
@@ -803,14 +968,14 @@ if (!empty($settings['tuition_modes'])) {
                                                     <small class="bill-month-for" style="color:var(--portal-blue); font-weight:700;"><?php echo htmlspecialchars($b['month_for']); ?></small>
                                                 </td>
                                                 <td>
-                                                    <div class="bill-remark" style="font-size:0.8rem; margin-bottom:8px; color:#475569; max-width:240px; word-break:break-word;">
+                                                    <div class="bill-remark" style="font-size:0.8rem; margin-bottom:8px; color:#475569; max-width:260px; word-break:break-word;">
                                                         <?php echo htmlspecialchars($b['remark']); ?>
                                                     </div>
-                                                    <div style="display: flex; align-items: center; gap: 5px; flex-wrap: wrap;">
+                                                    <div class="bill-action-group" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                                         <span class="status-badge status-<?php echo $b['status']; ?>"><?php echo $b['status']; ?></span>
                                                         
                                                         <a href="view_bill.php?id=<?php echo $b['id']; ?>" class="btn-quick-collect" title="View Bill">
-                                                            <i class="fas fa-eye"></i>
+                                                            <i class="fas fa-eye"></i> View
                                                         </a>
                                                         
                                                         <button type="button" class="btn-quick-collect btn-action-edit" 
@@ -845,103 +1010,106 @@ if (!empty($settings['tuition_modes'])) {
                     <input type="hidden" name="bill_id" id="single_delete_bill_id">
                 </form>
 
-                <!-- List 2: Recent Collections -->
-                <div class="portal-card">
-                    <h3 style="margin-bottom: 18px; font-size: 1.15rem; font-weight:800; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">
-                        <i class="fas fa-history" style="color:var(--portal-blue); margin-right:8px;"></i> Recent Payment Logs
-                    </h3>
-                    <div class="portal-table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Student</th>
-                                    <th>Month</th>
-                                    <th>Amount</th>
-                                    <th>Date / Method</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if ($payments->num_rows == 0): ?>
-                                    <tr>
-                                        <td colspan="4" style="text-align: center; color: #94a3b8; padding: 25px;">No payments recorded yet.</td>
-                                    </tr>
-                                <?php else: ?>
-                                    <?php while($p = $payments->fetch_assoc()): ?>
-                                        <tr>
-                                            <td><strong style="color:var(--portal-dark); font-size:0.9rem;"><?php echo htmlspecialchars($p['name']); ?></strong></td>
-                                            <td><span style="font-weight:700; color:var(--portal-blue); font-size:0.85rem;"><?php echo htmlspecialchars($p['month_for']); ?></span></td>
-                                            <td><span class="amount-tag">₹ <?php echo number_format($p['amount'], 2); ?></span></td>
-                                            <td>
-                                                <div style="font-weight:700; color:#334155; font-size:0.82rem;"><?php echo date('d M, Y', strtotime($p['payment_date'])); ?></div>
-                                                <small style="color:#64748b;"><i class="fas fa-wallet"></i> <?php echo htmlspecialchars($p['payment_method']); ?></small>
-                                            </td>
-                                        </tr>
-                                    <?php endwhile; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- List 3: Daily Student Expenses Log -->
-                <div class="portal-card">
-                    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; border-bottom:2px solid #f1f5f9; padding-bottom:12px;">
-                        <h3 style="font-size: 1.15rem; margin:0; font-weight:800;">
-                            <i class="fas fa-receipt" style="color:#d97706; margin-right:8px;"></i> Daily Student Expenses Log
+                <!-- List 2: Recent Collections & List 3: Daily Student Expenses Log -->
+                <div class="fees-col-logs" id="feesColLogs">
+                    <!-- List 2: Recent Collections -->
+                    <div class="portal-card" style="margin-bottom: 25px;">
+                        <h3 style="margin-bottom: 18px; font-size: 1.15rem; font-weight:800; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">
+                            <i class="fas fa-history" style="color:var(--portal-blue); margin-right:8px;"></i> Recent Payment Logs
                         </h3>
-                        <span style="font-size: 0.78rem; font-weight: 700; color: #b45309; background: #fef3c7; padding: 4px 10px; border-radius: 6px;">
-                            <i class="fas fa-calendar-alt"></i> <?php echo date('F Y'); ?> Entries
-                        </span>
+                        <div class="portal-table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Student</th>
+                                        <th>Month</th>
+                                        <th>Amount</th>
+                                        <th>Date / Method</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if ($payments->num_rows == 0): ?>
+                                        <tr>
+                                            <td colspan="4" style="text-align: center; color: #94a3b8; padding: 25px;">No payments recorded yet.</td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php while($p = $payments->fetch_assoc()): ?>
+                                            <tr>
+                                                <td><strong style="color:var(--portal-dark); font-size:0.9rem;"><?php echo htmlspecialchars($p['name']); ?></strong></td>
+                                                <td><span style="font-weight:700; color:var(--portal-blue); font-size:0.85rem;"><?php echo htmlspecialchars($p['month_for']); ?></span></td>
+                                                <td><span class="amount-tag">₹ <?php echo number_format($p['amount'], 2); ?></span></td>
+                                                <td>
+                                                    <div style="font-weight:700; color:#334155; font-size:0.82rem;"><?php echo date('d M, Y', strtotime($p['payment_date'])); ?></div>
+                                                    <small style="color:#64748b;"><i class="fas fa-wallet"></i> <?php echo htmlspecialchars($p['payment_method']); ?></small>
+                                                </td>
+                                            </tr>
+                                        <?php endwhile; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
-                    <div class="portal-table-container">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>Date</th>
-                                    <th>Student</th>
-                                    <th>Item & Amount</th>
-                                    <th>Status & Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (!$recent_expenses || $recent_expenses->num_rows == 0): ?>
+                    <!-- List 3: Daily Student Expenses Log -->
+                    <div class="portal-card">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; border-bottom:2px solid #f1f5f9; padding-bottom:12px;">
+                            <h3 style="font-size: 1.15rem; margin:0; font-weight:800;">
+                                <i class="fas fa-receipt" style="color:#d97706; margin-right:8px;"></i> Daily Student Expenses Log
+                            </h3>
+                            <span style="font-size: 0.78rem; font-weight: 700; color: #b45309; background: #fef3c7; padding: 4px 10px; border-radius: 6px;">
+                                <i class="fas fa-calendar-alt"></i> <?php echo date('F Y'); ?> Entries
+                            </span>
+                        </div>
+
+                        <div class="portal-table-container">
+                            <table>
+                                <thead>
                                     <tr>
-                                        <td colspan="4" style="text-align: center; color: #94a3b8; padding: 25px;">No daily expenses logged yet.</td>
+                                        <th>Date</th>
+                                        <th>Student</th>
+                                        <th>Item & Amount</th>
+                                        <th>Status & Action</th>
                                     </tr>
-                                <?php else: ?>
-                                    <?php while($exp = $recent_expenses->fetch_assoc()): ?>
+                                </thead>
+                                <tbody>
+                                    <?php if (!$recent_expenses || $recent_expenses->num_rows == 0): ?>
                                         <tr>
-                                            <td>
-                                                <div style="font-weight:700; color:#334155; font-size:0.82rem;"><?php echo date('d M, Y', strtotime($exp['expense_date'])); ?></div>
-                                            </td>
-                                            <td>
-                                                <strong style="color:var(--portal-dark); font-size:0.88rem;"><?php echo htmlspecialchars($exp['student_name']); ?></strong>
-                                                <?php if(!empty($exp['reg_no'])): ?>
-                                                    <div><small style="color:#94a3b8; font-family:monospace;"><?php echo htmlspecialchars($exp['reg_no']); ?></small></div>
-                                                <?php endif; ?>
-                                            </td>
-                                            <td>
-                                                <div style="font-weight:700; color:#1e293b; font-size:0.88rem;"><?php echo htmlspecialchars($exp['item_name']); ?></div>
-                                                <span class="amount-tag" style="background:#fef3c7; color:#b45309; padding:3px 8px; font-size:0.8rem;">₹ <?php echo number_format($exp['amount'], 2); ?></span>
-                                            </td>
-                                            <td>
-                                                <?php if($exp['status'] === 'billed'): ?>
-                                                    <span class="status-badge status-paid" style="background:#dcfce7; color:#15803d;"><i class="fas fa-check-circle"></i> Billed</span>
-                                                <?php else: ?>
-                                                    <div style="display:flex; align-items:center; gap:6px;">
-                                                        <span class="status-badge status-unpaid" style="background:#fef3c7; color:#b45309;"><i class="fas fa-clock"></i> Unbilled</span>
-                                                        <a href="fees.php?delete_expense_id=<?php echo $exp['id']; ?>" class="btn-quick-collect btn-action-delete" style="padding:3px 8px;" onclick="return confirm('Delete this unbilled expense?');" title="Delete Expense">
-                                                            <i class="fas fa-trash-alt"></i>
-                                                        </a>
-                                                    </div>
-                                                <?php endif; ?>
-                                            </td>
+                                            <td colspan="4" style="text-align: center; color: #94a3b8; padding: 25px;">No daily expenses logged yet.</td>
                                         </tr>
-                                    <?php endwhile; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
+                                    <?php else: ?>
+                                        <?php while($exp = $recent_expenses->fetch_assoc()): ?>
+                                            <tr>
+                                                <td>
+                                                    <div style="font-weight:700; color:#334155; font-size:0.82rem;"><?php echo date('d M, Y', strtotime($exp['expense_date'])); ?></div>
+                                                </td>
+                                                <td>
+                                                    <strong style="color:var(--portal-dark); font-size:0.88rem;"><?php echo htmlspecialchars($exp['student_name']); ?></strong>
+                                                    <?php if(!empty($exp['reg_no'])): ?>
+                                                        <div><small style="color:#94a3b8; font-family:monospace;"><?php echo htmlspecialchars($exp['reg_no']); ?></small></div>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <div style="font-weight:700; color:#1e293b; font-size:0.88rem;"><?php echo htmlspecialchars($exp['item_name']); ?></div>
+                                                    <span class="amount-tag" style="background:#fef3c7; color:#b45309; padding:3px 8px; font-size:0.8rem;">₹ <?php echo number_format($exp['amount'], 2); ?></span>
+                                                </td>
+                                                <td>
+                                                    <?php if($exp['status'] === 'billed'): ?>
+                                                        <span class="status-badge status-paid" style="background:#dcfce7; color:#15803d;"><i class="fas fa-check-circle"></i> Billed</span>
+                                                    <?php else: ?>
+                                                        <div style="display:flex; align-items:center; gap:6px;">
+                                                            <span class="status-badge status-unpaid" style="background:#fef3c7; color:#b45309;"><i class="fas fa-clock"></i> Unbilled</span>
+                                                            <a href="fees.php?delete_expense_id=<?php echo $exp['id']; ?>" class="btn-quick-collect btn-action-delete" style="padding:3px 8px;" onclick="return confirm('Delete this unbilled expense?');" title="Delete Expense">
+                                                                <i class="fas fa-trash-alt"></i>
+                                                            </a>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </td>
+                                            </tr>
+                                        <?php endwhile; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -953,8 +1121,8 @@ if (!empty($settings['tuition_modes'])) {
     <div id="editBillModal" class="modal-backdrop">
         <div class="edit-modal-box">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="margin:0; font-size:1.25rem;"><i class="fas fa-edit" style="color:var(--portal-blue);"></i> Edit Invoice #<span id="modal_bill_id_title"></span></h3>
-                <button type="button" onclick="closeEditModal()" style="background:none; border:none; font-size:1.2rem; cursor:pointer; color:#64748b;">&times;</button>
+                <h3 style="margin:0; font-size:1.2rem;"><i class="fas fa-edit" style="color:var(--portal-blue);"></i> Edit Invoice #<span id="modal_bill_id_title"></span></h3>
+                <button type="button" onclick="closeEditModal()" style="background:none; border:none; font-size:1.4rem; cursor:pointer; color:#64748b;">&times;</button>
             </div>
             <form method="POST">
                 <input type="hidden" name="edit_bill" value="1">
@@ -992,6 +1160,37 @@ if (!empty($settings['tuition_modes'])) {
     </div>
 
     <script>
+        // Mobile Segmented Tab Switcher for Android
+        function switchFeesTab(tab) {
+            const btnForms = document.getElementById('tabBtnForms');
+            const btnInvoices = document.getElementById('tabBtnInvoices');
+            const btnLogs = document.getElementById('tabBtnLogs');
+
+            const colForms = document.getElementById('feesColForms');
+            const colInvoices = document.getElementById('feesColInvoices');
+            const colLogs = document.getElementById('feesColLogs');
+
+            // Remove active classes
+            if (btnForms) btnForms.classList.remove('active');
+            if (btnInvoices) btnInvoices.classList.remove('active');
+            if (btnLogs) btnLogs.classList.remove('active');
+
+            if (colForms) colForms.classList.remove('tab-visible');
+            if (colInvoices) colInvoices.classList.remove('tab-visible');
+            if (colLogs) colLogs.classList.remove('tab-visible');
+
+            if (tab === 'forms') {
+                if (btnForms) btnForms.classList.add('active');
+                if (colForms) colForms.classList.add('tab-visible');
+            } else if (tab === 'invoices') {
+                if (btnInvoices) btnInvoices.classList.add('active');
+                if (colInvoices) colInvoices.classList.add('tab-visible');
+            } else if (tab === 'logs') {
+                if (btnLogs) btnLogs.classList.add('active');
+                if (colLogs) colLogs.classList.add('tab-visible');
+            }
+        }
+
         // Select All Checkbox Handler
         function toggleSelectAllBills(master) {
             const checkboxes = document.querySelectorAll('.bill-checkbox');

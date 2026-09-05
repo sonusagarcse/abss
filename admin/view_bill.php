@@ -12,7 +12,7 @@ $bill_id = (int)$_GET['id'];
 // Fetch bill details with student scholar mode & class admitted
 $stmt = $conn->prepare("
     SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, s.guardian_email,
-           p.parent_name, p.phone, p.email as parent_email
+           COALESCE(p.phone, s.phone, '') AS phone, p.parent_name, COALESCE(p.email, s.guardian_email, '') as parent_email
     FROM fees_generated fg
     JOIN students s ON fg.student_id = s.id
     LEFT JOIN parents p ON s.parent_id = p.id
