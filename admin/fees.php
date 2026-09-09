@@ -375,7 +375,7 @@ while($s = $students_res->fetch_assoc()) {
 
 // Fetch payments log (All non-Razorpay payment logs: Cash, Offline, Admin entries)
 $payments = $conn->query("
-    SELECT f.*, s.name 
+    SELECT f.*, s.name, s.parent_name 
     FROM fee_payments f 
     JOIN students s ON f.student_id = s.id 
     WHERE (s.status = 'active' OR s.status IS NULL)
@@ -384,7 +384,7 @@ $payments = $conn->query("
           OR f.payment_method LIKE '%pay_%' 
           OR f.payment_method LIKE '%rzp_%'
       )
-    ORDER BY f.created_at DESC, f.id DESC LIMIT 50
+    ORDER BY f.created_at DESC, f.id DESC LIMIT 10
 ");
 
 // Fetch Razorpay Online payments with comprehensive student details
@@ -425,7 +425,7 @@ if ($filter === 'unpaid') $status_cond .= " AND fg.status = 'unpaid'";
 if ($filter === 'paid') $status_cond .= " AND fg.status = 'paid'";
 
 $bills = $conn->query("
-    SELECT fg.*, s.name 
+    SELECT fg.*, s.name, s.parent_name 
     FROM fees_generated fg 
     JOIN students s ON fg.student_id = s.id 
     $status_cond
@@ -544,14 +544,244 @@ if (!empty($settings['tuition_modes'])) {
         .modal-backdrop.active { display: flex; }
         .edit-modal-box {
             background: #ffffff;
-            padding: 24px;
+            padding: 22px 24px;
             border-radius: var(--radius-lg);
             width: 100%;
-            max-width: 500px;
+            max-width: 620px;
             max-height: 90vh;
             overflow-y: auto;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+            box-shadow: 0 25px 50px -12px rgba(15, 23, 42, 0.28);
             box-sizing: border-box;
+            border: 1px solid rgba(226, 232, 240, 0.9);
+        }
+
+        /* Edit Invoice Modal: Amount & Sync Card */
+        .edit-amount-card {
+            background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+        .amount-input-container {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: #ffffff;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 6px 12px;
+            transition: all 0.2s ease;
+        }
+        .amount-input-container:focus-within {
+            border-color: var(--portal-blue);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+        }
+        .currency-symbol-big {
+            font-size: 1.25rem;
+            font-weight: 900;
+            color: var(--portal-blue);
+        }
+        .edit-amount-main-input {
+            border: none !important;
+            outline: none !important;
+            font-size: 1.35rem !important;
+            font-weight: 900 !important;
+            color: #0f172a !important;
+            width: 100% !important;
+            padding: 0 !important;
+            background: transparent !important;
+        }
+        .badge-sync-active {
+            background: #dcfce7;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+            font-size: 0.72rem;
+            font-weight: 800;
+            padding: 2px 8px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        @keyframes pulseHighlight {
+            0% { transform: scale(1); background: #dcfce7; }
+            50% { transform: scale(1.06); background: #bbf7d0; }
+            100% { transform: scale(1); background: #dcfce7; }
+        }
+        .pulse-sync {
+            animation: pulseHighlight 0.4s ease-in-out;
+        }
+        @keyframes pulseInputField {
+            0% { background: transparent; }
+            50% { background: rgba(37, 99, 235, 0.08); }
+            100% { background: transparent; }
+        }
+        .pulse-input {
+            animation: pulseInputField 0.35s ease-in-out;
+        }
+
+        /* Edit Invoice Modal: Itemized Remarks Section */
+        .edit-remarks-section {
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+        }
+        .edit-items-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 240px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .edit-item-row {
+            display: grid;
+            grid-template-columns: 1fr 125px 34px;
+            gap: 8px;
+            align-items: center;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 6px 8px;
+            transition: all 0.15s ease;
+        }
+        .edit-item-row:hover {
+            border-color: #cbd5e1;
+        }
+        .edit-item-row.is-deduction {
+            background: #fffbfb;
+            border-color: #fed7aa;
+        }
+        .edit-item-title-input {
+            border: 1px solid transparent !important;
+            border-radius: 6px !important;
+            padding: 6px 8px !important;
+            font-size: 0.86rem !important;
+            font-weight: 600 !important;
+            color: #1e293b !important;
+            width: 100% !important;
+            background: transparent !important;
+            transition: all 0.15s;
+        }
+        .edit-item-title-input:focus {
+            background: #ffffff !important;
+            border-color: #bfdbfe !important;
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1) !important;
+            outline: none !important;
+        }
+        .edit-item-col-amount {
+            display: flex;
+            align-items: center;
+            background: #f1f5f9;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 4px 6px;
+            transition: all 0.15s;
+        }
+        .edit-item-col-amount:focus-within {
+            background: #ffffff;
+            border-color: var(--portal-blue);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+        .edit-currency-tag {
+            font-size: 0.78rem;
+            font-weight: 800;
+            color: #64748b;
+            margin-right: 3px;
+        }
+        .edit-item-amount-input {
+            border: none !important;
+            outline: none !important;
+            background: transparent !important;
+            font-size: 0.88rem !important;
+            font-weight: 800 !important;
+            color: #0f172a !important;
+            width: 100% !important;
+            text-align: right !important;
+            padding: 2px 0 !important;
+        }
+        .edit-item-amount-input.negative-amt {
+            color: #b91c1c !important;
+        }
+        .btn-delete-item {
+            background: #fee2e2;
+            color: #dc2626;
+            border: 1px solid #fecaca;
+            border-radius: 6px;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            font-size: 0.82rem;
+            padding: 0;
+        }
+        .btn-delete-item:hover {
+            background: #dc2626;
+            color: #ffffff;
+            border-color: #dc2626;
+            transform: scale(1.06);
+        }
+        .btn-add-item-chip {
+            background: #eff6ff;
+            color: #2563eb;
+            border: 1px solid #bfdbfe;
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.76rem;
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.15s;
+        }
+        .btn-add-item-chip:hover {
+            background: #2563eb;
+            color: #ffffff;
+        }
+        .edit-items-empty {
+            text-align: center;
+            padding: 20px 10px;
+            color: #94a3b8;
+            font-size: 0.82rem;
+            font-weight: 600;
+        }
+        .btn-add-first-item {
+            background: #2563eb;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            padding: 6px 14px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            margin-top: 8px;
+            cursor: pointer;
+        }
+        .items-summary-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+            padding-top: 8px;
+            border-top: 1px dashed #cbd5e1;
+        }
+        .edit-raw-textarea {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 0.82rem;
+            font-family: monospace;
+            color: #334155;
+            box-sizing: border-box;
+            resize: vertical;
         }
 
         .mobile-table-hint {
@@ -729,16 +959,21 @@ if (!empty($settings['tuition_modes'])) {
                 margin-bottom: 18px !important;
             }
             .edit-modal-box {
-                padding: 20px 16px !important;
-                border-radius: 20px !important;
+                padding: 18px 14px !important;
+                border-radius: 16px !important;
                 max-height: 92vh !important;
                 width: 100% !important;
-                margin: 10px !important;
+                margin: 8px !important;
             }
             .edit-modal-box input, 
             .edit-modal-box select, 
             .edit-modal-box textarea {
-                font-size: 16px !important;
+                font-size: 15px !important;
+            }
+            .edit-item-row {
+                grid-template-columns: 1fr 105px 32px !important;
+                gap: 6px !important;
+                padding: 5px 6px !important;
             }
         }
 
@@ -1058,7 +1293,10 @@ if (!empty($settings['tuition_modes'])) {
                                                     <input type="checkbox" name="selected_bill_ids[]" value="<?php echo $b['id']; ?>" class="bill-checkbox" onclick="updateBulkDeleteState()" style="cursor:pointer; width:16px; height:16px;">
                                                 </td>
                                                 <td>
-                                                    <strong class="bill-student-name" style="color:var(--portal-dark); font-size:0.92rem;"><?php echo htmlspecialchars($b['name']); ?></strong><br>
+                                                    <strong class="bill-student-name" style="color:var(--portal-dark); font-size:0.92rem;"><?php echo htmlspecialchars($b['name']); ?></strong>
+                                                    <?php if (!empty($b['parent_name'])): ?>
+                                                        <div style="font-size:0.75rem; color:#64748b; font-weight:600;"><i class="fas fa-user-friends" style="font-size:0.7rem; color:#94a3b8;"></i> S/o <?php echo htmlspecialchars($b['parent_name']); ?></div>
+                                                    <?php endif; ?>
                                                     <small style="color:#64748b; font-weight:600;">Inv #<?php echo $b['id']; ?> • <?php echo date('d M, Y', strtotime($b['billing_date'])); ?></small>
                                                 </td>
                                                 <td>
@@ -1073,9 +1311,6 @@ if (!empty($settings['tuition_modes'])) {
                                                     <small class="bill-month-for" style="color:var(--portal-blue); font-weight:700;"><?php echo htmlspecialchars($b['month_for']); ?></small>
                                                 </td>
                                                 <td>
-                                                    <div class="bill-remark" style="font-size:0.8rem; margin-bottom:8px; color:#475569; max-width:260px; word-break:break-word;">
-                                                        <?php echo htmlspecialchars($b['remark']); ?>
-                                                    </div>
                                                     <div class="bill-action-group" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                                         <span class="status-badge status-<?php echo $b['status']; ?>"><?php echo $b['status']; ?></span>
                                                         
@@ -1084,7 +1319,13 @@ if (!empty($settings['tuition_modes'])) {
                                                         </a>
                                                         
                                                         <button type="button" class="btn-quick-collect btn-action-edit" 
-                                                                onclick="openEditModal(<?php echo $b['id']; ?>, <?php echo $b['amount']; ?>, '<?php echo addslashes($b['month_for']); ?>', '<?php echo addslashes($b['remark']); ?>', '<?php echo $b['status']; ?>')" 
+                                                                data-id="<?php echo $b['id']; ?>"
+                                                                data-amount="<?php echo $b['amount']; ?>"
+                                                                data-month="<?php echo htmlspecialchars($b['month_for'] ?? '', ENT_QUOTES); ?>"
+                                                                data-remark="<?php echo htmlspecialchars($b['remark'] ?? '', ENT_QUOTES); ?>"
+                                                                data-status="<?php echo htmlspecialchars($b['status'] ?? '', ENT_QUOTES); ?>"
+                                                                data-student="<?php echo htmlspecialchars($b['name'] ?? '', ENT_QUOTES); ?>"
+                                                                onclick="openEditModalFromButton(this)" 
                                                                 title="Edit Bill Details">
                                                             <i class="fas fa-edit"></i>
                                                         </button>
@@ -1201,6 +1442,9 @@ if (!empty($settings['tuition_modes'])) {
                                                 </td>
                                                 <td>
                                                     <strong style="color:var(--portal-dark); font-size:0.9rem;"><?php echo htmlspecialchars($op['student_name']); ?></strong>
+                                                    <?php if (!empty($op['parent_name'])): ?>
+                                                        <div style="font-size:0.75rem; color:#64748b; font-weight:600;"><i class="fas fa-user-friends" style="font-size:0.7rem; color:#94a3b8;"></i> S/o <?php echo htmlspecialchars($op['parent_name']); ?></div>
+                                                    <?php endif; ?>
                                                     <div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap; margin-top:2px;">
                                                         <?php if (!empty($op['reg_no'])): ?>
                                                             <span style="font-size:0.72rem; font-family:monospace; color:#475569; background:#f1f5f9; padding:1px 5px; border-radius:4px;">
@@ -1276,8 +1520,13 @@ if (!empty($settings['tuition_modes'])) {
                                         </tr>
                                     <?php else: ?>
                                         <?php while($p = $payments->fetch_assoc()): ?>
-                                            <tr>
-                                                <td><strong style="color:var(--portal-dark); font-size:0.9rem;"><?php echo htmlspecialchars($p['name']); ?></strong></td>
+                                             <tr>
+                                                 <td>
+                                                     <strong style="color:var(--portal-dark); font-size:0.9rem;"><?php echo htmlspecialchars($p['name']); ?></strong>
+                                                     <?php if (!empty($p['parent_name'])): ?>
+                                                         <div style="font-size:0.75rem; color:#64748b; font-weight:600;"><i class="fas fa-user-friends" style="font-size:0.7rem; color:#94a3b8;"></i> S/o <?php echo htmlspecialchars($p['parent_name']); ?></div>
+                                                     <?php endif; ?>
+                                                 </td>
                                                 <td><span style="font-weight:700; color:var(--portal-blue); font-size:0.85rem;"><?php echo htmlspecialchars($p['month_for']); ?></span></td>
                                                 <td><span class="amount-tag">₹ <?php echo number_format($p['amount'], 2); ?></span></td>
                                                 <td>
@@ -1377,39 +1626,97 @@ if (!empty($settings['tuition_modes'])) {
     <!-- Modal for Editing Generated Invoice -->
     <div id="editBillModal" class="modal-backdrop">
         <div class="edit-modal-box">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-                <h3 style="margin:0; font-size:1.2rem;"><i class="fas fa-edit" style="color:var(--portal-blue);"></i> Edit Invoice #<span id="modal_bill_id_title"></span></h3>
-                <button type="button" onclick="closeEditModal()" style="background:none; border:none; font-size:1.4rem; cursor:pointer; color:#64748b;">&times;</button>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <div>
+                    <h3 style="margin:0; font-size:1.15rem; font-weight:800; color:var(--portal-dark); display:flex; align-items:center; gap:8px;">
+                        <i class="fas fa-edit" style="color:var(--portal-blue);"></i> 
+                        <span>Edit Invoice #<span id="modal_bill_id_title"></span></span>
+                    </h3>
+                    <div id="modal_bill_student_subtitle" style="font-size:0.78rem; color:#64748b; font-weight:600; margin-top:2px;"></div>
+                </div>
+                <button type="button" onclick="closeEditModal()" style="background:none; border:none; font-size:1.4rem; cursor:pointer; color:#64748b; padding:0; width:30px; height:30px; display:flex; align-items:center; justify-content:center; border-radius:50%;" title="Close dialog">&times;</button>
             </div>
-            <form method="POST">
+            <form method="POST" id="editInvoiceForm" onsubmit="prepareInvoiceFormSubmit(event)">
                 <input type="hidden" name="edit_bill" value="1">
                 <input type="hidden" name="bill_id" id="edit_bill_id">
 
-                <div class="portal-input-group">
-                    <label>Amount (₹)</label>
-                    <input type="number" step="0.01" name="amount" id="edit_bill_amount" required>
+                <!-- Prominent Amount Card with Real-time Sync Indicator -->
+                <div class="edit-amount-card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <label style="font-size:0.78rem; font-weight:800; color:#475569; text-transform:uppercase; letter-spacing:0.4px; margin:0;">
+                            Total Invoice Amount
+                        </label>
+                        <span id="amount_sync_pill" class="badge-sync-active" title="Automatically recalculated when items are edited or deleted">
+                            <i class="fas fa-bolt"></i> Realtime Synced
+                        </span>
+                    </div>
+                    <div class="amount-input-container">
+                        <span class="currency-symbol-big">₹</span>
+                        <input type="number" step="0.01" name="amount" id="edit_bill_amount" class="edit-amount-main-input" required>
+                    </div>
+                    <div style="font-size:0.72rem; color:#64748b; margin-top:4px; font-weight:600;">
+                        Auto-updates whenever items below are added, changed, or deleted.
+                    </div>
                 </div>
 
-                <div class="portal-input-group">
-                    <label>Bill Month(s)</label>
-                    <input type="text" name="month_for" id="edit_bill_month_for" required>
+                <!-- 2-Column Month & Status Grid -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
+                    <div class="portal-input-group" style="margin-bottom:0;">
+                        <label style="font-size:0.78rem; font-weight:700;">Bill Month(s)</label>
+                        <input type="text" name="month_for" id="edit_bill_month_for" required style="padding:8px 10px; font-size:0.88rem;">
+                    </div>
+
+                    <div class="portal-input-group" style="margin-bottom:0;">
+                        <label style="font-size:0.78rem; font-weight:700;">Invoice Status</label>
+                        <select name="status" id="edit_bill_status" required style="padding:8px 10px; font-size:0.88rem;">
+                            <option value="unpaid">Unpaid</option>
+                            <option value="paid">Paid</option>
+                        </select>
+                    </div>
                 </div>
 
-                <div class="portal-input-group">
-                    <label>Remarks / Description</label>
-                    <textarea name="remark" id="edit_bill_remark" rows="3" required></textarea>
+                <!-- Itemized Remarks / Fee Breakdown Section -->
+                <div class="edit-remarks-section">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <label style="font-size:0.82rem; font-weight:800; color:var(--portal-dark); margin:0;">
+                                <i class="fas fa-layer-group" style="color:var(--portal-blue);"></i> Fee Items & Breakdown
+                            </label>
+                            <span id="items_count_badge" style="background:#e0e7ff; color:#3730a3; font-size:0.7rem; font-weight:800; padding:2px 7px; border-radius:12px;">0 items</span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:6px;">
+                            <button type="button" onclick="toggleRawRemarkMode()" id="btn_toggle_raw" style="background:none; border:none; color:#64748b; font-size:0.75rem; font-weight:700; cursor:pointer; text-decoration:underline;">
+                                <i class="fas fa-code"></i> Raw Text
+                            </button>
+                            <button type="button" onclick="addEditModalItem()" class="btn-add-item-chip">
+                                <i class="fas fa-plus"></i> Add Item
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic List of Item Rows -->
+                    <div id="edit_items_container" class="edit-items-container">
+                        <!-- Rendered via JS -->
+                    </div>
+
+                    <!-- Raw Remark Textarea (Hidden by default, synchronized in real-time) -->
+                    <div id="edit_raw_remark_wrap" style="display:none; margin-top:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                            <span style="font-size:0.73rem; color:#64748b; font-weight:600;">Direct Remark String (pipe '|' separated):</span>
+                            <span style="font-size:0.7rem; color:#0284c7; font-weight:700;">Synced with DB</span>
+                        </div>
+                        <textarea name="remark" id="edit_bill_remark" rows="3" class="edit-raw-textarea" oninput="onRawRemarkInput()"></textarea>
+                    </div>
+
+                    <!-- Breakdown Summary Bar -->
+                    <div class="items-summary-bar">
+                        <span style="font-size:0.78rem; font-weight:700; color:#475569;">Breakdown Sum:</span>
+                        <span id="items_sum_display" style="font-size:0.92rem; font-weight:900; color:var(--portal-dark);">₹ 0.00</span>
+                    </div>
                 </div>
 
-                <div class="portal-input-group">
-                    <label>Status</label>
-                    <select name="status" id="edit_bill_status" required>
-                        <option value="unpaid">Unpaid</option>
-                        <option value="paid">Paid</option>
-                    </select>
-                </div>
-
-                <div style="display:flex; gap:10px; margin-top:20px;">
-                    <button type="button" onclick="closeEditModal()" style="flex:1; background:#f1f5f9; color:#475569; border:none; padding:12px; border-radius:var(--radius-md); font-weight:800; cursor:pointer;">Cancel</button>
+                <div style="display:flex; gap:10px; margin-top:16px;">
+                    <button type="button" onclick="closeEditModal()" style="flex:1; background:#f1f5f9; color:#475569; border:none; padding:11px; border-radius:var(--radius-md); font-weight:800; cursor:pointer;">Cancel</button>
                     <button type="submit" class="btn-portal" style="flex:1;">Save Changes</button>
                 </div>
             </form>
@@ -1458,21 +1765,365 @@ if (!empty($settings['tuition_modes'])) {
             }
         }
 
+        // State for Edit Invoice Modal
+        let currentEditItems = [];
+        let currentRemarkPrefix = '';
+        let isSyncingAmount = false;
+
+        // Button Click Handler for Edit Modal
+        function openEditModalFromButton(btn) {
+            const id = btn.getAttribute('data-id');
+            const amount = btn.getAttribute('data-amount');
+            const month = btn.getAttribute('data-month');
+            const remark = btn.getAttribute('data-remark');
+            const status = btn.getAttribute('data-status');
+            const student = btn.getAttribute('data-student') || '';
+            openEditModal(id, amount, month, remark, status, student);
+        }
+
         // Modal Open Handler
-        function openEditModal(id, amount, month, remark, status) {
-            document.getElementById('modal_bill_id_title').innerText = id;
+        function openEditModal(id, amount, month, remark, status, studentName = '') {
+            const titleEl = document.getElementById('modal_bill_id_title');
+            if (titleEl) titleEl.innerText = id;
+
+            const subtitleEl = document.getElementById('modal_bill_student_subtitle');
+            if (subtitleEl) {
+                subtitleEl.innerHTML = studentName ? `<i class="fas fa-user-graduate" style="color:var(--portal-blue);"></i> Student: <strong>${escapeHtml(studentName)}</strong>` : '';
+            }
+
             document.getElementById('edit_bill_id').value = id;
-            document.getElementById('edit_bill_amount').value = amount;
-            document.getElementById('edit_bill_month_for').value = month;
-            document.getElementById('edit_bill_remark').value = remark;
-            document.getElementById('edit_bill_status').value = status;
-            
+            document.getElementById('edit_bill_month_for').value = month || '';
+            document.getElementById('edit_bill_status').value = status || 'unpaid';
+
+            // Reset raw text mode visibility
+            const rawWrap = document.getElementById('edit_raw_remark_wrap');
+            if (rawWrap) rawWrap.style.display = 'none';
+            const btnToggle = document.getElementById('btn_toggle_raw');
+            if (btnToggle) btnToggle.innerHTML = '<i class="fas fa-code"></i> Raw Text';
+
+            // Parse existing remarks into separate item entries
+            const parsed = parseRemarkToItems(remark, amount);
+            currentRemarkPrefix = parsed.prefix;
+            currentEditItems = parsed.items;
+
+            // Render separated items
+            renderEditItems();
+
+            // Set amount input & calculate total
+            recalculateAndSyncModal(false);
+
             document.getElementById('editBillModal').classList.add('active');
         }
 
         // Modal Close Handler
         function closeEditModal() {
             document.getElementById('editBillModal').classList.remove('active');
+        }
+
+        // Helper to escape HTML characters
+        function escapeHtml(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Parse remark string into structured items array
+        function parseRemarkToItems(rawRemark, billAmount) {
+            let text = (rawRemark || '').trim();
+            let prefix = '';
+
+            // Detect and separate system prefixes like "Auto-generated Bill." or "Manual Bill."
+            const prefixMatch = text.match(/^(Auto-generated Bill\.|Manual Bill\.|Daily Expense\.)\s*/i);
+            if (prefixMatch) {
+                prefix = prefixMatch[1];
+                text = text.slice(prefixMatch[0].length).trim();
+            }
+
+            const fallbackAmt = parseFloat(billAmount) || 0;
+
+            if (!text) {
+                return { 
+                    prefix: prefix, 
+                    items: [{ title: 'Fee / Charges', amount: fallbackAmt }] 
+                };
+            }
+
+            // Split by pipe '|'
+            const parts = text.split('|').map(s => s.trim()).filter(Boolean);
+            const items = [];
+
+            for (const part of parts) {
+                // 1. Check for negative deduction/payment: e.g. Payment received on 2026-09-09 (-₹3,000.00) (Rcpt #18)
+                const negMatch = part.match(/^(.*?)\s*\(\s*-\s*[₹Rs\.]*\s*([0-9,]+(?:\.[0-9]+)?)\s*\)\s*(.*)$/i);
+                if (negMatch) {
+                    const amt = -Math.abs(parseFloat(negMatch[2].replace(/,/g, '')) || 0);
+                    const title = (negMatch[1].trim() + (negMatch[3].trim() ? ' ' + negMatch[3].trim() : '')).trim();
+                    items.push({ title: title || 'Payment Deduction', amount: amt });
+                    continue;
+                }
+
+                // 2. Check for colon with amount: e.g. "Hostler Fee: ₹2,000.00 (September 2026)" or "Books: 500"
+                const colonMatch = part.match(/^(.*?):\s*[₹Rs\.]*\s*([0-9,]+(?:\.[0-9]+)?)\s*(.*)$/i);
+                if (colonMatch) {
+                    const amt = parseFloat(colonMatch[2].replace(/,/g, '')) || 0;
+                    const title = (colonMatch[1].trim() + (colonMatch[3].trim() ? ' ' + colonMatch[3].trim() : '')).trim();
+                    items.push({ title: title || 'Fee Item', amount: amt });
+                    continue;
+                }
+
+                // 3. Fallback check for currency symbol without colon: e.g. "Tuition ₹1,500.00"
+                const currMatch = part.match(/^(.*?)[₹Rs\.]\s*([0-9,]+(?:\.[0-9]+)?)\s*(.*)$/i);
+                if (currMatch) {
+                    const amt = parseFloat(currMatch[2].replace(/,/g, '')) || 0;
+                    const title = (currMatch[1].trim() + (currMatch[3].trim() ? ' ' + currMatch[3].trim() : '')).trim();
+                    items.push({ title: title || 'Fee Item', amount: amt });
+                    continue;
+                }
+
+                // 4. Plain text without any number: e.g. "Dudh" or "Previous carryover dues"
+                items.push({
+                    title: part,
+                    amount: parts.length === 1 ? fallbackAmt : 0
+                });
+            }
+
+            if (items.length === 0) {
+                items.push({ title: 'Fee / Charges', amount: fallbackAmt });
+            }
+
+            return { prefix: prefix, items: items };
+        }
+
+        // Render separated item rows
+        function renderEditItems() {
+            const container = document.getElementById('edit_items_container');
+            const badge = document.getElementById('items_count_badge');
+            if (!container) return;
+
+            if (currentEditItems.length === 0) {
+                container.innerHTML = `
+                    <div class="edit-items-empty">
+                        <i class="fas fa-receipt" style="font-size:1.5rem; color:#cbd5e1; margin-bottom:6px; display:block;"></i>
+                        No breakdown items currently added.<br>
+                        <button type="button" onclick="addEditModalItem()" class="btn-add-first-item">
+                            <i class="fas fa-plus"></i> Add Item / Fee Breakdown
+                        </button>
+                    </div>
+                `;
+                if (badge) badge.innerText = '0 items';
+                return;
+            }
+
+            if (badge) {
+                badge.innerText = `${currentEditItems.length} item${currentEditItems.length > 1 ? 's' : ''}`;
+            }
+
+            let html = '';
+            currentEditItems.forEach((item, index) => {
+                const isNegative = (parseFloat(item.amount) || 0) < 0;
+                const safeTitle = escapeHtml(item.title || '');
+                html += `
+                    <div class="edit-item-row ${isNegative ? 'is-deduction' : ''}" data-index="${index}">
+                        <div class="edit-item-col-title">
+                            <input type="text" 
+                                   class="edit-item-title-input" 
+                                   placeholder="Item name / note (e.g. Tuition Fee)" 
+                                   value="${safeTitle}" 
+                                   oninput="onItemTitleChanged(${index}, this.value)">
+                        </div>
+                        <div class="edit-item-col-amount">
+                            <span class="edit-currency-tag">₹</span>
+                            <input type="number" 
+                                   step="0.01" 
+                                   class="edit-item-amount-input ${isNegative ? 'negative-amt' : ''}" 
+                                   placeholder="0.00" 
+                                   value="${item.amount}" 
+                                   oninput="onItemAmountChanged(${index}, this.value)">
+                        </div>
+                        <div class="edit-item-col-delete">
+                            <button type="button" 
+                                    class="btn-delete-item" 
+                                    onclick="deleteEditModalItem(${index})" 
+                                    title="Delete this item">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Realtime Handler: Item Title Changed
+        function onItemTitleChanged(index, newTitle) {
+            if (currentEditItems[index]) {
+                currentEditItems[index].title = newTitle;
+                buildRemarkFromItems();
+            }
+        }
+
+        // Realtime Handler: Item Amount Changed
+        function onItemAmountChanged(index, newAmount) {
+            if (currentEditItems[index]) {
+                currentEditItems[index].amount = parseFloat(newAmount) || 0;
+                recalculateAndSyncModal(true);
+            }
+        }
+
+        // Handler: Delete Item
+        function deleteEditModalItem(index) {
+            if (currentEditItems[index]) {
+                currentEditItems.splice(index, 1);
+                renderEditItems();
+                recalculateAndSyncModal(true);
+            }
+        }
+
+        // Handler: Add New Item
+        function addEditModalItem(defaultTitle = '', defaultAmount = 0) {
+            currentEditItems.push({
+                title: defaultTitle,
+                amount: defaultAmount
+            });
+            renderEditItems();
+            recalculateAndSyncModal(true);
+
+            // Focus newly added title input
+            const container = document.getElementById('edit_items_container');
+            const inputs = container.querySelectorAll('.edit-item-title-input');
+            if (inputs.length > 0) {
+                inputs[inputs.length - 1].focus();
+            }
+        }
+
+        // Recalculate Sum and Reflect to Main Amount Field in Real Time
+        function recalculateAndSyncModal(pulse = false) {
+            isSyncingAmount = true;
+            let total = 0;
+            currentEditItems.forEach(it => {
+                total += (parseFloat(it.amount) || 0);
+            });
+            total = Math.round(total * 100) / 100;
+
+            const amountInput = document.getElementById('edit_bill_amount');
+            if (amountInput) {
+                amountInput.value = total.toFixed(2);
+                if (pulse) {
+                    amountInput.classList.remove('pulse-input');
+                    void amountInput.offsetWidth;
+                    amountInput.classList.add('pulse-input');
+                }
+            }
+
+            const sumDisplay = document.getElementById('items_sum_display');
+            if (sumDisplay) {
+                sumDisplay.innerText = '₹ ' + total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+
+            const pill = document.getElementById('amount_sync_pill');
+            if (pill && pulse) {
+                pill.classList.remove('pulse-sync');
+                void pill.offsetWidth;
+                pill.classList.add('pulse-sync');
+            }
+
+            buildRemarkFromItems();
+            isSyncingAmount = false;
+        }
+
+        // Rebuild Remark string from current items
+        function buildRemarkFromItems() {
+            const rawTextarea = document.getElementById('edit_bill_remark');
+            if (!rawTextarea) return;
+
+            if (currentEditItems.length === 0) {
+                rawTextarea.value = '';
+                return;
+            }
+
+            const parts = currentEditItems.map(it => {
+                const title = (it.title || '').trim() || 'Fee Item';
+                const amt = parseFloat(it.amount) || 0;
+                if (amt < 0) {
+                    const formatted = Math.abs(amt).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    return `${title} (-₹${formatted})`;
+                } else {
+                    const formatted = amt.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    return `${title}: ₹${formatted}`;
+                }
+            });
+
+            let full = parts.join(' | ');
+            if (currentRemarkPrefix) {
+                full = currentRemarkPrefix + ' ' + full;
+            }
+            rawTextarea.value = full;
+        }
+
+        // Direct editing of main amount input reflects back to items
+        document.addEventListener('DOMContentLoaded', function() {
+            const mainAmtInput = document.getElementById('edit_bill_amount');
+            if (mainAmtInput) {
+                mainAmtInput.addEventListener('input', function() {
+                    if (isSyncingAmount) return;
+                    const val = parseFloat(this.value) || 0;
+                    if (currentEditItems.length === 1) {
+                        currentEditItems[0].amount = val;
+                        renderEditItems();
+                        buildRemarkFromItems();
+                    }
+                    const sumDisplay = document.getElementById('items_sum_display');
+                    if (sumDisplay) {
+                        sumDisplay.innerText = '₹ ' + val.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    }
+                });
+            }
+        });
+
+        // Toggle Raw Remarks View
+        function toggleRawRemarkMode() {
+            const wrap = document.getElementById('edit_raw_remark_wrap');
+            const btn = document.getElementById('btn_toggle_raw');
+            if (!wrap) return;
+
+            if (wrap.style.display === 'none') {
+                wrap.style.display = 'block';
+                if (btn) btn.innerHTML = '<i class="fas fa-table-cells"></i> Visual Mode';
+            } else {
+                wrap.style.display = 'none';
+                if (btn) btn.innerHTML = '<i class="fas fa-code"></i> Raw Text';
+            }
+        }
+
+        // Realtime Handler when editing Raw Remark String
+        function onRawRemarkInput() {
+            const rawVal = document.getElementById('edit_bill_remark').value;
+            const billAmt = document.getElementById('edit_bill_amount').value;
+            const parsed = parseRemarkToItems(rawVal, billAmt);
+            currentRemarkPrefix = parsed.prefix;
+            currentEditItems = parsed.items;
+            renderEditItems();
+
+            let total = currentEditItems.reduce((acc, it) => acc + (parseFloat(it.amount) || 0), 0);
+            total = Math.round(total * 100) / 100;
+            document.getElementById('edit_bill_amount').value = total.toFixed(2);
+            const sumDisplay = document.getElementById('items_sum_display');
+            if (sumDisplay) {
+                sumDisplay.innerText = '₹ ' + total.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            }
+        }
+
+        // Form Submit Handler: Final sync & validation
+        function prepareInvoiceFormSubmit(event) {
+            // Remove completely empty items before submitting
+            currentEditItems = currentEditItems.filter(it => (it.title || '').trim() !== '' || (parseFloat(it.amount) || 0) !== 0);
+            buildRemarkFromItems();
+            return true;
         }
 
         // Live Fee Rate & Discount Auto-Calculation
