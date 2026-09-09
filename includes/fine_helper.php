@@ -30,6 +30,37 @@ if (!function_exists('get_fine_rate_per_day')) {
 }
 
 /**
+ * Checks whether late fee/fine is turned OFF (exempt) for a specific student.
+ */
+if (!function_exists('is_student_fine_exempt')) {
+    function is_student_fine_exempt($student_id, $conn = null, $force_refresh = false) {
+        static $exempt_cache = [];
+        $student_id = (int)$student_id;
+        if ($student_id <= 0) return false;
+        
+        if (!$force_refresh && isset($exempt_cache[$student_id])) {
+            return $exempt_cache[$student_id];
+        }
+        
+        if ($conn === null && function_exists('getDB')) {
+            $conn = getDB();
+        }
+        if (!$conn) return false;
+        
+        $res = $conn->query("SELECT fine_applicable FROM students WHERE id = $student_id LIMIT 1");
+        if ($res && $row = $res->fetch_assoc()) {
+            $exempt = (isset($row['fine_applicable']) && (int)$row['fine_applicable'] === 0);
+            $exempt_cache[$student_id] = $exempt;
+            return $exempt;
+        }
+        
+        $exempt_cache[$student_id] = false;
+        return false;
+    }
+}
+
+
+/**
  * Returns the fine start month as 'YYYY-MM', or null if not set.
  * Bills issued BEFORE this month are exempt from fine.
  */
@@ -173,33 +204,47 @@ if (!function_exists('calculate_single_month_fine')) {
 
         $current_month = date('Y-m', strtotime($eval_date_str));
 
-        // Fine Start Month Gate
+        // Fine Start Month Gate:
+        // 1) If today is before the fine_start_month, no fines apply at all yet.
+        // 2) If the BILL's month is before fine_start_month, that specific bill is permanently exempt
+        //    from fine — the user said "start charging fine from September", so August bills
+        //    must NEVER incur fine, even if they remain unpaid.
         $fine_start_month = get_fine_start_month($settings);
-        if ($fine_start_month !== null && $current_month < $fine_start_month) {
-            return [
-                'fine_amount'        => 0.00,
-                'overdue_days'       => 0,
-                'grace_date'         => null,
-                'is_fine_active'     => false,
-                'rate_per_day'       => $base_rate,
-                'grace_days'         => $grace_days,
-                'escalation_applied' => false,
-            ];
+        if ($fine_start_month !== null) {
+            // Block 1: Today is before start month — no fines at all yet
+            if ($current_month < $fine_start_month) {
+                return [
+                    'fine_amount'        => 0.00,
+                    'overdue_days'       => 0,
+                    'grace_date'         => null,
+                    'is_fine_active'     => false,
+                    'rate_per_day'       => $base_rate,
+                    'grace_days'         => $grace_days,
+                    'escalation_applied' => false,
+                ];
+            }
+            // Block 2: This bill's month is before the fine start month — permanently exempt
+            if ($bill_ym < $fine_start_month) {
+                return [
+                    'fine_amount'        => 0.00,
+                    'overdue_days'       => 0,
+                    'grace_date'         => null,
+                    'is_fine_active'     => false,
+                    'rate_per_day'       => $base_rate,
+                    'grace_days'         => $grace_days,
+                    'escalation_applied' => false,
+                    'exempt_reason'      => 'before_fine_start_month',
+                ];
+            }
         }
 
         $parts = explode('-', $bill_ym);
         $bill_year = (int)($parts[0] ?? date('Y'));
         $bill_month_num = (int)($parts[1] ?? date('m'));
 
-        // If a start month is set in settings, bills from before start month begin counting from fine_start_month grace date
-        if ($fine_start_month !== null && $bill_ym < $fine_start_month) {
-            $fsm_parts = explode('-', $fine_start_month);
-            $eff_year  = (int)($fsm_parts[0] ?? $bill_year);
-            $eff_month = (int)($fsm_parts[1] ?? $bill_month_num);
-        } else {
-            $eff_year  = $bill_year;
-            $eff_month = $bill_month_num;
-        }
+        // Grace date is always based on the bill's own month
+        $eff_year  = $bill_year;
+        $eff_month = $bill_month_num;
 
         $grace_date_str = sprintf('%04d-%02d-%02d', $eff_year, $eff_month, min(28, $grace_days));
         $grace_dt_bill  = new DateTime($grace_date_str);
@@ -308,6 +353,24 @@ if (!function_exists('calculate_bill_fine')) {
             $billing_date = date('Y-m-01');
         }
 
+        // Check if fine is turned OFF (exempt) for this specific student
+        if (is_array($bill_input) && !empty($bill_input['student_id'])) {
+            if (is_student_fine_exempt((int)$bill_input['student_id'])) {
+                return [
+                    'fine_amount'        => 0.00,
+                    'overdue_days'       => 0,
+                    'grace_date'         => null,
+                    'is_fine_active'     => false,
+                    'rate_per_day'       => 0.00,
+                    'grace_days'         => 5,
+                    'escalation_applied' => false,
+                    'is_exempt'          => true,
+                    'months_counted'     => [],
+                ];
+            }
+        }
+
+
         // Parse all unpaid months covered by this bill (e.g. ["2026-08", "2026-09"])
         $months = parse_bill_months_for($month_for_str, $billing_date);
 
@@ -353,10 +416,11 @@ if (!function_exists('get_student_total_fine')) {
         $unpaid_count = 0;
         $breakdown = [];
 
-        if (!is_fine_system_enabled($settings)) {
+        if (!is_fine_system_enabled($settings) || is_student_fine_exempt($student_id, $conn)) {
             return [
                 'total_fine'   => 0.00,
                 'unpaid_count' => 0,
+                'is_exempt'    => is_student_fine_exempt($student_id, $conn),
                 'breakdown'    => []
             ];
         }
@@ -402,7 +466,7 @@ if (!function_exists('get_all_unpaid_total_fine')) {
         $eval_date_str = !empty($as_of_date) ? $as_of_date : date('Y-m-d');
         $total_fine    = 0.00;
 
-        $res = $conn->query("SELECT id, amount, billing_date, month_for FROM fees_generated WHERE status = 'unpaid'");
+        $res = $conn->query("SELECT id, student_id, amount, billing_date, month_for FROM fees_generated WHERE status = 'unpaid'");
         if ($res) {
             while ($row = $res->fetch_assoc()) {
                 $calc = calculate_bill_fine($row, $settings, $eval_date_str);

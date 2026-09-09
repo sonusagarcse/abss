@@ -101,7 +101,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
 
             if ($rem_pay >= $bill_amt) {
                 // Fully cleared this bill
-                $payment_tag = "Paid ₹" . number_format($bill_amt, 2) . " on $date (Rcpt #$pay_id)";
+                $payment_tag = "Payment received on $date (-₹" . number_format($bill_amt, 2) . ") (Rcpt #$pay_id)";
                 $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $payment_tag) : $payment_tag;
                 
                 $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = 0, status = 'paid', remark = ? WHERE id = ?");
@@ -112,7 +112,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
             } else {
                 // Partial payment towards this bill
                 $new_bill_amt = round($bill_amt - $rem_pay, 2);
-                $payment_tag = "Partial payment of ₹" . number_format($rem_pay, 2) . " on $date (Rcpt #$pay_id)";
+                $payment_tag = "Payment received on $date (-₹" . number_format($rem_pay, 2) . ") (Rcpt #$pay_id)";
                 $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $payment_tag) : $payment_tag;
                 
                 $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = 'unpaid', remark = ? WHERE id = ?");
@@ -337,7 +337,8 @@ if (isset($_GET['collect_offline'])) {
             $stmt = $conn->prepare("INSERT INTO fee_payments (student_id, amount, payment_date, month_for, payment_method) VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param("idsss", $sid, $total_amount, $date, $month, $method);
             $stmt->execute();
-            $payment_tag = "Paid ₹" . number_format($total_amount, 2) . " on $date (Rcpt #$pay_id)";
+            $pay_id = $conn->insert_id;
+            $payment_tag = "Payment received on $date (-₹" . number_format($total_amount, 2) . ") (Rcpt #$pay_id)";
             $new_remark = !empty($bill['remark']) ? ($bill['remark'] . " | " . $payment_tag) : $payment_tag;
             $conn->query("UPDATE fees_generated SET amount = 0, status = 'paid', remark = '" . $conn->real_escape_string($new_remark) . "' WHERE id = $bill_id");
             $conn->commit();
@@ -355,7 +356,7 @@ if (isset($_GET['collect_offline'])) {
 
 // Fetch active students with total pending dues calculated (including dynamic fine if enabled)
 $students_res = $conn->query("
-    SELECT s.id, s.name, s.scholar_mode, s.base_fee, s.monthly_discount
+    SELECT s.id, s.name, s.parent_name, s.scholar_mode, s.base_fee, s.monthly_discount
     FROM students s
     WHERE s.status = 'active'
     ORDER BY s.name ASC
@@ -372,14 +373,50 @@ while($s = $students_res->fetch_assoc()) {
     $students_list[] = $s;
 }
 
-// Fetch payments log
+// Fetch payments log (All non-Razorpay payment logs: Cash, Offline, Admin entries)
 $payments = $conn->query("
     SELECT f.*, s.name 
     FROM fee_payments f 
     JOIN students s ON f.student_id = s.id 
     WHERE (s.status = 'active' OR s.status IS NULL)
-    ORDER BY f.payment_date DESC LIMIT 5
+      AND NOT (
+          f.payment_method LIKE '%Razorpay%' 
+          OR f.payment_method LIKE '%pay_%' 
+          OR f.payment_method LIKE '%rzp_%'
+      )
+    ORDER BY f.created_at DESC, f.id DESC LIMIT 50
 ");
+
+// Fetch Razorpay Online payments with comprehensive student details
+$online_payments_res = $conn->query("
+    SELECT f.*, s.name AS student_name, s.reg_no, s.class_admitted, s.scholar_mode, s.parent_name, s.phone 
+    FROM fee_payments f 
+    JOIN students s ON f.student_id = s.id 
+    WHERE (
+        f.payment_method LIKE '%Razorpay%' 
+        OR f.payment_method LIKE '%pay_%' 
+        OR f.payment_method LIKE '%rzp_%'
+    )
+    ORDER BY f.created_at DESC, f.id DESC
+");
+
+$online_payments_list = [];
+$total_online_amount = 0;
+$today_online_amount = 0;
+$today_ymd = date('Y-m-d');
+
+if ($online_payments_res) {
+    while ($row = $online_payments_res->fetch_assoc()) {
+        $online_payments_list[] = $row;
+        $total_online_amount += (float)$row['amount'];
+        $created_date = substr($row['created_at'], 0, 10);
+        if ($created_date === $today_ymd || $row['payment_date'] === $today_ymd) {
+            $today_online_amount += (float)$row['amount'];
+        }
+    }
+}
+$total_online_count = count($online_payments_list);
+
 
 // Fetch bills log
 $filter = isset($_GET['filter']) ? $_GET['filter'] : 'unpaid';
@@ -471,49 +508,18 @@ if (!empty($settings['tuition_modes'])) {
         .btn-action-delete { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
         .btn-action-delete:hover { background: #dc2626; color: #ffffff; }
 
-        /* Mobile Segmented Tab Navigation for Android */
-        .fees-mobile-nav-tabs {
-            display: none;
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            padding: 6px;
-            border-radius: 14px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 15px rgba(15, 23, 42, 0.05);
-            gap: 6px;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-        }
-        .fees-tab-btn {
-            flex: 1;
-            min-width: 130px;
-            padding: 10px 14px;
-            border-radius: 10px;
-            border: none;
-            background: transparent;
-            color: #64748b;
-            font-weight: 700;
-            font-size: 0.88rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            white-space: nowrap;
-        }
-        .fees-tab-btn.active {
-            background: var(--portal-blue);
-            color: #ffffff;
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);
-        }
-
         /* Top Metric Cards Strip */
         .top-metrics-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
             gap: 16px;
             margin-bottom: 25px;
+            min-width: 0;
+        }
+
+        .fees-col-forms, .fees-col-invoices, .fees-col-logs {
+            min-width: 0;
+            display: block;
         }
 
         .form-grid-2col {
@@ -548,65 +554,70 @@ if (!empty($settings['tuition_modes'])) {
             box-sizing: border-box;
         }
 
-        /* Android and Mobile Responsive Layouts */
-        @media (max-width: 1024px) {
-            .fees-mobile-nav-tabs {
-                display: flex;
-            }
-            .fees-main-2col {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
-            .fees-col-forms, .fees-col-invoices, .fees-col-logs {
-                display: none;
-            }
-            .fees-col-forms.tab-visible, .fees-col-invoices.tab-visible, .fees-col-logs.tab-visible {
-                display: block;
-            }
+        .mobile-table-hint {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #94a3b8;
+            margin-bottom: 8px;
+            padding: 0 4px;
         }
 
-        @media (min-width: 1025px) {
+        .channel-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.74rem;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 6px;
+            white-space: nowrap;
+        }
+        .channel-badge.razorpay {
+            background: #eff6ff;
+            color: #1d4ed8;
+            border: 1px solid #bfdbfe;
+        }
+        .channel-badge.app {
+            background: #f0fdf4;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+        }
+        .time-pill {
+            font-weight: 700;
+            color: #b45309;
+            font-size: 0.78rem;
+            margin-top: 3px;
+            background: #fef3c7;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 7px;
+            border-radius: 4px;
+            white-space: nowrap;
+            border: 1px solid #fde68a;
+        }
+
+
+        /* Responsive Layouts: Stack forms and ledger naturally, slide tables horizontally */
+        @media (max-width: 1024px) {
+            .fees-main-2col {
+                grid-template-columns: 1fr;
+                gap: 25px;
+            }
             .fees-col-forms, .fees-col-invoices, .fees-col-logs {
                 display: block !important;
             }
         }
 
-        @media (max-width: 640px) {
-            .top-metrics-grid {
-                grid-template-columns: 1fr 1fr;
-                gap: 10px;
-                margin-bottom: 20px;
+        @media (max-width: 768px) {
+            .fees-page-header {
+                flex-direction: column;
+                align-items: stretch !important;
+                gap: 12px !important;
             }
-            .top-metrics-grid .portal-card {
-                padding: 12px 14px !important;
-                gap: 10px !important;
-                border-left-width: 3px !important;
-            }
-            .top-metrics-grid .stat-metric-icon {
-                width: 36px !important;
-                height: 36px !important;
-                font-size: 1rem !important;
-                border-radius: 8px !important;
-            }
-            .top-metrics-grid h3 {
-                font-size: 1.05rem !important;
-            }
-            .top-metrics-grid span {
-                font-size: 0.65rem !important;
-                line-height: 1.1;
-                display: block;
-            }
-
-            .form-grid-2col {
-                grid-template-columns: 1fr !important;
-                gap: 8px !important;
-            }
-
-            .portal-card {
-                padding: 16px 14px !important;
-                margin-bottom: 18px !important;
-            }
-
             .header-action-wrap {
                 width: 100%;
             }
@@ -615,22 +626,78 @@ if (!empty($settings['tuition_modes'])) {
                 justify-content: center;
             }
 
+            .top-metrics-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px;
+                margin-bottom: 20px;
+            }
+            .top-metrics-grid > .portal-card:last-child:nth-child(odd) {
+                grid-column: 1 / -1;
+            }
+            .top-metrics-grid .portal-card {
+                padding: 12px 14px !important;
+                gap: 10px !important;
+                border-left-width: 3px !important;
+            }
+            .top-metrics-grid .stat-metric-icon {
+                width: 38px !important;
+                height: 38px !important;
+                font-size: 1.05rem !important;
+                border-radius: 10px !important;
+            }
+            .top-metrics-grid h3 {
+                font-size: 1.1rem !important;
+            }
+            .top-metrics-grid span {
+                font-size: 0.65rem !important;
+                line-height: 1.1;
+                display: block;
+            }
+
             .table-header-controls {
                 flex-direction: column;
                 align-items: stretch !important;
-                gap: 10px !important;
+                gap: 12px !important;
             }
             .table-search-row {
-                display: flex;
-                flex-direction: column;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
                 gap: 8px;
                 width: 100%;
             }
-            .table-search-row input, .table-search-row select, .table-search-row button {
+            #search_bills_input {
+                grid-column: 1 / -1;
                 width: 100% !important;
+                font-size: 16px !important;
+                box-sizing: border-box;
+            }
+            .table-search-row select {
+                grid-column: 1 / -1;
+                width: 100% !important;
+                font-size: 16px !important;
+                box-sizing: border-box;
+            }
+            #btnBulkDelete {
+                grid-column: 1 / -1;
+                width: 100% !important;
+                justify-content: center;
+                box-sizing: border-box;
             }
 
-            /* Touch-friendly table adjustments on small devices */
+            .mobile-table-hint {
+                display: flex;
+            }
+
+            .portal-table-container {
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                border-radius: 12px;
+                width: 100%;
+            }
+            #billsTable {
+                min-width: 580px;
+                width: 100%;
+            }
             #billsTable td, #billsTable th {
                 padding: 12px 10px;
             }
@@ -641,8 +708,46 @@ if (!empty($settings['tuition_modes'])) {
                 margin-top: 6px;
             }
             .btn-quick-collect {
-                padding: 8px 12px;
-                font-size: 0.85rem;
+                padding: 7px 10px;
+                font-size: 0.8rem;
+                min-height: 34px;
+            }
+
+            .fees-col-logs .portal-table-container table {
+                min-width: 520px;
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .form-grid-2col {
+                grid-template-columns: 1fr !important;
+                gap: 8px !important;
+            }
+            .portal-card {
+                padding: 16px 14px !important;
+                margin-bottom: 18px !important;
+            }
+            .edit-modal-box {
+                padding: 20px 16px !important;
+                border-radius: 20px !important;
+                max-height: 92vh !important;
+                width: 100% !important;
+                margin: 10px !important;
+            }
+            .edit-modal-box input, 
+            .edit-modal-box select, 
+            .edit-modal-box textarea {
+                font-size: 16px !important;
+            }
+        }
+
+        @media (max-width: 400px) {
+            .top-metrics-grid {
+                grid-template-columns: 1fr;
+            }
+            .top-metrics-grid > .portal-card:last-child:nth-child(odd) {
+                grid-column: auto;
             }
         }
     </style>
@@ -651,7 +756,7 @@ if (!empty($settings['tuition_modes'])) {
     <?php include 'includes/sidebar.php'; ?>
 
     <main class="main-content">
-        <header style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+        <header class="fees-page-header" style="margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
             <div>
                 <h1 style="font-size: 1.65rem; margin-bottom: 4px;">Fee Management & Ledger</h1>
                 <p style="margin: 0; color:#64748b; font-size: 0.9rem;">Collect payments, generate manual fees, and view real-time billing logs.</p>
@@ -704,6 +809,16 @@ if (!empty($settings['tuition_modes'])) {
                 </div>
             </div>
 
+            <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #0284c7; background: #f0f9ff;">
+                <div class="stat-metric-icon" style="width: 44px; height: 44px; border-radius: 12px; background: #e0f2fe; color: #0284c7; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                    <i class="fas fa-bolt"></i>
+                </div>
+                <div style="min-width: 0;">
+                    <h3 style="margin: 0; font-size: 1.25rem; color: #0369a1; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">₹ <?php echo number_format($total_online_amount, 2); ?></h3>
+                    <span style="font-size: 0.72rem; color: #0284c7; font-weight: 800; text-transform: uppercase;">Online Collections (<?php echo $total_online_count; ?>)</span>
+                </div>
+            </div>
+
             <?php if ($total_adv_held > 0): ?>
             <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #ea580c; background: #fff7ed;">
                 <div class="stat-metric-icon" style="width: 44px; height: 44px; border-radius: 12px; background: #ffedd5; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
@@ -728,24 +843,11 @@ if (!empty($settings['tuition_modes'])) {
             </div>
         <?php endif; ?>
 
-        <!-- MOBILE SEGMENTED APP TABS (Visible on Android & Mobile) -->
-        <div class="fees-mobile-nav-tabs">
-            <button type="button" class="fees-tab-btn active" id="tabBtnForms" onclick="switchFeesTab('forms')">
-                <i class="fas fa-hand-holding-usd"></i> Collect / Forms
-            </button>
-            <button type="button" class="fees-tab-btn" id="tabBtnInvoices" onclick="switchFeesTab('invoices')">
-                <i class="fas fa-file-invoice"></i> Invoices
-            </button>
-            <button type="button" class="fees-tab-btn" id="tabBtnLogs" onclick="switchFeesTab('logs')">
-                <i class="fas fa-history"></i> Logs & Expenses
-            </button>
-        </div>
-
-        <!-- 2-COLUMN SIDE-BY-SIDE GRID LAYOUT (Adapts seamlessly on Android) -->
+        <!-- 2-COLUMN SIDE-BY-SIDE GRID LAYOUT (Stacks cleanly on mobile) -->
         <div class="fees-main-2col">
             
             <!-- LEFT COLUMN: CONTROLS & FORMS -->
-            <div class="fees-col-forms tab-visible" id="feesColForms">
+            <div class="fees-col-forms" id="feesColForms">
                 <!-- Form 1: Collect Fee -->
                 <div class="portal-card" style="margin-bottom: 25px;">
                     <h3 style="margin-bottom: 20px; font-size: 1.15rem; color:var(--portal-dark); font-weight:800; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">
@@ -761,7 +863,7 @@ if (!empty($settings['tuition_modes'])) {
                             <select name="student_id" id="collect_student_id" required>
                                 <option value="" data-due="0">-- Select Student --</option>
                                 <?php foreach($students_list as $student): ?>
-                                    <option value="<?php echo $student['id']; ?>" data-due="<?php echo $student['total_due']; ?>"><?php echo htmlspecialchars($student['name']); ?></option>
+                                    <option value="<?php echo $student['id']; ?>" data-due="<?php echo $student['total_due']; ?>"><?php echo htmlspecialchars($student['name']); ?><?php if(!empty($student['parent_name'])): ?> — S/o <?php echo htmlspecialchars($student['parent_name']); ?><?php endif; ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -819,7 +921,7 @@ if (!empty($settings['tuition_modes'])) {
                                             data-scholar-mode="<?php echo htmlspecialchars($student['scholar_mode'] ?? ''); ?>"
                                             data-base-fee="<?php echo $student['base_fee']; ?>"
                                             data-monthly-discount="<?php echo $student['monthly_discount']; ?>">
-                                        <?php echo htmlspecialchars($student['name']); ?>
+                                        <?php echo htmlspecialchars($student['name']); ?><?php if(!empty($student['parent_name'])): ?> — S/o <?php echo htmlspecialchars($student['parent_name']); ?><?php endif; ?>
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -874,7 +976,7 @@ if (!empty($settings['tuition_modes'])) {
                                 <option value="">-- Select Student --</option>
                                 <?php foreach($students_list as $student): ?>
                                     <option value="<?php echo $student['id']; ?>">
-                                        <?php echo htmlspecialchars($student['name']); ?> (<?php echo htmlspecialchars($student['scholar_mode'] ?? 'Day Scholar'); ?>)
+                                        <?php echo htmlspecialchars($student['name']); ?><?php if(!empty($student['parent_name'])): ?> — S/o <?php echo htmlspecialchars($student['parent_name']); ?><?php endif; ?> (<?php echo htmlspecialchars($student['scholar_mode'] ?? 'Day Scholar'); ?>)
                                     </option>
                                 <?php endforeach; ?>
                             </select>
@@ -901,9 +1003,9 @@ if (!empty($settings['tuition_modes'])) {
             </div>
 
             <!-- RIGHT COLUMN: MASTER LEDGER & INVOICES TABLES -->
-            <div style="display:flex; flex-direction:column; gap:25px;">
+            <div style="display:flex; flex-direction:column; gap:25px; min-width:0;">
                 <!-- List 1: Billed Invoices -->
-                <div class="portal-card fees-col-invoices tab-visible" id="feesColInvoices" style="margin-bottom: 0;">
+                <div class="portal-card fees-col-invoices" id="feesColInvoices" style="margin-bottom: 0;">
                     <form id="bulkDeleteForm" method="POST">
                         <input type="hidden" name="bulk_delete_bills" value="1">
                         
@@ -925,6 +1027,9 @@ if (!empty($settings['tuition_modes'])) {
                             </div>
                         </div>
 
+                        <div class="mobile-table-hint">
+                            <i class="fas fa-arrows-left-right"></i> Scroll table sideways to view full invoice &amp; actions
+                        </div>
                         <div class="portal-table-container">
                             <table id="billsTable">
                                 <thead>
@@ -1012,11 +1117,148 @@ if (!empty($settings['tuition_modes'])) {
 
                 <!-- List 2: Recent Collections & List 3: Daily Student Expenses Log -->
                 <div class="fees-col-logs" id="feesColLogs">
+                    
+                    <!-- NEW SECTION: Online App & Razorpay Payments Ledger with Detailed Timestamps -->
+                    <div class="portal-card" id="onlineLedgerCard" style="margin-bottom: 25px; border-top: 4px solid #0284c7;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; border-bottom:2px solid #f1f5f9; padding-bottom:14px;">
+                            <div>
+                                <h3 style="margin:0; font-size: 1.18rem; font-weight:800; color:var(--portal-dark); display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                    <i class="fas fa-bolt" style="color:#0284c7;"></i> Online Payments (Razorpay Gateway)
+                                    <span style="font-size:0.75rem; font-weight:800; background:#e0f2fe; color:#0369a1; padding:3px 8px; border-radius:6px; text-transform:uppercase;">
+                                        <i class="fas fa-circle-check"></i> Live Gateway
+                                    </span>
+                                </h3>
+                                <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">
+                                    Transactions processed strictly via Razorpay Payment Gateway with real-time timestamps
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                <span style="font-size:0.8rem; font-weight:800; color:#15803d; background:#dcfce7; padding:6px 12px; border-radius:8px; border:1px solid #bbf7d0;">
+                                    Total: ₹ <?php echo number_format($total_online_amount, 2); ?>
+                                </span>
+                                <input type="text" id="search_online_input" onkeyup="filterOnlineTable()" placeholder="🔍 Search online payment..." style="padding:7px 12px; border-radius:8px; border:1px solid #cbd5e1; font-size:0.82rem; min-width:160px;">
+                            </div>
+                        </div>
+
+                        <div class="mobile-table-hint">
+                            <i class="fas fa-arrows-left-right"></i> Scroll table sideways to view online transaction details &amp; exact time
+                        </div>
+                        <div class="portal-table-container">
+                            <table id="onlinePaymentsTable">
+                                <thead>
+                                    <tr>
+                                        <th>Txn / Rcpt ID</th>
+                                        <th>Exact Date &amp; Time</th>
+                                        <th>Student Details</th>
+                                        <th>Month / For</th>
+                                        <th>Payment Channel</th>
+                                        <th>Amount Paid</th>
+                                        <th>Status</th>
+                                        <th>Receipt</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($online_payments_list)): ?>
+                                        <tr>
+                                            <td colspan="8" style="text-align: center; color: #94a3b8; padding: 35px 20px;">
+                                                <div style="margin-bottom:8px; color:#cbd5e1; font-size:2rem;"><i class="fas fa-credit-card"></i></div>
+                                                <strong style="color:#64748b; font-size:0.95rem;">No online or app payments recorded yet.</strong>
+                                                <div style="font-size:0.8rem; color:#94a3b8; margin-top:4px;">When parents pay through Razorpay or the mobile app, transactions with exact timestamps will appear here.</div>
+                                            </td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php foreach($online_payments_list as $op): 
+                                            $clean_method = $op['payment_method'];
+                                            $rzp_code = '';
+                                            if (preg_match('/(pay_[a-zA-Z0-9]+)/', $clean_method, $matches)) {
+                                                $rzp_code = $matches[1];
+                                            }
+                                            $is_rzp = (stripos($clean_method, 'Razorpay') !== false || !empty($rzp_code));
+                                            
+                                            // Format exact date and time
+                                            $dt_timestamp = !empty($op['created_at']) ? strtotime($op['created_at']) : strtotime($op['payment_date']);
+                                            $formatted_date = date('d M, Y', $dt_timestamp);
+                                            $formatted_time = date('h:i:s A', $dt_timestamp);
+                                        ?>
+                                            <tr class="online-payment-row">
+                                                <td>
+                                                    <span style="font-family:monospace; font-weight:800; color:#1e293b; font-size:0.85rem;">
+                                                        #RCPT-<?php echo str_pad($op['id'], 4, '0', STR_PAD_LEFT); ?>
+                                                    </span>
+                                                    <?php if (!empty($rzp_code)): ?>
+                                                        <div style="font-family:monospace; font-size:0.75rem; color:#0284c7; font-weight:700; margin-top:2px;" title="Razorpay Payment ID">
+                                                            <i class="fas fa-receipt"></i> <?php echo htmlspecialchars($rzp_code); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <div style="font-weight:800; color:#1e293b; font-size:0.85rem; white-space:nowrap;">
+                                                        <i class="far fa-calendar-check" style="color:#0284c7; margin-right:4px;"></i> <?php echo $formatted_date; ?>
+                                                    </div>
+                                                    <div class="time-pill">
+                                                        <i class="far fa-clock"></i> <?php echo $formatted_time; ?>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <strong style="color:var(--portal-dark); font-size:0.9rem;"><?php echo htmlspecialchars($op['student_name']); ?></strong>
+                                                    <div style="display:flex; gap:5px; align-items:center; flex-wrap:wrap; margin-top:2px;">
+                                                        <?php if (!empty($op['reg_no'])): ?>
+                                                            <span style="font-size:0.72rem; font-family:monospace; color:#475569; background:#f1f5f9; padding:1px 5px; border-radius:4px;">
+                                                                <?php echo htmlspecialchars($op['reg_no']); ?>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                        <span style="font-size:0.72rem; color:#64748b;">
+                                                            <?php echo htmlspecialchars($op['class_admitted'] ?? 'Class'); ?>
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span style="font-weight:700; color:var(--portal-blue); font-size:0.85rem; white-space:nowrap;">
+                                                        <?php echo htmlspecialchars($op['month_for']); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <?php if ($is_rzp): ?>
+                                                        <span class="channel-badge razorpay">
+                                                            <i class="fas fa-bolt"></i> Razorpay Gateway
+                                                        </span>
+                                                    <?php else: ?>
+                                                        <span class="channel-badge app">
+                                                            <i class="fas fa-mobile-screen"></i> Parent Mobile App
+                                                        </span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <span class="amount-tag" style="background:#dcfce7; color:#15803d; font-size:0.92rem; font-weight:800; white-space:nowrap;">
+                                                        ₹ <?php echo number_format($op['amount'], 2); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span class="status-badge status-paid" style="display:inline-flex; align-items:center; gap:4px; font-size:0.72rem; white-space:nowrap;">
+                                                        <i class="fas fa-check-circle"></i> Captured
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <a href="receipt.php?id=<?php echo $op['id']; ?>" target="_blank" class="btn-quick-collect" style="padding:5px 10px; font-size:0.78rem; text-decoration:none; white-space:nowrap;" title="View & Print Official Receipt">
+                                                        <i class="fas fa-receipt"></i> Print Receipt
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- List 2: Recent Collections -->
                     <div class="portal-card" style="margin-bottom: 25px;">
                         <h3 style="margin-bottom: 18px; font-size: 1.15rem; font-weight:800; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">
                             <i class="fas fa-history" style="color:var(--portal-blue); margin-right:8px;"></i> Recent Payment Logs
                         </h3>
+                        <div class="mobile-table-hint">
+                            <i class="fas fa-arrows-left-right"></i> Scroll table sideways to view details
+                        </div>
                         <div class="portal-table-container">
                             <table>
                                 <thead>
@@ -1024,7 +1266,7 @@ if (!empty($settings['tuition_modes'])) {
                                         <th>Student</th>
                                         <th>Month</th>
                                         <th>Amount</th>
-                                        <th>Date / Method</th>
+                                        <th>Date &amp; Time / Method</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1039,8 +1281,20 @@ if (!empty($settings['tuition_modes'])) {
                                                 <td><span style="font-weight:700; color:var(--portal-blue); font-size:0.85rem;"><?php echo htmlspecialchars($p['month_for']); ?></span></td>
                                                 <td><span class="amount-tag">₹ <?php echo number_format($p['amount'], 2); ?></span></td>
                                                 <td>
-                                                    <div style="font-weight:700; color:#334155; font-size:0.82rem;"><?php echo date('d M, Y', strtotime($p['payment_date'])); ?></div>
-                                                    <small style="color:#64748b;"><i class="fas fa-wallet"></i> <?php echo htmlspecialchars($p['payment_method']); ?></small>
+                                                    <div style="font-weight:700; color:#334155; font-size:0.82rem; white-space:nowrap;">
+                                                        <?php echo date('d M, Y', strtotime($p['payment_date'])); ?>
+                                                        <?php if (!empty($p['created_at'])): ?>
+                                                            <span style="color:#b45309; font-weight:600; font-size:0.75rem; margin-left:4px;">
+                                                                <i class="far fa-clock"></i> <?php echo date('h:i A', strtotime($p['created_at'])); ?>
+                                                            </span>
+                                                        <?php endif; ?>
+                                                    </div>
+                                                    <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:2px;">
+                                                        <small style="color:#64748b;"><i class="fas fa-wallet"></i> <?php echo htmlspecialchars($p['payment_method']); ?></small>
+                                                        <a href="receipt.php?id=<?php echo $p['id']; ?>" target="_blank" class="btn-quick-collect" style="padding:2px 7px; font-size:0.72rem; min-height:24px;" title="Print Receipt">
+                                                            <i class="fas fa-receipt"></i>
+                                                        </a>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         <?php endwhile; ?>
@@ -1061,6 +1315,9 @@ if (!empty($settings['tuition_modes'])) {
                             </span>
                         </div>
 
+                        <div class="mobile-table-hint">
+                            <i class="fas fa-arrows-left-right"></i> Scroll table sideways to view details
+                        </div>
                         <div class="portal-table-container">
                             <table>
                                 <thead>
@@ -1160,37 +1417,6 @@ if (!empty($settings['tuition_modes'])) {
     </div>
 
     <script>
-        // Mobile Segmented Tab Switcher for Android
-        function switchFeesTab(tab) {
-            const btnForms = document.getElementById('tabBtnForms');
-            const btnInvoices = document.getElementById('tabBtnInvoices');
-            const btnLogs = document.getElementById('tabBtnLogs');
-
-            const colForms = document.getElementById('feesColForms');
-            const colInvoices = document.getElementById('feesColInvoices');
-            const colLogs = document.getElementById('feesColLogs');
-
-            // Remove active classes
-            if (btnForms) btnForms.classList.remove('active');
-            if (btnInvoices) btnInvoices.classList.remove('active');
-            if (btnLogs) btnLogs.classList.remove('active');
-
-            if (colForms) colForms.classList.remove('tab-visible');
-            if (colInvoices) colInvoices.classList.remove('tab-visible');
-            if (colLogs) colLogs.classList.remove('tab-visible');
-
-            if (tab === 'forms') {
-                if (btnForms) btnForms.classList.add('active');
-                if (colForms) colForms.classList.add('tab-visible');
-            } else if (tab === 'invoices') {
-                if (btnInvoices) btnInvoices.classList.add('active');
-                if (colInvoices) colInvoices.classList.add('tab-visible');
-            } else if (tab === 'logs') {
-                if (btnLogs) btnLogs.classList.add('active');
-                if (colLogs) colLogs.classList.add('tab-visible');
-            }
-        }
-
         // Select All Checkbox Handler
         function toggleSelectAllBills(master) {
             const checkboxes = document.querySelectorAll('.bill-checkbox');
@@ -1329,6 +1555,25 @@ if (!empty($settings['tuition_modes'])) {
                 const remarkText = remarkCol ? remarkCol.textContent.toLowerCase() : "";
 
                 if (nameText.includes(filter) || monthText.includes(filter) || remarkText.includes(filter)) {
+                    rows[i].style.display = "";
+                } else {
+                    rows[i].style.display = "none";
+                }
+            }
+        }
+
+        // Quick Search Filter for Online Payments Table
+        function filterOnlineTable() {
+            const input = document.getElementById("search_online_input");
+            if (!input) return;
+            const filter = input.value.toLowerCase();
+            const table = document.getElementById("onlinePaymentsTable");
+            if (!table) return;
+            const rows = table.getElementsByClassName("online-payment-row");
+
+            for (let i = 0; i < rows.length; i++) {
+                const text = rows[i].textContent || rows[i].innerText;
+                if (text.toLowerCase().indexOf(filter) > -1) {
                     rows[i].style.display = "";
                 } else {
                     rows[i].style.display = "none";

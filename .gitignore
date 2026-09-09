@@ -5,3 +5,5 @@ config/service-account.json
 logs/*
 uploads/*
 !uploads/.gitkeep
+.agents/*
+AGENTS.md

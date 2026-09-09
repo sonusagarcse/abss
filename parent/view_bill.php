@@ -299,24 +299,41 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
                     }
                     if (empty($rem)) continue;
 
-                    $is_payment_row = (strpos(strtolower($rem), 'payment received') !== false || strpos($rem, '-₹') !== false);
+                    $is_payment_row = (
+                        stripos($rem, 'payment received') !== false || 
+                        stripos($rem, 'partial payment') !== false || 
+                        stripos($rem, 'payment of') !== false || 
+                        stripos($rem, 'paid') !== false || 
+                        strpos($rem, '-₹') !== false
+                    );
                     $item_desc = $rem;
                     $item_month = $bill['month_for'];
                     $item_amt = '';
 
                     if ($is_payment_row) {
+                        // Extract paid amount
                         if (preg_match('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $rem, $amt_match)) {
                             $item_amt = '-₹ ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
-                        } elseif (preg_match('/-?\s*[₹Rs\.]\s*([0-9\.,]+)/i', $rem, $amt_match)) {
+                        } elseif (preg_match('/[₹Rs\.]\s*([0-9\.,]+)/i', $rem, $amt_match)) {
                             $item_amt = '-₹ ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
                         } else {
                             $item_amt = '-₹ 0.00';
                         }
+
+                        // Extract receipt number if available
+                        $rcpt_tag = '';
+                        if (preg_match('/(Rcpt\s*#?[0-9]+)/i', $rem, $r_match)) {
+                            $rcpt_tag = ' (' . $r_match[1] . ')';
+                        }
+
+                        // Extract payment date
                         if (preg_match('/[0-9]{4}-[0-9]{2}-[0-9]{2}/', $rem, $d_match)) {
-                            $item_month = date('d M, Y', strtotime($d_match[0]));
-                            $item_desc = "Payment received on " . date('d M, Y', strtotime($d_match[0]));
+                            $formatted_pay_date = date('d M, Y', strtotime($d_match[0]));
+                            $item_month = $formatted_pay_date;
+                            $item_desc = "Payment received on " . $formatted_pay_date . $rcpt_tag;
                         } else {
-                            $item_desc = "Payment received";
+                            $item_month = $bill['month_for'];
+                            $item_desc = "Payment received" . $rcpt_tag;
                         }
                     } else {
                         // Extract month string from () or [] if present in item remark
@@ -350,10 +367,10 @@ if ($bill['status'] === 'unpaid' && !empty($razorpay_key) && !empty($razorpay_se
                         if (empty($item_desc)) $item_desc = "Tuition Fee";
                     }
                     ?>
-                    <tr style="<?php echo $is_payment_row ? 'background: #f0fdf4;' : ''; ?>">
-                        <td class="text-center"><?php echo $sno++; ?></td>
+                    <tr style="<?php echo $is_payment_row ? 'background: #f0fdf4; border-bottom: 1px solid #bbf7d0;' : ''; ?>">
+                        <td class="text-center" style="<?php echo $is_payment_row ? 'color: #15803d; font-weight: 800;' : ''; ?>"><?php echo $sno++; ?></td>
                         <td style="font-weight: 700; color: <?php echo $is_payment_row ? '#15803d' : '#1a237e'; ?>;">
-                            <?php if ($is_payment_row): ?><i class="fas fa-check-circle" style="margin-right: 5px;"></i><?php endif; ?>
+                            <?php if ($is_payment_row): ?><i class="fas fa-check-circle" style="margin-right: 6px; color: #16a34a;"></i><?php endif; ?>
                             <?php echo htmlspecialchars($item_desc); ?>
                         </td>
                         <td style="font-weight: 700; color: <?php echo $is_payment_row ? '#166534' : '#2563eb'; ?>;">
