@@ -133,7 +133,7 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
 
 <!-- Mobile Sticky Glass Header -->
 <div class="mobile-header">
-    <div class="mobile-brand">
+    <div class="mobile-brand" onclick="window.location.href='<?php echo $admin_url; ?>dashboard.php'" style="cursor:pointer;" title="Admin Dashboard">
         <img src="<?php echo $assets_url; ?>logo.png" alt="Logo">
         <span>ABSS Command Center</span>
     </div>
@@ -141,6 +141,44 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
         <i class="fas fa-bars"></i>
     </button>
 </div>
+
+<!-- Mobile Bottom Navigation Bar (App Dock) -->
+<nav class="mobile-bottom-nav" id="adminBottomNav">
+    <ul>
+        <li>
+            <a href="<?php echo $admin_url; ?>students.php" class="<?php echo $current_page == 'students.php' ? 'active' : ''; ?>">
+                <i class="fas fa-user-graduate"></i>
+                <span>Students</span>
+            </a>
+        </li>
+        <li>
+            <a href="<?php echo $admin_url; ?>notifications.php" class="<?php echo $is_notif_page ? 'active' : ''; ?>">
+                <i class="fas fa-bell"></i>
+                <span>Alerts</span>
+            </a>
+        </li>
+        <li class="nav-center-item">
+            <a href="<?php echo $admin_url; ?>fees.php" class="<?php echo $current_page == 'fees.php' ? 'active' : ''; ?>" title="Fee Management &amp; Ledger">
+                <div class="center-btn-bubble">
+                    <i class="fas fa-wallet"></i>
+                </div>
+                <span class="center-label">Fees</span>
+            </a>
+        </li>
+        <li>
+            <a href="<?php echo $admin_url; ?>gallery.php" class="<?php echo $current_page == 'gallery.php' ? 'active' : ''; ?>">
+                <i class="fas fa-images"></i>
+                <span>Gallery</span>
+            </a>
+        </li>
+        <li>
+            <a href="javascript:void(0);" onclick="toggleSidebar()" id="adminBottomNavMenuBtn">
+                <i class="fas fa-bars"></i>
+                <span>Menu</span>
+            </a>
+        </li>
+    </ul>
+</nav>
 
 <!-- Mobile Dimming Background Backdrop Overlay -->
 <div class="sidebar-overlay" onclick="toggleSidebar()"></div>

@@ -67,103 +67,189 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_bill'])) {
     }
 }
 
-// Handle Payment Receipt
+// Handle Payment Receipt or Rebate
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
-    $sid = $_POST['student_id'];
-    $amount = $_POST['amount'];
+    $sid = (int)$_POST['student_id'];
+    $amount = (float)$_POST['amount'];
     $date = $_POST['payment_date'];
     $month = $_POST['month_for'];
     $method = $_POST['payment_method'];
+    $is_rebate = isset($_POST['is_rebate']) && $_POST['is_rebate'] == '1';
+    $rebate_reason = !empty($_POST['rebate_reason']) ? trim($_POST['rebate_reason']) : 'Parent concession / fee waiver';
 
-    $stmt = $conn->prepare("INSERT INTO fee_payments (student_id, amount, payment_date, month_for, payment_method) VALUES (?, ?, ?, ?, ?)");
-    $stmt->bind_param("idsss", $sid, $amount, $date, $month, $method);
-    
-    if ($stmt->execute()) {
-        $pay_id = $conn->insert_id;
-        $msg = "Payment recorded successfully.";
+    if ($sid > 0 && $amount > 0) {
+        if ($is_rebate) {
+            // Record as Rebate / Waiver in dedicated fee_rebates table (NOT in fee_payments)
+            $stmt = $conn->prepare("INSERT INTO fee_rebates (student_id, amount, rebate_date, month_for, remarks) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("idsss", $sid, $amount, $date, $month, $rebate_reason);
 
-        // Sequentially allocate payment across unpaid generated bills (oldest to newest)
-        $rem_pay = (float)$amount;
-        $unpaid_bills_stmt = $conn->prepare("
-            SELECT id, amount, remark, billing_date 
-            FROM fees_generated 
-            WHERE student_id = ? AND status = 'unpaid' 
-            ORDER BY billing_date ASC, id ASC
-        ");
-        $unpaid_bills_stmt->bind_param("i", $sid);
-        $unpaid_bills_stmt->execute();
-        $unpaid_bills_res = $unpaid_bills_stmt->get_result();
+            if ($stmt->execute()) {
+                $rebate_id = $conn->insert_id;
+                $msg = "Fee rebate of ₹" . number_format($amount, 2) . " granted successfully! Dues have been waived and this amount is excluded from monthly collection totals.";
 
-        while ($rem_pay > 0 && ($bill = $unpaid_bills_res->fetch_assoc())) {
-            $bill_id = (int)$bill['id'];
-            $bill_amt = (float)$bill['amount'];
-            $existing_rem = trim($bill['remark'] ?? '');
+                // Sequentially allocate rebate across unpaid generated bills (oldest to newest) to clear/reduce student's due
+                $rem_reb = (float)$amount;
+                $unpaid_bills_stmt = $conn->prepare("
+                    SELECT id, amount, remark, billing_date 
+                    FROM fees_generated 
+                    WHERE student_id = ? AND status = 'unpaid' 
+                    ORDER BY billing_date ASC, id ASC
+                ");
+                $unpaid_bills_stmt->bind_param("i", $sid);
+                $unpaid_bills_stmt->execute();
+                $unpaid_bills_res = $unpaid_bills_stmt->get_result();
 
-            if ($rem_pay >= $bill_amt) {
-                // Fully cleared this bill
-                $payment_tag = "Payment received on $date (-₹" . number_format($bill_amt, 2) . ") (Rcpt #$pay_id)";
-                $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $payment_tag) : $payment_tag;
-                
-                $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = 0, status = 'paid', remark = ? WHERE id = ?");
-                $u_stmt->bind_param("si", $new_remark, $bill_id);
-                $u_stmt->execute();
-                
-                $rem_pay = round($rem_pay - $bill_amt, 2);
+                while ($rem_reb > 0 && ($bill = $unpaid_bills_res->fetch_assoc())) {
+                    $bill_id = (int)$bill['id'];
+                    $bill_amt = (float)$bill['amount'];
+                    $existing_rem = trim($bill['remark'] ?? '');
+
+                    if ($rem_reb >= $bill_amt) {
+                        // Fully cleared this bill with rebate
+                        $rebate_tag = "Fee rebate/waiver on $date (-₹" . number_format($bill_amt, 2) . ") (Rebate #$rebate_id)";
+                        $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $rebate_tag) : $rebate_tag;
+                        
+                        $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = 0, status = 'paid', remark = ? WHERE id = ?");
+                        $u_stmt->bind_param("si", $new_remark, $bill_id);
+                        $u_stmt->execute();
+                        
+                        $rem_reb = round($rem_reb - $bill_amt, 2);
+                    } else {
+                        // Partial rebate towards this bill
+                        $new_bill_amt = round($bill_amt - $rem_reb, 2);
+                        $rebate_tag = "Fee rebate/waiver on $date (-₹" . number_format($rem_reb, 2) . ") (Rebate #$rebate_id)";
+                        $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $rebate_tag) : $rebate_tag;
+                        
+                        $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = 'unpaid', remark = ? WHERE id = ?");
+                        $u_stmt->bind_param("dsi", $new_bill_amt, $new_remark, $bill_id);
+                        $u_stmt->execute();
+                        
+                        $rem_reb = 0;
+                    }
+                }
+
+                // Log Activity
+                $st_name_stmt = $conn->prepare("SELECT name FROM students WHERE id = ?");
+                $st_name_stmt->bind_param("i", $sid);
+                $st_name_stmt->execute();
+                $st_name_row = $st_name_stmt->get_result()->fetch_assoc();
+                $st_name = $st_name_row['name'] ?? 'ID ' . $sid;
+                if (function_exists('log_activity')) {
+                    log_activity('fee_rebate_recorded', "Recorded rebate/concession of ₹" . number_format($amount, 2) . " for student $st_name (month: $month)");
+                }
             } else {
-                // Partial payment towards this bill
-                $new_bill_amt = round($bill_amt - $rem_pay, 2);
-                $payment_tag = "Payment received on $date (-₹" . number_format($rem_pay, 2) . ") (Rcpt #$pay_id)";
-                $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $payment_tag) : $payment_tag;
+                $err = "Error recording fee rebate: " . $conn->error;
+            }
+        } else {
+            // Standard fee collection payment (Recorded in fee_payments)
+            $stmt = $conn->prepare("INSERT INTO fee_payments (student_id, amount, payment_date, month_for, payment_method) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("idsss", $sid, $amount, $date, $month, $method);
+            
+            if ($stmt->execute()) {
+                $pay_id = $conn->insert_id;
+                $msg = "Payment recorded successfully.";
+
+                // Sequentially allocate payment across unpaid generated bills (oldest to newest)
+                $rem_pay = (float)$amount;
+                $unpaid_bills_stmt = $conn->prepare("
+                    SELECT id, amount, remark, billing_date 
+                    FROM fees_generated 
+                    WHERE student_id = ? AND status = 'unpaid' 
+                    ORDER BY billing_date ASC, id ASC
+                ");
+                $unpaid_bills_stmt->bind_param("i", $sid);
+                $unpaid_bills_stmt->execute();
+                $unpaid_bills_res = $unpaid_bills_stmt->get_result();
+
+                while ($rem_pay > 0 && ($bill = $unpaid_bills_res->fetch_assoc())) {
+                    $bill_id = (int)$bill['id'];
+                    $bill_amt = (float)$bill['amount'];
+                    $existing_rem = trim($bill['remark'] ?? '');
+
+                    if ($rem_pay >= $bill_amt) {
+                        // Fully cleared this bill
+                        $payment_tag = "Payment received on $date (-₹" . number_format($bill_amt, 2) . ") (Rcpt #$pay_id)";
+                        $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $payment_tag) : $payment_tag;
+                        
+                        $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = 0, status = 'paid', remark = ? WHERE id = ?");
+                        $u_stmt->bind_param("si", $new_remark, $bill_id);
+                        $u_stmt->execute();
+                        
+                        $rem_pay = round($rem_pay - $bill_amt, 2);
+                    } else {
+                        // Partial payment towards this bill
+                        $new_bill_amt = round($bill_amt - $rem_pay, 2);
+                        $payment_tag = "Payment received on $date (-₹" . number_format($rem_pay, 2) . ") (Rcpt #$pay_id)";
+                        $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $payment_tag) : $payment_tag;
+                        
+                        $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = 'unpaid', remark = ? WHERE id = ?");
+                        $u_stmt->bind_param("dsi", $new_bill_amt, $new_remark, $bill_id);
+                        $u_stmt->execute();
+                        
+                        $rem_pay = 0;
+                    }
+                }
+
+                // Fetch parent email if linked for billing receipt
+                $student_stmt = $conn->prepare("
+                    SELECT s.name AS student_name, p.parent_name, p.email AS parent_email 
+                    FROM students s 
+                    LEFT JOIN parents p ON s.parent_id = p.id 
+                    WHERE s.id = ?
+                ");
+                $student_stmt->bind_param("i", $sid);
+                $student_stmt->execute();
+                $student_res = $student_stmt->get_result()->fetch_assoc();
                 
-                $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = 'unpaid', remark = ? WHERE id = ?");
-                $u_stmt->bind_param("dsi", $new_bill_amt, $new_remark, $bill_id);
-                $u_stmt->execute();
-                
-                $rem_pay = 0;
+                // Log Fee Payment Recorded
+                $st_name = $student_res['student_name'] ?? 'ID ' . $sid;
+                if (function_exists('log_activity')) {
+                    log_activity('fee_payment_recorded', "Recorded payment of ₹" . number_format($amount, 2) . " for student $st_name (month: $month)");
+                }
+
+                if ($student_res && !empty($student_res['parent_email'])) {
+                    require_once __DIR__ . '/../includes/mail_helper.php';
+                    
+                    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                    $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+                    $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
+                    
+                    $receipt_url = "$base_url/parent/receipt.php?id=" . $pay_id;
+                    $email_html = get_fee_paid_template(
+                        $student_res['student_name'], 
+                        $amount, 
+                        $month, 
+                        $date, 
+                        $receipt_url
+                    );
+                    
+                    send_smtp_email(
+                        $student_res['parent_email'], 
+                        "Fee Payment Receipt - " . $student_res['student_name'] . " - ABSS", 
+                        $email_html
+                    );
+                }
+            } else {
+                $err = "Error recording payment: " . $conn->error;
             }
         }
+    } else {
+        $err = "Please select a student and enter a valid amount.";
+    }
+}
 
-        // Fetch parent email if linked for billing receipt
-        $student_stmt = $conn->prepare("
-            SELECT s.name AS student_name, p.parent_name, p.email AS parent_email 
-            FROM students s 
-            LEFT JOIN parents p ON s.parent_id = p.id 
-            WHERE s.id = ?
-        ");
-        $student_stmt->bind_param("i", $sid);
-        $student_stmt->execute();
-        $student_res = $student_stmt->get_result()->fetch_assoc();
-        
-        // Log Fee Payment Recorded
-        $st_name = $student_res['student_name'] ?? 'ID ' . $sid;
+// Handle Single Delete Rebate Entry
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_rebate'])) {
+    $rebate_id = (int)$_POST['rebate_id'];
+    $stmt = $conn->prepare("DELETE FROM fee_rebates WHERE id = ?");
+    $stmt->bind_param("i", $rebate_id);
+    if ($stmt->execute()) {
+        $msg = "Rebate record #$rebate_id deleted successfully.";
         if (function_exists('log_activity')) {
-            log_activity('fee_payment_recorded', "Recorded payment of ₹" . number_format($amount, 2) . " for student $st_name (month: $month)");
-        }
-
-        if ($student_res && !empty($student_res['parent_email'])) {
-            require_once __DIR__ . '/../includes/mail_helper.php';
-            
-            $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-            $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
-            $base_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss" : "$protocol://$host";
-            
-            $receipt_url = "$base_url/parent/receipt.php?id=" . $pay_id;
-            $email_html = get_fee_paid_template(
-                $student_res['student_name'], 
-                $amount, 
-                $month, 
-                $date, 
-                $receipt_url
-            );
-            
-            send_smtp_email(
-                $student_res['parent_email'], 
-                "Fee Payment Receipt - " . $student_res['student_name'] . " - ABSS", 
-                $email_html
-            );
+            log_activity('fee_rebate_deleted', "Deleted fee rebate record #$rebate_id");
         }
     } else {
-        $err = "Error recording payment.";
+        $err = "Failed to delete rebate entry: " . $conn->error;
     }
 }
 
@@ -443,6 +529,19 @@ $recent_expenses = $conn->query("
     ORDER BY e.expense_date DESC, e.id DESC 
     LIMIT 100
 ");
+
+// Fetch fee rebates log (Concessions & Waivers)
+$rebates_res = $conn->query("
+    SELECT r.*, s.name, s.parent_name, s.reg_no, s.class_admitted
+    FROM fee_rebates r 
+    JOIN students s ON r.student_id = s.id 
+    ORDER BY r.created_at DESC, r.id DESC 
+    LIMIT 100
+");
+$rebates_total_q = $conn->query("SELECT COALESCE(SUM(amount), 0) as total FROM fee_rebates");
+$total_rebate_amount = (float)($rebates_total_q ? $rebates_total_q->fetch_assoc()['total'] : 0);
+$month_rebate_q = $conn->query("SELECT COALESCE(SUM(amount), 0) as total FROM fee_rebates WHERE MONTH(rebate_date) = MONTH(CURDATE()) AND YEAR(rebate_date) = YEAR(CURDATE())");
+$this_month_rebate = (float)($month_rebate_q ? $month_rebate_q->fetch_assoc()['total'] : 0);
 
 // Retrieve tuition modes from settings database table
 $tuition_modes = [];
@@ -1054,6 +1153,16 @@ if (!empty($settings['tuition_modes'])) {
                 </div>
             </div>
 
+            <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #d97706; background: #fffbeb;">
+                <div class="stat-metric-icon" style="width: 44px; height: 44px; border-radius: 12px; background: #fef3c7; color: #d97706; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
+                    <i class="fas fa-hand-holding-heart"></i>
+                </div>
+                <div style="min-width: 0;">
+                    <h3 style="margin: 0; font-size: 1.25rem; color: #92400e; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">₹ <?php echo number_format($total_rebate_amount, 2); ?></h3>
+                    <span style="font-size: 0.72rem; color: #b45309; font-weight: 800; text-transform: uppercase;">Total Rebates / Waivers</span>
+                </div>
+            </div>
+
             <?php if ($total_adv_held > 0): ?>
             <div class="portal-card" style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; border-left: 4px solid #ea580c; background: #fff7ed;">
                 <div class="stat-metric-icon" style="width: 44px; height: 44px; border-radius: 12px; background: #ffedd5; color: #ea580c; display: flex; align-items: center; justify-content: center; font-size: 1.25rem; flex-shrink: 0;">
@@ -1134,7 +1243,23 @@ if (!empty($settings['tuition_modes'])) {
                                 <input type="date" name="payment_date" value="<?php echo date('Y-m-d'); ?>" required>
                             </div>
                         </div>
-                        <button type="submit" class="btn-portal" style="width: 100%; padding: 13px;">
+
+                        <!-- Rebate / Waiver Option -->
+                        <div style="background: #fffbeb; border: 1px dashed #f59e0b; border-radius: 8px; padding: 12px 14px; margin-bottom: 16px;">
+                            <label style="display: flex; align-items: center; gap: 9px; cursor: pointer; margin: 0; font-weight: 800; color: #b45309; font-size: 0.88rem;">
+                                <input type="checkbox" name="is_rebate" id="is_rebate_checkbox" value="1" style="width: 18px; height: 18px; cursor: pointer; accent-color: #d97706;" onchange="toggleRebateFields(this)">
+                                <span><i class="fas fa-hand-holding-heart"></i> Mark as Rebate / Discount (छूट / Waived Amount)</span>
+                            </label>
+                            <div id="rebate_help_text" style="font-size: 0.76rem; color: #78350f; margin-top: 5px; line-height: 1.4;">
+                                Tick this if parent requested a discount or fee reduction. This will clear the student's dues without adding to monthly collection total.
+                            </div>
+                            <div id="rebate_reason_group" style="display: none; margin-top: 10px;">
+                                <label style="font-size: 0.78rem; font-weight: 700; color: #92400e; display:block; margin-bottom:4px;">Rebate Reason / Note (Optional)</label>
+                                <input type="text" name="rebate_reason" placeholder="e.g. Parent requested concession, Principal approved discount" style="width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid #fcd34d; font-size: 0.82rem; background: #ffffff;">
+                            </div>
+                        </div>
+
+                        <button type="submit" id="record_payment_btn" class="btn-portal" style="width: 100%; padding: 13px;">
                             <i class="fas fa-receipt"></i> Record Fee Payment
                         </button>
                     </form>
@@ -1553,6 +1678,112 @@ if (!empty($settings['tuition_modes'])) {
                         </div>
                     </div>
 
+                    <!-- List: Fee Rebate & Concession Ledger -->
+                    <div class="portal-card" id="rebatesLedger" style="margin-bottom: 25px; border-top: 4px solid #d97706;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:18px; border-bottom:2px solid #f1f5f9; padding-bottom:14px;">
+                            <div>
+                                <h3 style="margin:0; font-size: 1.18rem; font-weight:800; color:var(--portal-dark); display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                                    <i class="fas fa-hand-holding-heart" style="color:#d97706;"></i> Fee Rebate &amp; Concession Ledger
+                                    <span style="font-size:0.75rem; font-weight:800; background:#fef3c7; color:#b45309; padding:3px 8px; border-radius:6px; text-transform:uppercase;">
+                                        <i class="fas fa-tags"></i> Waived Fees
+                                    </span>
+                                </h3>
+                                <div style="font-size:0.8rem; color:#64748b; margin-top:4px;">
+                                    Fee concessions and waived amounts (reduces student dues, excluded from revenue collections)
+                                </div>
+                            </div>
+                            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                <span style="font-size:0.8rem; font-weight:800; color:#92400e; background:#fef3c7; padding:6px 12px; border-radius:8px; border:1px solid #fde68a;">
+                                    Total Waived: ₹ <?php echo number_format($total_rebate_amount, 2); ?>
+                                </span>
+                                <span style="font-size:0.8rem; font-weight:800; color:#15803d; background:#dcfce7; padding:6px 12px; border-radius:8px; border:1px solid #bbf7d0;">
+                                    This Month: ₹ <?php echo number_format($this_month_rebate, 2); ?>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="mobile-table-hint">
+                            <i class="fas fa-arrows-left-right"></i> Scroll table sideways to view rebate details
+                        </div>
+                        <div class="portal-table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Rebate ID</th>
+                                        <th>Date &amp; Time</th>
+                                        <th>Student Details</th>
+                                        <th>Month For</th>
+                                        <th>Waived Amount</th>
+                                        <th>Reason / Note</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (!$rebates_res || $rebates_res->num_rows == 0): ?>
+                                        <tr>
+                                            <td colspan="7" style="text-align: center; color: #94a3b8; padding: 30px 20px;">
+                                                <div style="margin-bottom:8px; color:#fcd34d; font-size:2rem;"><i class="fas fa-hand-holding-heart"></i></div>
+                                                <strong style="color:#64748b; font-size:0.95rem;">No fee rebates or concessions recorded yet.</strong>
+                                                <div style="font-size:0.8rem; color:#94a3b8; margin-top:4px;">When parents request a waiver and you tick 'Mark as Rebate', records will appear here separately.</div>
+                                            </td>
+                                        </tr>
+                                    <?php else: ?>
+                                        <?php while($reb = $rebates_res->fetch_assoc()): ?>
+                                            <tr>
+                                                <td>
+                                                    <span style="font-family:monospace; font-weight:800; color:#b45309; font-size:0.85rem; background:#fffbeb; padding:2px 6px; border-radius:4px; border:1px solid #fde68a;">
+                                                        #REB-<?php echo str_pad($reb['id'], 4, '0', STR_PAD_LEFT); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div style="font-weight:800; color:#1e293b; font-size:0.85rem; white-space:nowrap;">
+                                                        <?php echo date('d M, Y', strtotime($reb['rebate_date'])); ?>
+                                                    </div>
+                                                    <?php if (!empty($reb['created_at'])): ?>
+                                                        <div class="time-pill" style="color:#b45309; background:#fef3c7;">
+                                                            <i class="far fa-clock"></i> <?php echo date('h:i A', strtotime($reb['created_at'])); ?>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <strong style="color:var(--portal-dark); font-size:0.9rem;"><?php echo htmlspecialchars($reb['name']); ?></strong>
+                                                    <?php if (!empty($reb['parent_name'])): ?>
+                                                        <div style="font-size:0.75rem; color:#64748b; font-weight:600;"><i class="fas fa-user-friends" style="font-size:0.7rem; color:#94a3b8;"></i> S/o <?php echo htmlspecialchars($reb['parent_name']); ?></div>
+                                                    <?php endif; ?>
+                                                    <?php if (!empty($reb['reg_no'])): ?>
+                                                        <span style="font-size:0.72rem; font-family:monospace; color:#475569; background:#f1f5f9; padding:1px 5px; border-radius:4px;"><?php echo htmlspecialchars($reb['reg_no']); ?></span>
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <span style="font-weight:700; color:#d97706; font-size:0.85rem;"><?php echo htmlspecialchars($reb['month_for']); ?></span>
+                                                </td>
+                                                <td>
+                                                    <span class="amount-tag" style="background:#fef3c7; color:#b45309; font-weight:800; font-size:0.92rem; border:1px solid #fde68a;">
+                                                        - ₹ <?php echo number_format($reb['amount'], 2); ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div style="color:#475569; font-size:0.82rem; max-width:180px;">
+                                                        <?php echo htmlspecialchars($reb['remarks'] ?: 'Parent concession / waiver'); ?>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <form method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to delete this rebate record (#REB-<?php echo $reb['id']; ?>)?');">
+                                                        <input type="hidden" name="delete_rebate" value="1">
+                                                        <input type="hidden" name="rebate_id" value="<?php echo $reb['id']; ?>">
+                                                        <button type="submit" class="btn-quick-collect btn-action-delete" title="Delete Rebate Entry">
+                                                            <i class="fas fa-trash"></i>
+                                                        </button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        <?php endwhile; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
                     <!-- List 3: Daily Student Expenses Log -->
                     <div class="portal-card">
                         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:20px; border-bottom:2px solid #f1f5f9; padding-bottom:12px;">
@@ -1724,6 +1955,25 @@ if (!empty($settings['tuition_modes'])) {
     </div>
 
     <script>
+        // Toggle Fee Rebate / Waiver Form Behavior
+        function toggleRebateFields(cb) {
+            const reasonGrp = document.getElementById('rebate_reason_group');
+            const submitBtn = document.getElementById('record_payment_btn');
+            if (cb.checked) {
+                if (reasonGrp) reasonGrp.style.display = 'block';
+                if (submitBtn) {
+                    submitBtn.innerHTML = '<i class="fas fa-hand-holding-heart"></i> Record Fee Rebate / Waiver';
+                    submitBtn.style.background = '#d97706';
+                }
+            } else {
+                if (reasonGrp) reasonGrp.style.display = 'none';
+                if (submitBtn) {
+                    submitBtn.innerHTML = '<i class="fas fa-receipt"></i> Record Fee Payment';
+                    submitBtn.style.background = '';
+                }
+            }
+        }
+
         // Select All Checkbox Handler
         function toggleSelectAllBills(master) {
             const checkboxes = document.querySelectorAll('.bill-checkbox');

@@ -70,6 +70,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         .portal-links { display: flex; justify-content: center; gap: 15px; margin-top: 10px; }
         .portal-links a { color: var(--portal-green); text-decoration: none; font-weight: 700; }
         .portal-links a:hover { text-decoration: underline; }
+
+        @media (max-width: 480px) {
+            body { padding: 15px; }
+            .login-card { padding: 30px 20px; }
+            .logo-header h2 { font-size: 1.4rem; }
+            .portal-links { flex-direction: column; gap: 12px; }
+            .portal-links span { display: none; }
+        }
     </style>
 </head>
 <body>

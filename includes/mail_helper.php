@@ -96,11 +96,13 @@ function send_smtp_email($to, $subject, $message, $attachments = []) {
     // Direct SMTP Socket implementation
     $socket_host = ($encryption === 'ssl') ? "ssl://$host" : $host;
     
-    $socket = @fsockopen($socket_host, $port, $errno, $errstr, 15);
+    // Set 3 second connection timeout to prevent web requests from hanging
+    $socket = @fsockopen($socket_host, $port, $errno, $errstr, 3);
     if (!$socket) {
         error_log("SMTP Connection Failure: $errstr ($errno) - Host: $socket_host, Port: $port");
         return false;
     }
+    stream_set_timeout($socket, 3);
     
     // Helper closure to read SMTP responses
     $readResponse = function() use ($socket) {

@@ -84,7 +84,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_result'])) {
                     "Result Published: " . $exam . " - " . $student_res['student_name'] . " - ABSS", 
                     $email_html
                 );
-                send_smtp_email('abssimamganj@gmail.com', "Result Published: " . $exam . " - " . $student_res['student_name'], $email_html);
+                if (strtolower(trim($student_res['parent_email'])) !== 'abssimamganj@gmail.com') {
+                    send_smtp_email('abssimamganj@gmail.com', "Result Published: " . $exam . " - " . $student_res['student_name'], $email_html);
+                }
             }
         } else {
             $err = "Error recording result: " . $conn->error;

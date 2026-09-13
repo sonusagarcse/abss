@@ -66,7 +66,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_result'])) {
                         "Result Published: " . $exam_name . " - " . $student_res['student_name'] . " - ABSS", 
                         $email_html
                     );
-                    send_smtp_email('abssimamganj@gmail.com', "Result Published: " . $exam_name . " - " . $student_res['student_name'], $email_html);
+                    if (strtolower(trim($student_res['parent_email'])) !== 'abssimamganj@gmail.com') {
+                        send_smtp_email('abssimamganj@gmail.com', "Result Published: " . $exam_name . " - " . $student_res['student_name'], $email_html);
+                    }
                 }
             }
         } else {
@@ -77,13 +79,44 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_result'])) {
     }
 }
 
+// Handle edit update
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['update_result'])) {
+    $result_id = (int)($_POST['result_id'] ?? 0);
+    $score = (float)($_POST['score'] ?? 0);
+    $total_marks = (float)($_POST['total_marks'] ?? 100);
+    $remarks = trim($_POST['remarks'] ?? '');
+    $exam_date = !empty($_POST['exam_date']) ? $_POST['exam_date'] : date('Y-m-d');
+    if ($result_id > 0 && $total_marks > 0) {
+        $stmt = $conn->prepare("UPDATE results SET score = ?, total_marks = ?, remarks = ?, exam_date = ? WHERE id = ?");
+        $stmt->bind_param("ddsdi", $score, $total_marks, $remarks, $exam_date, $result_id);
+        if ($stmt->execute()) {
+            $msg = "Result updated successfully.";
+        } else {
+            $err = "Error updating result: " . $conn->error;
+        }
+    } else {
+        $err = "Invalid data for updating result.";
+    }
+}
+
 // Fetch results
-$results_query = $conn->query("
-    SELECT r.*, s.name as student_name, s.academic_group
-    FROM results r 
-    JOIN students s ON r.student_id = s.id 
-    ORDER BY COALESCE(r.exam_date, DATE(r.created_at)) DESC, r.id DESC
-");
+$page = isset($_GET['page']) && is_numeric($_GET['page']) ? (int)$_GET['page'] : 1;
+$limit = 10;
+$offset = ($page - 1) * $limit;
+
+// Get total count for pagination
+$totalRes = $conn->query("SELECT COUNT(*) as cnt FROM results");
+$totalRows = $totalRes && $totalRes->num_rows ? $totalRes->fetch_assoc()['cnt'] : 0;
+$totalPages = $limit > 0 ? ceil($totalRows / $limit) : 1;
+
+$results_query = $conn->query(
+    "
+        SELECT r.*, s.name as student_name, s.academic_group
+        FROM results r 
+        JOIN students s ON r.student_id = s.id 
+        ORDER BY COALESCE(r.exam_date, DATE(r.created_at)) DESC, r.id DESC
+        LIMIT $limit OFFSET $offset
+    ");
 
 // Fetch active students for dropdown
 $students_list = $conn->query("SELECT id, name, reg_no, academic_group FROM students WHERE status = 'active' ORDER BY name ASC");
@@ -111,6 +144,25 @@ $students_list = $conn->query("SELECT id, name, reg_no, academic_group FROM stud
         /* Results Table */
         .result-table { width: 100%; border-collapse: separate; border-spacing: 0 8px; }
         .result-table th { text-align: left; padding: 6px 14px; color: #64748b; font-weight: 800; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+        .btn-edit { background: var(--teacher-purple); color: white; border: none; border-radius: 6px; padding: 6px 12px; cursor: pointer; font-size: 0.75rem; }
+        .btn-edit:hover { background: var(--teacher-dark); }
+        .loader-overlay {
+            position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.3); display:flex; align-items:center; justify-content:center; z-index:9999; visibility:hidden;
+        }
+        .loader-overlay.active { visibility:visible; }
+        .loader {
+            border: 6px solid #f3f3f3; border-top: 6px solid var(--teacher-purple); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .pagination { margin-top:20px; text-align:center; }
+        .pagination a { margin:0 5px; padding:6px 12px; background:#eee; color:#333; text-decoration:none; border-radius:4px; }
+        .pagination a.active { background:var(--teacher-purple); color:white; }
+        .modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center; visibility:hidden; z-index:10000; }
+        .modal.active { visibility:visible; }
+        .modal-content { background:#fff; padding:20px; border-radius:12px; width:90%; max-width:500px; box-shadow:0 4px 20px rgba(0,0,0,0.2); }
+        .modal-header { font-size:1.2rem; margin-bottom:10px; }
+        .modal-close { float:right; cursor:pointer; font-size:1.2rem; }
+
         .result-row td { padding: 12px 14px; background: #faf5ff; border-top: 1px solid #ede9fe; border-bottom: 1px solid #ede9fe; font-weight: 600; color: #334155; vertical-align: middle; }
         .result-row td:first-child { border-left: 1px solid #ede9fe; border-radius: 10px 0 0 10px; }
         .result-row td:last-child { border-right: 1px solid #ede9fe; border-radius: 0 10px 10px 0; }
@@ -233,6 +285,7 @@ $students_list = $conn->query("SELECT id, name, reg_no, academic_group FROM stud
                             <th>%</th>
                             <th>Remarks</th>
                             <th>Date</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -255,23 +308,68 @@ $students_list = $conn->query("SELECT id, name, reg_no, academic_group FROM stud
                                     <td><span class="score-badge <?= $sc_class ?>"><?= $pct ?>%</span></td>
                                     <td style="color: #64748b; font-size: 0.85rem; max-width: 150px;"><?= htmlspecialchars($r['remarks'] ?? '-') ?></td>
                                     <td style="color: #94a3b8; font-size: 0.8rem; white-space:nowrap;"><?= $res_date ? date('M d, Y', strtotime($res_date)) : '-' ?></td>
+                                    <td><button class="btn-edit" data-id="<?= $r['id'] ?>" data-student="<?= htmlspecialchars($r['student_name']) ?>" data-exam="<?= htmlspecialchars($r['exam_name']) ?>" data-score="<?= $score_val ?>" data-total="<?= (int)$total_val ?>" data-remarks="<?= htmlspecialchars($r['remarks'] ?? '') ?>" data-date="<?= $res_date ?>">Edit</button></td>
                                 </tr>
                             <?php endwhile; ?>
                         <?php else: ?>
-                            <tr><td colspan="6" style="text-align: center; color: #94a3b8; padding: 30px;">No exam results published yet.</td></tr>
+                            <tr><td colspan="7" style="text-align: center; color: #94a8b8; padding: 30px;">No exam results published yet.</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
+                <!-- Pagination Controls -->
+                <div class="pagination">
+                    <?php if ($totalPages > 1): ?>
+                        <?php for ($i = 1; $i <= $totalPages; $i++): ?>
+                            <a href="?page=<?= $i ?>" class="<?= $i == $page ? 'active' : '' ?>"><?= $i ?></a>
+                        <?php endfor; ?>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
     </main>
 
+    <!-- Loader Overlay -->
+    <div class="loader-overlay" id="loaderOverlay"><div class="loader"></div></div>
+
+    <!-- Edit Modal -->
+    <div class="modal" id="editModal">
+        <div class="modal-content">
+            <span class="modal-close" id="modalClose">&times;</span>
+            <div class="modal-header">Edit Result</div>
+            <form id="editForm" method="POST" action="results.php">
+                <input type="hidden" name="update_result" value="1">
+                <input type="hidden" name="result_id" id="result_id">
+                <div class="form-group">
+                    <label>Score</label>
+                    <input type="number" step="0.01" name="score" id="edit_score" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Total Marks</label>
+                    <input type="number" step="0.01" name="total_marks" id="edit_total" class="form-control" required>
+                </div>
+                <div class="form-group">
+                    <label>Remarks</label>
+                    <input type="text" name="remarks" id="edit_remarks" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Exam Date</label>
+                    <input type="date" name="exam_date" id="edit_date" class="form-control" required>
+                </div>
+                <button type="submit" class="btn-purple">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
     <script>
     function updateCalc() {
-        const s = parseFloat(document.getElementById('score').value);
-        const t = parseFloat(document.getElementById('total_marks').value);
+        const scoreElem = document.getElementById('score');
+        const totalElem = document.getElementById('total_marks');
         const el = document.getElementById('calcPct');
-        if (s >= 0 && t > 0) {
+        if (!scoreElem || !totalElem || !el) return;
+
+        const s = parseFloat(scoreElem.value);
+        const t = parseFloat(totalElem.value);
+        if (!isNaN(s) && !isNaN(t) && s >= 0 && t > 0) {
             const p = ((s / t) * 100).toFixed(1);
             el.textContent = p + '%';
             el.style.color = p >= 60 ? '#16a34a' : (p >= 40 ? '#b45309' : '#dc2626');
@@ -280,6 +378,33 @@ $students_list = $conn->query("SELECT id, name, reg_no, academic_group FROM stud
             el.style.color = '#6d28d9';
         }
     }
+
+    // Loader handling
+    const loaderOverlay = document.getElementById('loaderOverlay');
+    document.querySelectorAll('form').forEach(frm => {
+        frm.addEventListener('submit', () => { if (loaderOverlay) loaderOverlay.classList.add('active'); });
+    });
+    // Hide loader after page load (in case of redirects)
+    window.addEventListener('load', () => { if (loaderOverlay) loaderOverlay.classList.remove('active'); });
+
+    // Edit modal handling
+    const editModal = document.getElementById('editModal');
+    const modalClose = document.getElementById('modalClose');
+    const editForm = document.getElementById('editForm');
+    document.querySelectorAll('.btn-edit').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            document.getElementById('result_id').value = id;
+            document.getElementById('edit_score').value = btn.getAttribute('data-score');
+            document.getElementById('edit_total').value = btn.getAttribute('data-total');
+            document.getElementById('edit_remarks').value = btn.getAttribute('data-remarks');
+            document.getElementById('edit_date').value = btn.getAttribute('data-date');
+            if (editModal) editModal.classList.add('active');
+        });
+    });
+    if (modalClose) modalClose.addEventListener('click', () => { if (editModal) editModal.classList.remove('active'); });
+    if (editModal) window.addEventListener('click', e => { if (e.target === editModal) editModal.classList.remove('active'); });
     </script>
+
 </body>
 </html>

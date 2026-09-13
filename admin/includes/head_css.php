@@ -283,10 +283,104 @@ if ('serviceWorker' in navigator) {
         right: 20px;
     }
 
+    /* Mobile Bottom Navigation Bar */
+    .mobile-bottom-nav {
+        display: none;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-top: 1px solid rgba(226, 232, 240, 0.9);
+        box-shadow: 0 -8px 25px rgba(15, 23, 42, 0.08);
+        z-index: 1500;
+        padding: 6px 10px calc(8px + env(safe-area-inset-bottom, 0px));
+    }
+    .mobile-bottom-nav ul {
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        position: relative;
+    }
+    .mobile-bottom-nav li {
+        flex: 1;
+        text-align: center;
+    }
+    .mobile-bottom-nav a {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 3px;
+        color: #64748b;
+        text-decoration: none;
+        font-size: 0.70rem;
+        font-weight: 700;
+        padding: 5px 4px;
+        border-radius: 12px;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .mobile-bottom-nav a:hover,
+    .mobile-bottom-nav a.active {
+        color: var(--portal-blue, #2563eb);
+        background: rgba(37, 99, 235, 0.07);
+    }
+    .mobile-bottom-nav a i {
+        font-size: 1.15rem;
+    }
+
+    /* Elevated Center Button for Fees */
+    .mobile-bottom-nav .nav-center-item {
+        position: relative;
+    }
+    .mobile-bottom-nav .nav-center-item a {
+        background: transparent !important;
+        padding: 0;
+        overflow: visible;
+    }
+    .mobile-bottom-nav .center-btn-bubble {
+        width: 48px;
+        height: 48px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, var(--portal-blue, #2563eb), #1d4ed8);
+        color: #ffffff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.25rem;
+        box-shadow: 0 8px 20px rgba(37, 99, 235, 0.4);
+        border: 3px solid #ffffff;
+        margin: -18px auto 0;
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .mobile-bottom-nav .center-btn-bubble i {
+        color: #ffffff !important;
+        font-size: 1.25rem;
+    }
+    .mobile-bottom-nav .nav-center-item a.active .center-btn-bubble {
+        background: linear-gradient(135deg, #10b981, #059669);
+        box-shadow: 0 8px 22px rgba(16, 185, 129, 0.5);
+        transform: scale(1.08);
+    }
+    .mobile-bottom-nav .center-label {
+        font-size: 0.70rem;
+        font-weight: 800;
+        color: var(--portal-blue, #2563eb);
+        margin-top: 2px;
+    }
+    .mobile-bottom-nav .nav-center-item a.active .center-label {
+        color: #059669;
+    }
+
     /* Responsive Media Queries */
     @media (max-width: 1024px) {
-        body { flex-direction: column; }
+        body { flex-direction: column; padding-bottom: 74px !important; }
         .mobile-header { display: flex; }
+        .mobile-bottom-nav { display: block; }
         
         .sidebar {
             position: fixed;

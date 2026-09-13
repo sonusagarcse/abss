@@ -63,6 +63,12 @@ $admission_fee_total = (float)($adm_fee_res ? $adm_fee_res->fetch_assoc()['total
 $settings = function_exists('getAllSettings') ? getAllSettings() : [];
 $total_fine_amount = function_exists('get_all_unpaid_total_fine') ? get_all_unpaid_total_fine($conn, $settings) : 0.00;
 
+// 5. Total Fee Rebates / Concessions (छूट राशि - Excluded from collections)
+$rebates_res = $conn->query("SELECT COALESCE(SUM(amount), 0) as total FROM fee_rebates");
+$total_rebate_amount = (float)($rebates_res ? $rebates_res->fetch_assoc()['total'] : 0);
+$month_rebate_res = $conn->query("SELECT COALESCE(SUM(amount), 0) as total FROM fee_rebates WHERE MONTH(rebate_date) = MONTH(NOW()) AND YEAR(rebate_date) = YEAR(NOW())");
+$month_rebate_amount = (float)($month_rebate_res ? $month_rebate_res->fetch_assoc()['total'] : 0);
+
 // Total Unified Outstanding Dues (Base Unpaid + Late Fine)
 $total_unpaid_due = $unpaid_base_total + $total_fine_amount;
 $unpaid_total = $total_unpaid_due;
@@ -238,7 +244,19 @@ $unpaid_total = $total_unpaid_due;
                 </div>
             </div>
 
-            <!-- Card 7: Previous Month Data Box -->
+            <!-- Card 7: Total Fee Rebates / Concessions (छूट राशि - Excluded from Collections) -->
+            <a href="fees.php#rebatesLedger" class="stat-card" style="text-decoration:none; color:inherit; border-left: 4px solid #d97706;" title="Click to view Fee Rebate &amp; Concession Ledger">
+                <div class="stat-icon" style="background:#fef3c7; color:#d97706;"><i class="fas fa-hand-holding-heart"></i></div>
+                <div class="stat-info">
+                    <h3 style="color:#b45309;">₹ <?php echo number_format($total_rebate_amount, 2); ?></h3>
+                    <p style="font-weight:700;">Total Fee Rebate</p>
+                    <small style="color:#b45309; font-weight:700; font-size:0.75rem;">
+                        ₹ <?php echo number_format($month_rebate_amount, 2); ?> in <?php echo date('F'); ?> (Waiver / छूट)
+                    </small>
+                </div>
+            </a>
+
+            <!-- Card 8: Previous Month Data Box -->
             <div class="stat-card">
                 <div class="stat-icon icon-teal"><i class="fas fa-history"></i></div>
                 <div class="stat-info">
