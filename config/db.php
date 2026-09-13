@@ -692,8 +692,14 @@ function runAutoMigrator($conn) {
 
 /**
  * Fetch all settings into an associative array (settings table takes precedence)
+ * Includes in-memory static caching to prevent redundant queries during request execution.
  */
-function getAllSettings() {
+function getAllSettings($force_refresh = false) {
+    static $cached_settings = null;
+    if ($cached_settings !== null && !$force_refresh) {
+        return $cached_settings;
+    }
+
     $conn = getDB();
     $settings = [];
     
@@ -713,7 +719,8 @@ function getAllSettings() {
         }
     }
     
-    return $settings;
+    $cached_settings = $settings;
+    return $cached_settings;
 }
 
 /**
@@ -729,6 +736,9 @@ function saveSetting($key, $val) {
     
     // Also sync in site_settings table
     $conn->query("INSERT INTO site_settings (setting_key, setting_value) VALUES ('$esc_key', '$esc_val') ON DUPLICATE KEY UPDATE setting_value = '$esc_val'");
+
+    // Invalidate in-memory cache so fresh setting is returned immediately
+    getAllSettings(true);
 }
 
 // Auto-load Visitor Tracking and Activity Logging System

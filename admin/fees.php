@@ -449,13 +449,33 @@ $students_res = $conn->query("
 ");
 $students_list = [];
 $settings = function_exists('getAllSettings') ? getAllSettings() : [];
+
+// Pre-aggregate base unpaid dues in a single query (Eliminates N+1 query loop)
+$base_due_map = [];
+$base_due_res = $conn->query("
+    SELECT student_id, COALESCE(SUM(amount), 0) AS total_base_due 
+    FROM fees_generated 
+    WHERE status = 'unpaid' 
+    GROUP BY student_id
+");
+if ($base_due_res) {
+    while($row = $base_due_res->fetch_assoc()) {
+        $base_due_map[(int)$row['student_id']] = (float)$row['total_base_due'];
+    }
+}
+
 while($s = $students_res->fetch_assoc()) {
     $sid_val = (int)$s['id'];
-    $fine_info = function_exists('get_student_total_fine') ? get_student_total_fine($sid_val, $conn, $settings) : ['total_fine' => 0.00];
+    $base_due = $base_due_map[$sid_val] ?? 0.00;
     
-    $base_due_q = $conn->query("SELECT COALESCE(SUM(amount), 0) AS base_due FROM fees_generated WHERE student_id = $sid_val AND status = 'unpaid'");
-    $base_due = (float)($base_due_q ? $base_due_q->fetch_assoc()['base_due'] : 0);
-    $s['total_due'] = $base_due + (float)$fine_info['total_fine'];
+    // Only calculate late fine if student has pending unpaid dues
+    $fine_amount = 0.00;
+    if ($base_due > 0 && function_exists('get_student_total_fine')) {
+        $fine_info = get_student_total_fine($sid_val, $conn, $settings);
+        $fine_amount = (float)($fine_info['total_fine'] ?? 0);
+    }
+    
+    $s['total_due'] = $base_due + $fine_amount;
     $students_list[] = $s;
 }
 
