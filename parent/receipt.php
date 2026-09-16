@@ -216,7 +216,7 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
                     </tr>
                     <tr>
                         <td class="kv-label">Email:</td>
-                        <td class="kv-value"><?php echo htmlspecialchars($_SESSION['parent_email']); ?></td>
+                        <td class="kv-value"><?php echo htmlspecialchars($_SESSION['parent_email'] ?? 'N/A'); ?></td>
                     </tr>
                 </table>
             </div>
@@ -240,18 +240,79 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
         </div>
 
         <?php
-        // Fetch invoice details for gross subtotal and remaining balance calculation
+        // Fetch associated bill to get full itemized charges & student expenses
         $sid = (int)$pay['student_id'];
-        $month_for = $pay['month_for'];
         $paid_amount = (float)$pay['amount'];
         $paid_date = date('d M, Y', strtotime($pay['payment_date']));
+        $bill_row = null;
 
-        $bill_res = $conn->query("SELECT amount, remark, status FROM fees_generated WHERE student_id = $sid AND month_for LIKE '%" . $conn->real_escape_string($month_for) . "%' ORDER BY id DESC LIMIT 1");
-        $bill_row = ($bill_res && $bill_res->num_rows > 0) ? $bill_res->fetch_assoc() : null;
+        $rcpt_tag = "%Rcpt #" . $pay['id'] . "%";
+        $b_stmt = $conn->prepare("SELECT id, amount, remark, month_for, status FROM fees_generated WHERE student_id = ? AND remark LIKE ? ORDER BY id DESC LIMIT 1");
+        $b_stmt->bind_param("is", $sid, $rcpt_tag);
+        $b_stmt->execute();
+        $bill_row = $b_stmt->get_result()->fetch_assoc();
+        $b_stmt->close();
 
-        $subtotal = $bill_row ? (float)$bill_row['amount'] : $paid_amount;
-        if ($subtotal < $paid_amount) $subtotal = $paid_amount;
-        $remaining_due = max(0, $subtotal - $paid_amount);
+        if (!$bill_row) {
+            $clean_month = trim(explode('(', $pay['month_for'])[0]);
+            $m_like = "%" . $clean_month . "%";
+            $b_stmt = $conn->prepare("SELECT id, amount, remark, month_for, status FROM fees_generated WHERE student_id = ? AND month_for LIKE ? ORDER BY id DESC LIMIT 1");
+            $b_stmt->bind_param("is", $sid, $m_like);
+            $b_stmt->execute();
+            $bill_row = $b_stmt->get_result()->fetch_assoc();
+            $b_stmt->close();
+        }
+
+        // Current remaining unpaid dues for this student
+        $due_stmt = $conn->prepare("SELECT COALESCE(SUM(amount), 0) AS total_due FROM fees_generated WHERE student_id = ? AND status = 'unpaid'");
+        $due_stmt->bind_param("i", $sid);
+        $due_stmt->execute();
+        $remaining_due = (float)($due_stmt->get_result()->fetch_assoc()['total_due'] ?? 0);
+        $due_stmt->close();
+
+        $itemized_list = [];
+        if (!empty($bill_row['remark'])) {
+            $raw_parts = explode('|', $bill_row['remark']);
+            foreach ($raw_parts as $part) {
+                $part = trim($part);
+                if (empty($part)) continue;
+                $clean_part = preg_replace('/^(Auto-generated Bill\.|Manual Bill\.|Daily Expense\.)\s*/i', '', $part);
+                $clean_part = trim($clean_part);
+                if (stripos($clean_part, 'payment received') !== false || 
+                    stripos($clean_part, 'partial payment') !== false || 
+                    stripos($clean_part, 'paid ₹') !== false || 
+                    stripos($clean_part, 'fee rebate') !== false || 
+                    strpos($clean_part, '-₹') !== false) {
+                    continue;
+                }
+
+                $item_title = $clean_part;
+                $item_amt_val = null;
+                if (preg_match('/^(.*?):\s*[₹Rs\.]*\s*([0-9\.,]+)(.*)$/i', $clean_part, $m)) {
+                    $item_title = trim($m[1] . ' ' . trim($m[3]));
+                    $item_amt_val = (float)str_replace(',', '', $m[2]);
+                }
+
+                $is_expense = (stripos($clean_part, 'expense') !== false || stripos($clean_part, 'olympiad') !== false || stripos($clean_part, 'medicine') !== false);
+                $badge = $is_expense ? '<span style="background:#fef3c7; color:#92400e; font-size:0.7rem; font-weight:800; padding:2px 7px; border-radius:4px; margin-left:6px; text-transform:uppercase;">Daily Expense</span>' : '<span style="background:#e0e7ff; color:#3730a3; font-size:0.7rem; font-weight:800; padding:2px 7px; border-radius:4px; margin-left:6px; text-transform:uppercase;">Institutional Fee</span>';
+
+                $itemized_list[] = [
+                    'title' => $item_title,
+                    'badge' => $badge,
+                    'amount' => $item_amt_val,
+                    'raw' => $clean_part
+                ];
+            }
+        }
+
+        if (empty($itemized_list)) {
+            $itemized_list[] = [
+                'title' => !empty($pay['month_for']) ? ("Fee / Dues (" . $pay['month_for'] . ")") : "Fee Payment",
+                'badge' => '<span style="background:#e0e7ff; color:#3730a3; font-size:0.7rem; font-weight:800; padding:2px 7px; border-radius:4px; margin-left:6px; text-transform:uppercase;">School Fee</span>',
+                'amount' => $paid_amount,
+                'raw' => $pay['month_for']
+            ];
+        }
         ?>
 
         <!-- Ledger itemization -->
@@ -259,34 +320,23 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
             <thead>
                 <tr>
                     <th class="text-center" style="width: 8%;">S.No</th>
-                    <th>Fee Description</th>
-                    <th>Bill Month</th>
-                    <th>Method</th>
-                    <th class="text-right" style="width: 25%;">Amount</th>
+                    <th>Fee / Charge Description</th>
+                    <th>Billing Cycle</th>
+                    <th class="text-right" style="width: 25%;">Billed Rate (₹)</th>
                 </tr>
             </thead>
             <tbody>
-                <?php 
-                $fee_remarks = !empty($bill_row['remark']) ? explode('|', $bill_row['remark']) : ['Monthly Fee Payment'];
-                $sno = 1;
-                foreach ($fee_remarks as $rem):
-                    $rem = trim($rem);
-                    if (strpos($rem, 'Auto-generated Bill.') !== false) {
-                        $rem = trim(str_replace('Auto-generated Bill.', '', $rem));
-                    }
-                    if (empty($rem)) continue;
-                    if (strpos(strtolower($rem), 'payment received') !== false || strpos($rem, '-₹') !== false || strpos($rem, '-Rs') !== false) {
-                        continue;
-                    }
-                ?>
+                <?php $sno = 1; foreach ($itemized_list as $item): ?>
                     <tr>
-                        <td class="text-center"><?php echo $sno++; ?></td>
-                        <td style="font-weight: 700; color: #1a237e;">
-                            <?php echo htmlspecialchars($rem); ?>
+                        <td class="text-center" style="font-weight:700; color:#64748b;"><?php echo $sno++; ?></td>
+                        <td>
+                            <strong style="font-weight: 700; color: #1a237e;"><?php echo htmlspecialchars($item['title']); ?></strong>
+                            <?php echo $item['badge']; ?>
                         </td>
-                        <td><?php echo htmlspecialchars($pay['month_for']); ?></td>
-                        <td><?php echo htmlspecialchars($pay['payment_method']); ?></td>
-                        <td class="text-right" style="font-weight: 700;">₹ <?php echo number_format($paid_amount, 2); ?></td>
+                        <td><?php echo htmlspecialchars($bill_row['month_for'] ?? $pay['month_for']); ?></td>
+                        <td class="text-right" style="font-weight: 700; color:#0f172a;">
+                            <?php echo ($item['amount'] !== null) ? ('₹ ' . number_format($item['amount'], 2)) : '—'; ?>
+                        </td>
                     </tr>
                 <?php endforeach; ?>
             </tbody>
@@ -294,29 +344,25 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
 
         <!-- Grand Summary Breakdown -->
         <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 8px; padding: 18px 24px; margin-bottom: 25px; position: relative; z-index: 2;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="font-size: 1rem; font-weight: 700; color: #475569;">Subtotal (Gross Charges & Expenses):</span>
-                <span style="font-size: 1.15rem; font-weight: 700; color: #1e293b;">₹ <?php echo number_format($subtotal, 2); ?></span>
-            </div>
-            
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
                 <div>
-                    <span style="font-size: 1rem; font-weight: 700; color: #166534;">Less: Amount Paid:</span>
+                    <span style="font-size: 1.05rem; font-weight: 800; color: #166534;">Amount Received in this Receipt:</span>
                     <div style="font-size: 0.8rem; font-weight: 600; color: #15803d; margin-top: 2px;">
                         <i class="fas fa-check-circle"></i> Paid on <?php echo $paid_date; ?> via <?php echo htmlspecialchars($pay['payment_method']); ?>
                     </div>
                 </div>
-                <span style="font-size: 1.15rem; font-weight: 700; color: #166534;">- ₹ <?php echo number_format($paid_amount, 2); ?></span>
+                <span style="font-size: 1.35rem; font-weight: 900; color: #166534;">₹ <?php echo number_format($paid_amount, 2); ?></span>
             </div>
 
             <hr style="border: 0; border-top: 2px dashed #cbd5e1; margin: 12px 0;">
 
             <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span style="font-size: 1.15rem; font-weight: 800; color: <?php echo $remaining_due > 0 ? '#b71c1c' : '#15803d'; ?>;">
-                    <?php echo $remaining_due > 0 ? 'Final Remaining Balance Due:' : 'Final Balance Due:'; ?>
+                <span style="font-size: 1.05rem; font-weight: 800; color: <?php echo $remaining_due > 0 ? '#b71c1c' : '#15803d'; ?>;">
+                    <?php echo $remaining_due > 0 ? 'Remaining Balance Due:' : 'Balance Due:'; ?>
                 </span>
-                <span style="font-size: 1.45rem; font-weight: 800; color: <?php echo $remaining_due > 0 ? '#b71c1c' : '#15803d'; ?>;">
+                <span style="font-size: 1.35rem; font-weight: 800; color: <?php echo $remaining_due > 0 ? '#b71c1c' : '#15803d'; ?>;">
                     ₹ <?php echo number_format($remaining_due, 2); ?>
+                    <?php echo $remaining_due <= 0 ? ' (ALL DUES CLEAR)' : ''; ?>
                 </span>
             </div>
         </div>

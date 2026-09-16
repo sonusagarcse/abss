@@ -136,6 +136,11 @@ try {
             $bill_rem = $bill_row ? $bill_row['remark'] : '';
             $bill_view_url = (strpos($host, 'localhost') !== false) ? "http://localhost/abss/parent/view_bill.php?id=$bill_id" : "$protocol://$host/parent/view_bill.php?id=$bill_id";
 
+            // Calculate fine specifically for this individual bill
+            $bill_fine_info = ($bill_row && function_exists('calculate_bill_fine')) ? calculate_bill_fine($bill_row, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0];
+            $b_fine_amt = (float)($bill_fine_info['fine_amount'] ?? 0);
+            $b_overdue_days = (int)($bill_fine_info['overdue_days'] ?? 0);
+
             $email_html = get_fee_generated_template(
                 $student['name'],
                 $bill_amt,
@@ -143,7 +148,8 @@ try {
                 $bill_date,
                 $bill_rem,
                 $bill_view_url,
-                $parent_name
+                $b_fine_amt,
+                $b_overdue_days
             );
             $subject = "Fee Invoice #" . str_pad($bill_id, 5, '0', STR_PAD_LEFT) . " (" . $bill_month . ") - " . $student['name'] . " - ABSS";
         } else {

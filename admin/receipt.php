@@ -316,41 +316,127 @@ if (file_exists($logo_path)) {
             </div>
         </div>
 
+        <?php
+        // Fetch associated bill to get full itemized charges & student expenses
+        $sid = (int)$pay['student_id'];
+        $bill_match = null;
+
+        $rcpt_tag = "%Rcpt #" . $pay['id'] . "%";
+        $b_stmt = $conn->prepare("SELECT id, amount, remark, month_for, status FROM fees_generated WHERE student_id = ? AND remark LIKE ? ORDER BY id DESC LIMIT 1");
+        $b_stmt->bind_param("is", $sid, $rcpt_tag);
+        $b_stmt->execute();
+        $bill_match = $b_stmt->get_result()->fetch_assoc();
+        $b_stmt->close();
+
+        if (!$bill_match) {
+            $clean_month = trim(explode('(', $pay['month_for'])[0]);
+            $m_like = "%" . $clean_month . "%";
+            $b_stmt = $conn->prepare("SELECT id, amount, remark, month_for, status FROM fees_generated WHERE student_id = ? AND month_for LIKE ? ORDER BY id DESC LIMIT 1");
+            $b_stmt->bind_param("is", $sid, $m_like);
+            $b_stmt->execute();
+            $bill_match = $b_stmt->get_result()->fetch_assoc();
+            $b_stmt->close();
+        }
+
+        // Current remaining unpaid dues for this student
+        $due_stmt = $conn->prepare("SELECT COALESCE(SUM(amount), 0) AS total_due FROM fees_generated WHERE student_id = ? AND status = 'unpaid'");
+        $due_stmt->bind_param("i", $sid);
+        $due_stmt->execute();
+        $remaining_due = (float)($due_stmt->get_result()->fetch_assoc()['total_due'] ?? 0);
+        $due_stmt->close();
+
+        $itemized_list = [];
+        if (!empty($bill_match['remark'])) {
+            $raw_parts = explode('|', $bill_match['remark']);
+            foreach ($raw_parts as $part) {
+                $part = trim($part);
+                if (empty($part)) continue;
+                $clean_part = preg_replace('/^(Auto-generated Bill\.|Manual Bill\.|Daily Expense\.)\s*/i', '', $part);
+                $clean_part = trim($clean_part);
+                if (stripos($clean_part, 'payment received') !== false || 
+                    stripos($clean_part, 'partial payment') !== false || 
+                    stripos($clean_part, 'paid ₹') !== false || 
+                    stripos($clean_part, 'fee rebate') !== false || 
+                    strpos($clean_part, '-₹') !== false) {
+                    continue;
+                }
+
+                $item_title = $clean_part;
+                $item_amt_val = null;
+                if (preg_match('/^(.*?):\s*[₹Rs\.]*\s*([0-9\.,]+)(.*)$/i', $clean_part, $m)) {
+                    $item_title = trim($m[1] . ' ' . trim($m[3]));
+                    $item_amt_val = (float)str_replace(',', '', $m[2]);
+                }
+
+                $is_expense = (stripos($clean_part, 'expense') !== false || stripos($clean_part, 'olympiad') !== false || stripos($clean_part, 'medicine') !== false);
+                $badge = $is_expense ? '<span style="background:#fef3c7; color:#92400e; font-size:0.7rem; font-weight:800; padding:2px 7px; border-radius:4px; margin-left:6px; text-transform:uppercase;">Daily Expense</span>' : '<span style="background:#e0e7ff; color:#3730a3; font-size:0.7rem; font-weight:800; padding:2px 7px; border-radius:4px; margin-left:6px; text-transform:uppercase;">Institutional Fee</span>';
+
+                $itemized_list[] = [
+                    'title' => $item_title,
+                    'badge' => $badge,
+                    'amount' => $item_amt_val,
+                    'raw' => $clean_part
+                ];
+            }
+        }
+
+        if (empty($itemized_list)) {
+            $itemized_list[] = [
+                'title' => !empty($pay['month_for']) ? ("Fee / Dues (" . $pay['month_for'] . ")") : "Fee Payment",
+                'badge' => '<span style="background:#e0e7ff; color:#3730a3; font-size:0.7rem; font-weight:800; padding:2px 7px; border-radius:4px; margin-left:6px; text-transform:uppercase;">School Fee</span>',
+                'amount' => (float)$pay['amount'],
+                'raw' => $pay['month_for']
+            ];
+        }
+        ?>
+
         <!-- Itemized Table -->
         <table class="item-table">
             <thead>
                 <tr>
-                    <th style="width: 8%;">#</th>
-                    <th>Fee Description / Month</th>
-                    <th>Transaction Channel</th>
-                    <th class="text-right" style="width: 25%;">Amount Paid (₹)</th>
+                    <th style="width: 8%; text-align:center;">#</th>
+                    <th>Fee / Charge Description</th>
+                    <th>Billing Cycle</th>
+                    <th class="text-right" style="width: 25%;">Billed Rate (₹)</th>
                 </tr>
             </thead>
             <tbody>
+                <?php $sno = 1; foreach ($itemized_list as $item): ?>
                 <tr>
-                    <td>1</td>
+                    <td style="text-align:center; font-weight:700; color:#64748b;"><?php echo $sno++; ?></td>
                     <td>
-                        <strong style="color:#0f172a; font-size:0.95rem;"><?php echo htmlspecialchars($pay['month_for']); ?></strong>
-                        <div style="font-size:0.78rem; color:#64748b; margin-top:3px;">
-                            Official school tuition &amp; institutional services fee
-                        </div>
+                        <strong style="color:#0f172a; font-size:0.92rem;"><?php echo htmlspecialchars($item['title']); ?></strong>
+                        <?php echo $item['badge']; ?>
                     </td>
                     <td>
-                        <span style="font-weight:700; color:#334155;">
-                            <?php echo htmlspecialchars($pay['payment_method']); ?>
+                        <span style="font-weight:600; color:#475569; font-size:0.85rem;">
+                            <?php echo htmlspecialchars($bill_match['month_for'] ?? $pay['month_for']); ?>
                         </span>
                     </td>
-                    <td class="text-right" style="font-weight:800; font-size:1.05rem; color:#0f172a;">
-                        ₹ <?php echo number_format($pay['amount'], 2); ?>
+                    <td class="text-right" style="font-weight:700; font-size:0.95rem; color:#0f172a;">
+                        <?php echo ($item['amount'] !== null) ? ('₹ ' . number_format($item['amount'], 2)) : '—'; ?>
                     </td>
                 </tr>
+                <?php endforeach; ?>
             </tbody>
         </table>
 
-        <!-- Total Paid Strip -->
-        <div class="total-strip">
-            <span class="total-label">Total Amount Received:</span>
-            <span class="total-value">₹ <?php echo number_format($pay['amount'], 2); ?></span>
+        <!-- Total Paid Strip with Verified Balance -->
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 18px 22px; margin-bottom: 25px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                <span style="font-size: 1.05rem; font-weight: 800; color: #0f172a;">Total Amount Received in this Receipt:</span>
+                <span style="font-size: 1.35rem; font-weight: 900; color: #15803d;">₹ <?php echo number_format($pay['amount'], 2); ?></span>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem; color:#64748b; border-top:1px dashed #cbd5e1; padding-top:10px;">
+                <span>Payment Mode: <strong><?php echo htmlspecialchars($pay['payment_method']); ?></strong> (Verified)</span>
+                <span>
+                    Remaining Balance Due: 
+                    <strong style="color: <?php echo $remaining_due > 0 ? '#dc2626' : '#16a34a'; ?>; font-size: 0.95rem;">
+                        ₹ <?php echo number_format($remaining_due, 2); ?>
+                        <?php echo $remaining_due <= 0 ? ' (ALL DUES CLEAR)' : ''; ?>
+                    </strong>
+                </span>
+            </div>
         </div>
 
         <!-- Words Block -->

@@ -78,6 +78,13 @@
         const parentPhone = (options.phone || '').replace(/[^0-9]/g, '');
         const receiptUrl  = options.receiptUrl || window.location.href;
 
+        // Optional late fine detail in message
+        let fineDetailsLine = '';
+        if (options.fineAmount && parseFloat(options.fineAmount) > 0) {
+            const daysText = options.overdueDays ? ` (${options.overdueDays} days overdue)` : '';
+            fineDetailsLine = `\n⚠️ *Late Fine Included:* ₹${options.fineAmount}${daysText}`;
+        }
+
         // Pre-filled structured WhatsApp message
         const shareMessage = 
 `*ABSS – Fee Invoice / Payment Receipt*
@@ -87,7 +94,7 @@ Dear Parent,
 Please find attached the official Fee Invoice / Payment Receipt of *${studentName}*.
 
 📋 *Receipt No:* ${invoiceNo}
-💰 *Total Amount:* ₹${amount}
+💰 *Total Amount Payable:* ₹${amount}${fineDetailsLine}
 📅 *Date:* ${dateStr}
 
 Thank you,

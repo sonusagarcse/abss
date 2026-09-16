@@ -320,10 +320,35 @@ if (!function_exists('calculate_single_month_fine')) {
 }
 
 /**
+ * Checks whether a bill is eligible for late fine.
+ * Late fine is ONLY applicable on institutional monthly / tuition fees.
+ * Pure daily student expense bills (Medicine, Stationery, Olympiad, etc.) are strictly exempt.
+ */
+if (!function_exists('is_bill_eligible_for_fine')) {
+    function is_bill_eligible_for_fine($remark) {
+        $remark = trim((string)$remark);
+        if (empty($remark)) {
+            return true;
+        }
+        if (stripos($remark, 'Daily Expense.') === 0 || stripos($remark, 'Daily Expense:') === 0) {
+            if (!preg_match('/(tution|tuition|hostler|day scholar|scholar fee)/i', $remark)) {
+                return false;
+            }
+        }
+        $has_tuition = preg_match('/(tution|tuition|hostler|day scholar|scholar fee|monthly fee)/i', $remark);
+        $has_expense = preg_match('/(expense|medicine|pen|copy|book|olympiad)/i', $remark);
+        if ($has_expense && !$has_tuition) {
+            return false;
+        }
+        return true;
+    }
+}
+
+/**
  * Calculates late fee/fine for an invoice/bill.
  * Accepts either:
  *  - string billing_date (e.g. "2026-09-01")
- *  - array bill row (containing 'billing_date' and 'month_for')
+ *  - array bill row (containing 'billing_date', 'month_for', 'remark', 'student_id')
  */
 if (!function_exists('calculate_bill_fine')) {
     function calculate_bill_fine($bill_input, $settings = null, $as_of_date = null, $is_carry_over = false, $month_for_str = null) {
@@ -342,9 +367,17 @@ if (!function_exists('calculate_bill_fine')) {
         $grace_days = get_fine_grace_days($settings);
         $base_rate  = get_fine_rate_per_day($settings);
 
+        $bill_remark = '';
         if (is_array($bill_input)) {
             $billing_date  = $bill_input['billing_date'] ?? date('Y-m-01');
             $month_for_str = $bill_input['month_for'] ?? '';
+            $bill_remark   = $bill_input['remark'] ?? '';
+            if (empty($bill_remark) && !empty($bill_input['id']) && function_exists('getDB')) {
+                $rem_stmt = getDB()->query("SELECT remark FROM fees_generated WHERE id = " . (int)$bill_input['id'] . " LIMIT 1");
+                if ($rem_stmt && $rrow = $rem_stmt->fetch_assoc()) {
+                    $bill_remark = $rrow['remark'] ?? '';
+                }
+            }
         } else {
             $billing_date = (string)$bill_input;
         }
@@ -353,9 +386,32 @@ if (!function_exists('calculate_bill_fine')) {
             $billing_date = date('Y-m-01');
         }
 
+        // Rule: Late fine is ONLY applicable on tuition fees. Pure expense bills are exempt.
+        if (!empty($bill_remark) && !is_bill_eligible_for_fine($bill_remark)) {
+            return [
+                'fine_amount'        => 0.00,
+                'overdue_days'       => 0,
+                'grace_date'         => null,
+                'is_fine_active'     => false,
+                'rate_per_day'       => 0.00,
+                'grace_days'         => $grace_days,
+                'escalation_applied' => false,
+                'is_exempt'          => true,
+                'exempt_reason'      => 'expense_only_bill',
+                'months_counted'     => [],
+            ];
+        }
+
         // Check if fine is turned OFF (exempt) for this specific student
-        if (is_array($bill_input) && !empty($bill_input['student_id'])) {
-            if (is_student_fine_exempt((int)$bill_input['student_id'])) {
+        if (is_array($bill_input)) {
+            $sid = !empty($bill_input['student_id']) ? (int)$bill_input['student_id'] : 0;
+            if ($sid <= 0 && !empty($bill_input['id']) && function_exists('getDB')) {
+                $s_res = getDB()->query("SELECT student_id FROM fees_generated WHERE id = " . (int)$bill_input['id'] . " LIMIT 1");
+                if ($s_res && $srow = $s_res->fetch_assoc()) {
+                    $sid = (int)$srow['student_id'];
+                }
+            }
+            if ($sid > 0 && is_student_fine_exempt($sid)) {
                 return [
                     'fine_amount'        => 0.00,
                     'overdue_days'       => 0,
@@ -365,11 +421,11 @@ if (!function_exists('calculate_bill_fine')) {
                     'grace_days'         => 5,
                     'escalation_applied' => false,
                     'is_exempt'          => true,
+                    'exempt_reason'      => 'student_fine_exempt',
                     'months_counted'     => [],
                 ];
             }
         }
-
 
         // Parse all unpaid months covered by this bill (e.g. ["2026-08", "2026-09"])
         $months = parse_bill_months_for($month_for_str, $billing_date);
@@ -427,7 +483,7 @@ if (!function_exists('get_student_total_fine')) {
 
         $eval_date_str = !empty($as_of_date) ? $as_of_date : date('Y-m-d');
 
-        $res = $conn->query("SELECT id, amount, billing_date, month_for FROM fees_generated WHERE student_id = $student_id AND status = 'unpaid'");
+        $res = $conn->query("SELECT id, student_id, amount, billing_date, month_for, remark FROM fees_generated WHERE student_id = $student_id AND status = 'unpaid'");
         if ($res) {
             while ($b = $res->fetch_assoc()) {
                 $calc = calculate_bill_fine($b, $settings, $eval_date_str);
@@ -456,6 +512,7 @@ if (!function_exists('get_student_total_fine')) {
 
 /**
  * Calculates aggregate total late fine across all unpaid bills school-wide (for Admin Dashboard).
+ * Strictly mirrors active students to stay 100% synchronized with Student Dues page.
  */
 if (!function_exists('get_all_unpaid_total_fine')) {
     function get_all_unpaid_total_fine($conn, $settings = null, $as_of_date = null) {
@@ -466,7 +523,12 @@ if (!function_exists('get_all_unpaid_total_fine')) {
         $eval_date_str = !empty($as_of_date) ? $as_of_date : date('Y-m-d');
         $total_fine    = 0.00;
 
-        $res = $conn->query("SELECT id, student_id, amount, billing_date, month_for FROM fees_generated WHERE status = 'unpaid'");
+        $res = $conn->query("
+            SELECT fg.id, fg.student_id, fg.amount, fg.billing_date, fg.month_for, fg.remark 
+            FROM fees_generated fg
+            JOIN students s ON fg.student_id = s.id
+            WHERE fg.status = 'unpaid' AND s.status = 'active'
+        ");
         if ($res) {
             while ($row = $res->fetch_assoc()) {
                 $calc = calculate_bill_fine($row, $settings, $eval_date_str);

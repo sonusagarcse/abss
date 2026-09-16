@@ -505,17 +505,21 @@ $logo_src = file_exists($logo_path) ? 'data:image/png;base64,' . base64_encode(f
                 ?>
                 <?php if ($fine_amount > 0): ?>
                     <tr style="background: #fff7ed;">
-                        <td class="text-center" style="font-weight: 700; color: #ea580c;"><?php echo $sno++; ?></td>
-                        <td style="font-weight: 700; color: #9a3412;">
-                            <i class="fas fa-coins" style="color:#ea580c;"></i> Late Fine (विलंब शुल्क)
-                            <span style="font-size:0.75rem; font-weight:600; color:#ea580c; background:#ffedd5; padding:2px 8px; border-radius:50px; margin-left:6px;">
-                                <?php echo $fine_calc['overdue_days']; ?> Days Overdue @ ₹<?php echo number_format($fine_calc['rate_per_day'], 2); ?>/day
-                            </span>
+                        <td class="text-center" style="font-weight: 700; color: #ea580c; vertical-align: middle;"><?php echo $sno++; ?></td>
+                        <td style="font-weight: 700; color: #9a3412; vertical-align: middle;">
+                            <div style="display: block; font-size: 0.92rem; font-weight: 800; color: #9a3412; line-height: 1.35; margin-bottom: 3px;">
+                                <i class="fas fa-coins" style="color:#ea580c; margin-right: 5px;"></i>Late Fine (विलंब शुल्क)
+                            </div>
+                            <div style="display: block;">
+                                <span style="display: inline-block; font-size: 0.72rem; font-weight: 700; color: #c2410c; background: #ffedd5; border: 1px solid #fed7aa; padding: 2px 8px; border-radius: 4px; line-height: 1.3;">
+                                    <?php echo $fine_calc['overdue_days']; ?> Days Overdue @ ₹<?php echo number_format($fine_calc['rate_per_day'], 2); ?>/day
+                                </span>
+                            </div>
                         </td>
-                        <td style="font-weight: 700; color: #ea580c;">
+                        <td style="font-weight: 700; color: #ea580c; vertical-align: middle;">
                             <?php echo htmlspecialchars($bill['month_for']); ?>
                         </td>
-                        <td class="text-right" style="font-weight: 800; color:#ea580c;">
+                        <td class="text-right" style="font-weight: 800; color:#ea580c; vertical-align: middle;">
                             ₹ <?php echo number_format($fine_amount, 2); ?>
                         </td>
                     </tr>
@@ -664,6 +668,8 @@ $logo_src = file_exists($logo_path) ? 'data:image/png;base64,' . base64_encode(f
                 studentName: <?php echo json_encode($bill['student_name']); ?>,
                 invoiceNo: <?php echo json_encode($invoice_no); ?>,
                 amount: <?php echo json_encode(number_format($total_payable_amount, 2)); ?>,
+                fineAmount: <?php echo json_encode($fine_amount > 0 ? number_format($fine_amount, 2) : ''); ?>,
+                overdueDays: <?php echo json_encode($fine_amount > 0 ? (int)$fine_calc['overdue_days'] : 0); ?>,
                 date: <?php echo json_encode(date('d M, Y', strtotime($bill['billing_date']))); ?>,
                 phone: <?php echo json_encode($bill['phone'] ?? ''); ?>,
                 btnId: 'btnShareWaImg'

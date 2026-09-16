@@ -87,15 +87,15 @@ if ($active_students && $active_students->num_rows > 0) {
         }
 
         // If student is ALREADY billed for this month:
-        if ($already_billed && !isset($force_student_id)) {
+        if ($already_billed) {
             // Attach unbilled daily expenses only if any exist
             if ($exp_amount > 0) {
                 $exp_remark_str = implode(" | ", $exp_remarks);
                 $existing_unpaid_res = $conn->query("SELECT id, amount, remark FROM fees_generated WHERE student_id = $sid AND status = 'unpaid' ORDER BY id DESC LIMIT 1");
                 if ($existing_unpaid_res && $existing_unpaid_res->num_rows > 0) {
                     $eu = $existing_unpaid_res->fetch_assoc();
-                    $new_total = (float)$eu['amount'] + $exp_amount;
-                    $new_remark = $eu['remark'] . " | " . $exp_remark_str;
+                    $new_total = round((float)$eu['amount'] + $exp_amount, 2);
+                    $new_remark = trim($eu['remark'] ?? '') . " | " . $exp_remark_str;
                     $u = $conn->prepare("UPDATE fees_generated SET amount = ?, remark = ? WHERE id = ?");
                     $u->bind_param("dsi", $new_total, $new_remark, $eu['id']);
                     $u->execute();
@@ -112,7 +112,7 @@ if ($active_students && $active_students->num_rows > 0) {
 
             // Sync last_billed_date
             $conn->query("UPDATE students SET last_billed_date = '$current_eval_last' WHERE id = $sid AND (last_billed_date IS NULL OR last_billed_date < '$current_eval_last')");
-            continue; // 100% IDEMPOTENT: Exits immediately with 0 additions!
+            continue; // 100% IDEMPOTENT: Exits immediately with 0 regular tuition additions!
         }
 
         // ── 3. Check mid-month admission rule for current month ──
@@ -200,6 +200,16 @@ if ($active_students && $active_students->num_rows > 0) {
 
                     $update_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, month_for = ?, remark = ? WHERE id = ?");
                     $update_stmt->bind_param("dssi", $updated_amount, $updated_month_for, $updated_remark, $existing_unpaid['id']);
+                    $update_stmt->execute();
+                    $invoice_id = $existing_unpaid['id'];
+                } else if (!empty($exp_ids)) {
+                    // Month is already in bill, but unbilled daily expenses must be attached
+                    $updated_amount = round((float)$existing_unpaid['amount'] + $exp_amount, 2);
+                    $exp_remark_str = implode(" | ", $exp_remarks);
+                    $existing_rem = trim($existing_unpaid['remark'] ?? '');
+                    $updated_remark = !empty($existing_rem) ? ($existing_rem . " | " . $exp_remark_str) : $exp_remark_str;
+                    $update_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, remark = ? WHERE id = ?");
+                    $update_stmt->bind_param("dsi", $updated_amount, $updated_remark, $existing_unpaid['id']);
                     $update_stmt->execute();
                     $invoice_id = $existing_unpaid['id'];
                 } else {

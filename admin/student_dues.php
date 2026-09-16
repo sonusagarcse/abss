@@ -367,13 +367,27 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                 color: #000000 !important;
                 font-family: Arial, sans-serif !important;
             }
-            .sidebar, .page-header, .filter-glass-box, .btn-portal, .dues-actions, .stats-kpi-grid, .no-print {
+            .sidebar, 
+            .mobile-header, 
+            .mobile-bottom-nav, 
+            #adminBottomNav, 
+            .sidebar-overlay, 
+            .close-sidebar-btn, 
+            .hamburger-btn, 
+            .page-header, 
+            .filter-glass-box, 
+            .btn-portal, 
+            .dues-actions, 
+            .stats-kpi-grid, 
+            .no-print {
                 display: none !important;
+                visibility: hidden !important;
             }
             .main-content {
                 margin: 0 !important;
                 padding: 0 !important;
                 width: 100% !important;
+                max-width: 100% !important;
             }
             .portal-card {
                 box-shadow: none !important;

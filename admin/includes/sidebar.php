@@ -129,6 +129,18 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
         color: #0284c7;
         opacity: 1;
     }
+    @media print {
+        .mobile-header,
+        .mobile-bottom-nav,
+        #adminBottomNav,
+        .sidebar,
+        .sidebar-overlay,
+        .close-sidebar-btn,
+        .hamburger-btn {
+            display: none !important;
+            visibility: hidden !important;
+        }
+    }
 </style>
 
 <!-- Mobile Sticky Glass Header -->

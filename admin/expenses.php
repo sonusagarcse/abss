@@ -42,12 +42,7 @@ if (isset($_GET['delete'])) {
         $del = $conn->prepare("DELETE FROM student_expenses WHERE id = ? AND status = 'unbilled'");
         $del->bind_param("i", $exp_id);
         if ($del->execute() && $conn->affected_rows > 0) {
-            $msg = "Expense removed.";
-            
-            $force_student_id = $student_id;
-            ob_start();
-            require __DIR__ . '/includes/billing_engine.php';
-            ob_end_clean();
+            $msg = "Expense removed successfully.";
         } else {
             $err = "Cannot delete this expense (it may have already been billed).";
         }

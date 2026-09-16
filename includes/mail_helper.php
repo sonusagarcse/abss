@@ -292,7 +292,7 @@ function get_fee_paid_template($student_name, $amount, $month, $payment_date, $r
 /**
  * Generates Fee invoice generated HTML email.
  */
-function get_fee_generated_template($student_name, $amount, $month, $billing_date, $remark, $portal_url) {
+function get_fee_generated_template($student_name, $amount, $month, $billing_date, $remark, $portal_url, $fine_amount = 0, $overdue_days = 0) {
     $content = '
     <div class="greeting">Dear Parents / Guardians,</div>
     <p>A new monthly tuition/fee invoice has been generated for <b>' . htmlspecialchars($student_name) . '</b>. Please find the invoice details below:</p>
@@ -304,8 +304,8 @@ function get_fee_generated_template($student_name, $amount, $month, $billing_dat
                 <td style="padding: 10px 0; font-weight:800; color:#0d47a1; text-align:right;">' . htmlspecialchars($student_name) . '</td>
             </tr>
             <tr>
-                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Amount Due</td>
-                <td style="padding: 10px 0; font-weight:800; color:#b71c1c; text-align:right; font-size:18px; border-top:1px solid #eef2ff;">₹ ' . number_format($amount, 2) . '</td>
+                <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Base Bill Amount</td>
+                <td style="padding: 10px 0; font-weight:800; color:#b71c1c; text-align:right; font-size:17px; border-top:1px solid #eef2ff;">₹ ' . number_format($amount, 2) . '</td>
             </tr>
             <tr>
                 <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Billing Month</td>
@@ -315,6 +315,18 @@ function get_fee_generated_template($student_name, $amount, $month, $billing_dat
                 <td style="padding: 10px 0; font-weight:700; color:#5c6bc0; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Issue Date</td>
                 <td style="padding: 10px 0; font-weight:800; color:#0d47a1; text-align:right; border-top:1px solid #eef2ff;">' . date('d F, Y', strtotime($billing_date)) . '</td>
             </tr>';
+    
+    if ($fine_amount > 0) {
+        $content .= '
+            <tr>
+                <td style="padding: 10px 0; font-weight:700; color:#ea580c; font-size:13px; text-transform:uppercase; border-top:1px solid #eef2ff;">Late Fine / Surcharge</td>
+                <td style="padding: 10px 0; font-weight:800; color:#ea580c; text-align:right; border-top:1px solid #eef2ff;">+ ₹ ' . number_format($fine_amount, 2) . ($overdue_days > 0 ? ' (' . (int)$overdue_days . ' Days Overdue)' : '') . '</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px 0; font-weight:800; color:#991b1b; font-size:14px; text-transform:uppercase; border-top:2px solid #eef2ff;">Total Amount Due</td>
+                <td style="padding: 10px 0; font-weight:900; color:#991b1b; text-align:right; font-size:18px; border-top:2px solid #eef2ff;">₹ ' . number_format($amount + $fine_amount, 2) . '</td>
+            </tr>';
+    }
     
     if (!empty($remark)) {
         $content .= '
