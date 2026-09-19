@@ -401,7 +401,7 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
                         $photo_url = (strpos($raw_photo, 'http') === 0 || strpos($raw_photo, '../') === 0) ? $raw_photo : '../' . ltrim($raw_photo, '/');
                     }
                     $c_name = htmlspecialchars($c['name']);
-                    $c_reg = htmlspecialchars($c['reg_no'] ?: 'ABSS-' . str_pad($c['id'], 4, '0', STR_PAD_LEFT));
+                    $c_reg = htmlspecialchars($c['reg_no'] ?: ('IMG' . date('y') . str_pad($c['id'], 4, '0', STR_PAD_LEFT)));
                     $c_class = htmlspecialchars($c['class_admitted'] ?: 'Class 5');
                     $c_mode = htmlspecialchars($c['scholar_mode'] ?? 'Day Scholar');
                     $c_target = htmlspecialchars($c['target_school'] ?: 'Netarhat Preparation');

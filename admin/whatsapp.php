@@ -817,7 +817,7 @@ Regarding student *{name}* (Reg No: *{reg_no}*, Class: *{class}*):
                 .replace(/\{parent_name\}/g, student.parent_name || 'Guardian')
                 .replace(/\{due_fee\}/g, dueAmt)
                 .replace(/\{month\}/g, dueMonths)
-                .replace(/\{reg_no\}/g, student.reg_no || 'ABSS-2026')
+                .replace(/\{reg_no\}/g, student.reg_no || 'IMG260001')
                 .replace(/\{class\}/g, student.class_admitted || 'Class 5')
                 .replace(/\{scholar_mode\}/g, student.scholar_mode || 'Day Scholar')
                 .replace(/\{target_school\}/g, student.target_school || 'Sainik School')

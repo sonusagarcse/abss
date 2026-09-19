@@ -211,6 +211,10 @@ function runAutoMigrator($conn) {
         if ($checkRegNo && $checkRegNo->num_rows == 0) {
             $conn->query("ALTER TABLE students ADD COLUMN reg_no VARCHAR(20) NULL AFTER id");
         }
+        $checkOldRegNo = $conn->query("SHOW COLUMNS FROM students LIKE 'old_reg_no'");
+        if ($checkOldRegNo && $checkOldRegNo->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN old_reg_no VARCHAR(30) NULL AFTER reg_no");
+        }
         $checkPhoto = $conn->query("SHOW COLUMNS FROM students LIKE 'photo'");
         if ($checkPhoto && $checkPhoto->num_rows == 0) {
             $conn->query("ALTER TABLE students ADD COLUMN photo VARCHAR(255) NULL");

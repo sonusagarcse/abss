@@ -178,8 +178,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
         $new_id = $conn->insert_id;
-        // Generate Registration Number: ABSS-YEAR-XXXX
-        $reg_no = 'ABSS-' . date('Y') . '-' . str_pad($new_id, 4, '0', STR_PAD_LEFT);
+        // Generate Registration Number: IMG + 2-digit year + 4-digit sequential (e.g. IMG260041)
+        $prefix = 'IMG' . date('y');
+        $reg_res = $conn->query("SELECT reg_no FROM students WHERE reg_no LIKE '{$prefix}%' ORDER BY reg_no DESC LIMIT 1");
+        $next_num = 1;
+        if ($reg_res && $row = $reg_res->fetch_assoc()) {
+            $last_num = intval(substr($row['reg_no'], strlen($prefix)));
+            $next_num = $last_num + 1;
+        }
+        $reg_no = $prefix . str_pad($next_num, 4, '0', STR_PAD_LEFT);
         $conn->query("UPDATE students SET reg_no = '$reg_no' WHERE id = $new_id");
         // Rename admission form scan with actual student id
         if (!empty($photo_path)) {
