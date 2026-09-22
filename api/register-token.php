@@ -1,11 +1,17 @@
 <?php
 // api/register-token.php - FCM Token Registration API Endpoint
 header('Content-Type: application/json; charset=utf-8');
-header('Access-Control-Allow-Origin: *');
+$origin = $_SERVER['HTTP_ORIGIN'] ?? '';
+if (!empty($origin)) {
+    header("Access-Control-Allow-Origin: $origin");
+    header('Access-Control-Allow-Credentials: true');
+} else {
+    header('Access-Control-Allow-Origin: *');
+}
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With');
 
-if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') {
     http_response_code(200);
     exit;
 }
@@ -48,6 +54,34 @@ $app_version = substr(preg_replace('/[^a-zA-Z0-9_.\-]/', '', $app_version), 0, 2
 
 try {
     $conn = getDB();
+
+    // Fallback: If unlinked, attempt IP correlation with recent parent logins (e.g. app launched right around login)
+    if ($parent_id <= 0) {
+        $clientIp = $_SERVER['HTTP_CF_CONNECTING_IP'] ?? $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? '';
+        if (strpos($clientIp, ',') !== false) {
+            $clientIp = trim(explode(',', $clientIp)[0]);
+        }
+        if (!empty($clientIp) && $clientIp !== '127.0.0.1' && $clientIp !== '::1') {
+            $ipStmt = $conn->prepare("
+                SELECT user_id 
+                FROM activity_logs 
+                WHERE ip_address = ? 
+                  AND (user_role = 'parent' OR action_details LIKE '%Parent%')
+                  AND user_id > 0
+                  AND created_at >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)
+                ORDER BY id DESC LIMIT 1
+            ");
+            if ($ipStmt) {
+                $ipStmt->bind_param("s", $clientIp);
+                $ipStmt->execute();
+                $ipRes = $ipStmt->get_result();
+                if ($ipRow = $ipRes->fetch_assoc()) {
+                    $parent_id = (int)$ipRow['user_id'];
+                }
+                $ipStmt->close();
+            }
+        }
+    }
     
     // Auto-resolve student if parent is present and student is not
     if ($parent_id > 0 && $student_id <= 0) {

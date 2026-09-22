@@ -73,6 +73,9 @@ AddType application/vnd.android.package-archive .apk .APK
     Options -MultiViews
     RewriteEngine On
 
+    # 0. Live Server Alias: If deployed at domain root, seamlessly route legacy /abss/ paths
+    RewriteRule ^abss/(.*)$ $1 [L,QSA]
+
     # 1. External 301 Redirect: Remove .php from URL if requested directly by browser
     # 1a. If index.php is requested, redirect to directory root
     RewriteCond %{REQUEST_METHOD} !POST
@@ -101,5 +104,5 @@ AddType application/vnd.android.package-archive .apk .APK
 
 # 5. CUSTOM ERROR PAGES
 # ----------------------------------------------------------------------
-ErrorDocument 404 /abss/404.php
+ErrorDocument 404 /404.php
 

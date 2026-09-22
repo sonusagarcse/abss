@@ -140,16 +140,55 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         </div>
     </div>
 
+    <?php
+    $base_path = '/';
+    if (defined('APP_URL') && !empty(APP_URL)) {
+        $parsed_path = parse_url(APP_URL, PHP_URL_PATH);
+        if (!empty($parsed_path)) {
+            $base_path = rtrim($parsed_path, '/') . '/';
+        }
+    } elseif (strpos($_SERVER['HTTP_HOST'] ?? '', 'localhost') !== false || strpos($_SERVER['REQUEST_URI'] ?? '', '/abss/') !== false) {
+        $base_path = '/abss/';
+    }
+    ?>
     <!-- ABSS FCM Device Token Hook for Native Android WebView App -->
+    <script>
+        window.ABSS_BASE_PATH = <?php echo json_encode($base_path); ?>;
+    </script>
     <script src="../js/fcm-client.js"></script>
     <script>
-        document.addEventListener("DOMContentLoaded", function() {
-            var cached = localStorage.getItem('abss_fcm_token');
-            if (cached) {
-                var el = document.getElementById('login_fcm_token');
-                if (el) el.value = cached;
+        function syncLoginFcmToken() {
+            var el = document.getElementById('login_fcm_token');
+            if (!el) return;
+            var token = el.value || '';
+            if (!token) {
+                try {
+                    token = localStorage.getItem('abss_fcm_token') || '';
+                } catch(e) {}
             }
-        });
+            if (!token && window.Android && typeof window.Android.getFcmToken === 'function') {
+                try { token = window.Android.getFcmToken(); } catch(e) {}
+            }
+            if (!token && window.WebToApp && typeof window.WebToApp.getFcmToken === 'function') {
+                try { token = window.WebToApp.getFcmToken(); } catch(e) {}
+            }
+            if (!token && window.ShiahoApp && typeof window.ShiahoApp.getFcmToken === 'function') {
+                try { token = window.ShiahoApp.getFcmToken(); } catch(e) {}
+            }
+            if (!token) {
+                var match = document.cookie.match(/abss_fcm_token=([^;]+)/);
+                if (match) token = decodeURIComponent(match[1]);
+            }
+            if (token) {
+                el.value = token;
+            }
+        }
+        document.addEventListener("DOMContentLoaded", syncLoginFcmToken);
+        syncLoginFcmToken();
+        var loginForm = document.querySelector('form');
+        if (loginForm) {
+            loginForm.addEventListener('submit', syncLoginFcmToken);
+        }
     </script>
 </body>
 </html>

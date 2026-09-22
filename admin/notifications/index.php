@@ -49,8 +49,20 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['sync_live_tokens'])) 
                 if (strlen($tVal) >= 20) {
                     $tType = $tRow['device_type'] ?? 'android';
                     $tVer  = $tRow['app_version'] ?? '1.2.0';
-                    $stmt = $conn->prepare("INSERT INTO fcm_tokens (token, device_type, app_version) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE device_type = VALUES(device_type), app_version = VALUES(app_version), updated_at = NOW()");
-                    $stmt->bind_param("sss", $tVal, $tType, $tVer);
+                    $tParentId  = !empty($tRow['parent_id']) ? (int)$tRow['parent_id'] : null;
+                    $tStudentId = !empty($tRow['student_id']) ? (int)$tRow['student_id'] : null;
+
+                    $stmt = $conn->prepare("
+                        INSERT INTO fcm_tokens (token, device_type, app_version, parent_id, student_id) 
+                        VALUES (?, ?, ?, ?, ?) 
+                        ON DUPLICATE KEY UPDATE 
+                            device_type = VALUES(device_type), 
+                            app_version = VALUES(app_version), 
+                            parent_id = COALESCE(VALUES(parent_id), parent_id),
+                            student_id = COALESCE(VALUES(student_id), student_id),
+                            updated_at = NOW()
+                    ");
+                    $stmt->bind_param("sssii", $tVal, $tType, $tVer, $tParentId, $tStudentId);
                     if ($stmt->execute()) {
                         $syncedCount++;
                         $tokensToSub[] = $tVal;
@@ -68,6 +80,101 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['sync_live_tokens'])) 
     } else {
         $err = "Failed to connect to live server (HTTP $httpCode). Ensure https://abss.lkvmbihar.in is accessible.";
     }
+}
+
+// Handle Retroactive Auto-Linking of Unlinked Tokens
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['auto_link_tokens'])) {
+    $unlinkedTokens = $conn->query("SELECT id, token, created_at, updated_at FROM fcm_tokens WHERE parent_id IS NULL OR student_id IS NULL");
+    $linkedCount = 0;
+    if ($unlinkedTokens) {
+        while ($tk = $unlinkedTokens->fetch_assoc()) {
+            $tokenId = (int)$tk['id'];
+            $cTime = $tk['created_at'];
+            $uTime = $tk['updated_at'];
+            $matchedParentId = 0;
+
+            // 1. Try finding login within +/- 20 minutes of created_at
+            $logStmt = $conn->prepare("
+                SELECT user_id 
+                FROM activity_logs 
+                WHERE (user_role = 'parent' OR action_details LIKE '%Parent%')
+                  AND user_id > 0
+                  AND created_at BETWEEN DATE_SUB(?, INTERVAL 20 MINUTE) AND DATE_ADD(?, INTERVAL 20 MINUTE)
+                ORDER BY ABS(TIMESTAMPDIFF(SECOND, created_at, ?)) ASC 
+                LIMIT 1
+            ");
+            if ($logStmt) {
+                $logStmt->bind_param("sss", $cTime, $cTime, $cTime);
+                $logStmt->execute();
+                $res = $logStmt->get_result();
+                if ($row = $res->fetch_assoc()) {
+                    $matchedParentId = (int)$row['user_id'];
+                }
+                $logStmt->close();
+            }
+
+            // 2. Try site_visitors within +/- 20 minutes of created_at
+            if (!$matchedParentId) {
+                $visStmt = $conn->prepare("
+                    SELECT parent_id 
+                    FROM site_visitors 
+                    WHERE parent_id > 0 
+                      AND visited_at BETWEEN DATE_SUB(?, INTERVAL 20 MINUTE) AND DATE_ADD(?, INTERVAL 20 MINUTE)
+                    ORDER BY ABS(TIMESTAMPDIFF(SECOND, visited_at, ?)) ASC 
+                    LIMIT 1
+                ");
+                if ($visStmt) {
+                    $visStmt->bind_param("sss", $cTime, $cTime, $cTime);
+                    $visStmt->execute();
+                    $res = $visStmt->get_result();
+                    if ($row = $res->fetch_assoc()) {
+                        $matchedParentId = (int)$row['parent_id'];
+                    }
+                    $visStmt->close();
+                }
+            }
+
+            // 3. Fallback: check updated_at if different
+            if (!$matchedParentId && $uTime !== $cTime) {
+                $logStmt2 = $conn->prepare("
+                    SELECT user_id 
+                    FROM activity_logs 
+                    WHERE (user_role = 'parent' OR action_details LIKE '%Parent%')
+                      AND user_id > 0
+                      AND created_at BETWEEN DATE_SUB(?, INTERVAL 20 MINUTE) AND DATE_ADD(?, INTERVAL 20 MINUTE)
+                    ORDER BY ABS(TIMESTAMPDIFF(SECOND, created_at, ?)) ASC 
+                    LIMIT 1
+                ");
+                if ($logStmt2) {
+                    $logStmt2->bind_param("sss", $uTime, $uTime, $uTime);
+                    $logStmt2->execute();
+                    $res2 = $logStmt2->get_result();
+                    if ($row2 = $res2->fetch_assoc()) {
+                        $matchedParentId = (int)$row2['user_id'];
+                    }
+                    $logStmt2->close();
+                }
+            }
+
+            if ($matchedParentId > 0) {
+                $checkParent = $conn->query("SELECT id FROM parents WHERE id = $matchedParentId LIMIT 1");
+                if ($checkParent && $checkParent->num_rows > 0) {
+                    $studQ = $conn->query("SELECT id FROM students WHERE parent_id = $matchedParentId ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, id ASC LIMIT 1");
+                    $studentId = ($studQ && $stud = $studQ->fetch_assoc()) ? (int)$stud['id'] : null;
+
+                    $upStmt = $conn->prepare("UPDATE fcm_tokens SET parent_id = ?, student_id = ?, updated_at = NOW() WHERE id = ?");
+                    if ($upStmt) {
+                        $upStmt->bind_param("iii", $matchedParentId, $studentId, $tokenId);
+                        if ($upStmt->execute()) {
+                            $linkedCount++;
+                        }
+                        $upStmt->close();
+                    }
+                }
+            }
+        }
+    }
+    $msg = "Auto-linking complete: Successfully correlated and linked $linkedCount device token(s) to parent accounts!";
 }
 
 // Handle Manual Token to Student Assignment
@@ -481,7 +588,7 @@ if ($all_students_res) {
                 </div>
 
                 <!-- Quick Actions: Add Token & Sync Live -->
-                <div class="token-action-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px; width: 100%; box-sizing: border-box;">
+                <div class="token-action-row" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; width: 100%; box-sizing: border-box;">
                     <button type="button" onclick="var f=document.getElementById('manualTokenForm'); f.style.display = (f.style.display === 'none' || f.style.display === '') ? 'block' : 'none';" class="btn-token-action btn-token-blue" style="width: 100%; min-height: 42px; padding: 10px 8px; font-size: 0.82rem; font-weight: 700; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 6px; border: none; cursor: pointer; background: #2563eb; color: #fff; box-sizing: border-box;">
                         <i class="fas fa-plus"></i> Add Token
                     </button>
@@ -491,6 +598,13 @@ if ($all_students_res) {
                         </button>
                     </form>
                 </div>
+                <?php if ($total_tokens > $linked_tokens): ?>
+                    <form method="POST" style="margin: 0 0 16px 0; padding: 0; width: 100%;">
+                        <button type="submit" name="auto_link_tokens" class="btn-token-action" style="width: 100%; min-height: 38px; padding: 9px 12px; font-size: 0.82rem; font-weight: 800; border-radius: 12px; display: flex; align-items: center; justify-content: center; gap: 8px; border: 1px solid #bbf7d0; cursor: pointer; background: #f0fdf4; color: #15803d; box-sizing: border-box; transition: 0.2s;" title="Auto-match unlinked tokens with recent parent logins and active students">
+                            <i class="fas fa-wand-magic-sparkles"></i> Auto-Link <?php echo ($total_tokens - $linked_tokens); ?> Unlinked Device(s)
+                        </button>
+                    </form>
+                <?php endif; ?>
 
                 <!-- Inline Manual Token Form -->
                 <div id="manualTokenForm" style="display: none; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 12px; padding: 14px; margin-bottom: 15px;">

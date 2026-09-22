@@ -19,12 +19,24 @@
     const VAPID_KEY = "BLBC9JquNYYaHFTiJuzrH50jyTBweuMdgSDkNZpHlyf_JhPgiPUa1l1bokgWdho1xo4YPpnk33-adM7qX1KcM3M";
 
     function getBasePath() {
-        const baseEl = document.querySelector('base');
-        let basePath = '/abss/';
-        if (baseEl && baseEl.getAttribute('href')) {
-            basePath = baseEl.getAttribute('href');
+        if (typeof window.ABSS_BASE_PATH === 'string' && window.ABSS_BASE_PATH.length > 0) {
+            return window.ABSS_BASE_PATH.replace(/\/+$/, '') + '/';
         }
-        return basePath.replace(/\/$/, '') + '/';
+        const baseEl = document.querySelector('base');
+        if (baseEl && baseEl.getAttribute('href')) {
+            return baseEl.getAttribute('href').replace(/\/+$/, '') + '/';
+        }
+        // Detect if app is hosted in a subfolder (e.g. localhost/abss/) or at domain root (live server)
+        const pathname = window.location.pathname;
+        const abssIdx = pathname.indexOf('/abss/');
+        if (abssIdx !== -1) {
+            return pathname.substring(0, abssIdx + 6);
+        }
+        const m = pathname.match(/^(.*?\/)(?:parent|admin|teacher|api)(?:\/|$)/i);
+        if (m) {
+            return m[1];
+        }
+        return '/';
     }
 
     function getApiUrl() {
@@ -42,7 +54,14 @@
         try {
             localStorage.setItem('abss_fcm_token', t);
             // Also store in cookie for seamless server-side PHP detection during logins
-            document.cookie = "abss_fcm_token=" + encodeURIComponent(t) + "; path=/; max-age=31536000; SameSite=Lax";
+            const isSecure = window.location.protocol === 'https:' ? '; Secure' : '';
+            document.cookie = "abss_fcm_token=" + encodeURIComponent(t) + "; path=/; max-age=31536000; SameSite=Lax" + isSecure;
+            
+            // Sync with login form hidden input if present
+            const loginEl = document.getElementById('login_fcm_token');
+            if (loginEl && !loginEl.value) {
+                loginEl.value = t;
+            }
         } catch(e) {}
     }
 
@@ -51,19 +70,20 @@
         if (!fcmToken || fcmToken.length < 10) return;
         setCachedToken(fcmToken);
 
-        const pId = parentId || window.ABSS_PARENT_ID || 0;
-        const sId = studentId || window.ABSS_STUDENT_ID || 0;
+        const pId = (parentId !== undefined && parentId !== null) ? parseInt(parentId, 10) : (window.ABSS_PARENT_ID || 0);
+        const sId = (studentId !== undefined && studentId !== null) ? parseInt(studentId, 10) : (window.ABSS_STUDENT_ID || 0);
 
         const payload = {
             token: fcmToken,
             device_type: deviceType || 'android_app',
             app_version: appVersion || '2.4.3',
-            parent_id: pId ? parseInt(pId, 10) : undefined,
-            student_id: sId ? parseInt(sId, 10) : undefined
+            parent_id: pId > 0 ? pId : undefined,
+            student_id: sId > 0 ? sId : undefined
         };
 
         fetch(getApiUrl(), {
             method: 'POST',
+            credentials: 'include',
             headers: {
                 'Content-Type': 'application/json'
             },
@@ -104,7 +124,7 @@
 
         if (token) {
             console.log('[ABSS FCM] Captured Android token from URL parameters.');
-            window.registerFcmDeviceToken(token, 'android_app', '2.4.3');
+            window.registerFcmDeviceToken(token, 'android_app', '2.4.3', window.ABSS_PARENT_ID, window.ABSS_STUDENT_ID);
         }
     }
 
@@ -112,21 +132,21 @@
     window.onFcmTokenReceived = function(token) {
         if (token) {
             console.log('[ABSS FCM] Received token via onFcmTokenReceived');
-            window.registerFcmDeviceToken(token, 'android_app', '2.4.3');
+            window.registerFcmDeviceToken(token, 'android_app', '2.4.3', window.ABSS_PARENT_ID, window.ABSS_STUDENT_ID);
         }
     };
 
     window.setFcmToken = function(token) {
         if (token) {
             console.log('[ABSS FCM] Received token via setFcmToken');
-            window.registerFcmDeviceToken(token, 'android_app', '2.4.3');
+            window.registerFcmDeviceToken(token, 'android_app', '2.4.3', window.ABSS_PARENT_ID, window.ABSS_STUDENT_ID);
         }
     };
 
     window.onTokenReceived = function(token) {
         if (token) {
             console.log('[ABSS FCM] Received token via onTokenReceived');
-            window.registerFcmDeviceToken(token, 'android_app', '2.4.3');
+            window.registerFcmDeviceToken(token, 'android_app', '2.4.3', window.ABSS_PARENT_ID, window.ABSS_STUDENT_ID);
         }
     };
 
@@ -135,15 +155,15 @@
         try {
             if (window.Android && typeof window.Android.getFcmToken === 'function') {
                 const t = window.Android.getFcmToken();
-                if (t) window.registerFcmDeviceToken(t, 'android_app', '2.4.3');
+                if (t) window.registerFcmDeviceToken(t, 'android_app', '2.4.3', window.ABSS_PARENT_ID, window.ABSS_STUDENT_ID);
             }
             if (window.WebToApp && typeof window.WebToApp.getFcmToken === 'function') {
                 const t = window.WebToApp.getFcmToken();
-                if (t) window.registerFcmDeviceToken(t, 'android_app', '2.4.3');
+                if (t) window.registerFcmDeviceToken(t, 'android_app', '2.4.3', window.ABSS_PARENT_ID, window.ABSS_STUDENT_ID);
             }
             if (window.ShiahoApp && typeof window.ShiahoApp.getFcmToken === 'function') {
                 const t = window.ShiahoApp.getFcmToken();
-                if (t) window.registerFcmDeviceToken(t, 'android_app', '2.4.3');
+                if (t) window.registerFcmDeviceToken(t, 'android_app', '2.4.3', window.ABSS_PARENT_ID, window.ABSS_STUDENT_ID);
             }
         } catch(e) {}
     }
@@ -202,7 +222,7 @@
                         serviceWorkerRegistration: registration 
                     }).then(function(currentToken) {
                         if (currentToken) {
-                            window.registerFcmDeviceToken(currentToken, 'web_browser', '1.0.0');
+                            window.registerFcmDeviceToken(currentToken, 'web_browser', '1.0.0', window.ABSS_PARENT_ID, window.ABSS_STUDENT_ID);
                         }
                     }).catch(function(err) {});
                 }

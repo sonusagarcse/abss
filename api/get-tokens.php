@@ -19,7 +19,7 @@ if (!$isAdmin && $apiKey !== $validKey && $apiKey !== 'abss_fcm_secret_key_2026'
 }
 
 $conn = getDB();
-$res = $conn->query("SELECT token, device_type, app_version, created_at, updated_at FROM fcm_tokens ORDER BY updated_at DESC LIMIT 200");
+$res = $conn->query("SELECT token, device_type, app_version, parent_id, student_id, created_at, updated_at FROM fcm_tokens ORDER BY updated_at DESC LIMIT 500");
 $tokens = [];
 if ($res) {
     while ($row = $res->fetch_assoc()) {

@@ -738,10 +738,43 @@ if ($fcm_pId > 0) {
             $fcm_sId = (int)$fcm_sr['id'];
         }
     }
+
+    // Direct server-side token linking if cookie is present (Zero reliance on JS fetch)
+    if (!empty($_COOKIE['abss_fcm_token']) && isset($conn)) {
+        $cToken = trim($_COOKIE['abss_fcm_token']);
+        if (strlen($cToken) >= 20) {
+            $db_sId = $fcm_sId > 0 ? $fcm_sId : null;
+            $lStmt = $conn->prepare("
+                INSERT INTO fcm_tokens (token, device_type, app_version, parent_id, student_id)
+                VALUES (?, 'android', '2.4.3', ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    parent_id = COALESCE(VALUES(parent_id), parent_id), 
+                    student_id = COALESCE(VALUES(student_id), student_id), 
+                    updated_at = NOW()
+            ");
+            if ($lStmt) {
+                $lStmt->bind_param("sii", $cToken, $fcm_pId, $db_sId);
+                $lStmt->execute();
+                $lStmt->close();
+            }
+        }
+    }
+}
+
+// Calculate dynamic base path for script API calls
+$base_path = '/';
+if (defined('APP_URL') && !empty(APP_URL)) {
+    $parsed_path = parse_url(APP_URL, PHP_URL_PATH);
+    if (!empty($parsed_path)) {
+        $base_path = rtrim($parsed_path, '/') . '/';
+    }
+} elseif (strpos($_SERVER['HTTP_HOST'] ?? '', 'localhost') !== false || strpos($_SERVER['REQUEST_URI'] ?? '', '/abss/') !== false) {
+    $base_path = '/abss/';
 }
 ?>
 <!-- ABSS FCM Device Token Engine & Auto-Linking -->
 <script>
+    window.ABSS_BASE_PATH = <?php echo json_encode($base_path); ?>;
     window.ABSS_PARENT_ID = <?php echo $fcm_pId; ?>;
     window.ABSS_STUDENT_ID = <?php echo $fcm_sId; ?>;
 </script>

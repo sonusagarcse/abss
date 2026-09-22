@@ -26,14 +26,17 @@ messaging.onBackgroundMessage(function (payload) {
     const notificationTitle = (payload.data && payload.data.title) ? payload.data.title : 'ABSS Notification';
     const tagKey = (payload.data && payload.data.tag) ? payload.data.tag : ('abss_tag_' + Date.now());
 
+    const swBase = (self.location.pathname.indexOf('/abss/') !== -1) ? '/abss/' : '/';
+    const fallbackLogo = swBase + 'assets/logo.png';
+
     const notificationOptions = {
         body: (payload.data && (payload.data.body || payload.data.message)) ? (payload.data.body || payload.data.message) : '',
-        icon: (payload.data && payload.data.image_url) ? payload.data.image_url : '/abss/assets/logo.png',
-        badge: '/abss/assets/logo.png',
+        icon: (payload.data && payload.data.image_url) ? payload.data.image_url : fallbackLogo,
+        badge: fallbackLogo,
         tag: tagKey,
         renotify: false,
         data: {
-            url: (payload.data && (payload.data.click_url || payload.data.url)) ? (payload.data.click_url || payload.data.url) : '/abss/'
+            url: (payload.data && (payload.data.click_url || payload.data.url)) ? (payload.data.click_url || payload.data.url) : swBase
         }
     };
 
@@ -42,7 +45,8 @@ messaging.onBackgroundMessage(function (payload) {
 
 self.addEventListener('notificationclick', function(event) {
     event.notification.close();
-    let targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/abss/';
+    const swBase = (self.location.pathname.indexOf('/abss/') !== -1) ? '/abss/' : '/';
+    let targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : swBase;
     
     // Normalize relative paths
     if (!targetUrl.startsWith('http')) {
