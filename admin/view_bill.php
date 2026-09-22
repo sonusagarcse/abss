@@ -7,18 +7,30 @@ if (!isset($_GET['id'])) {
     exit();
 }
 
-$bill_id = (int)$_GET['id'];
+$bill_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$inv_param = isset($_GET['inv']) ? trim($_GET['inv']) : (isset($_GET['invoice']) ? trim($_GET['invoice']) : '');
 
-// Fetch bill details with student scholar mode & class admitted
-$stmt = $conn->prepare("
-    SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, s.guardian_email,
-           COALESCE(p.phone, s.phone, '') AS phone, p.parent_name, COALESCE(p.email, s.guardian_email, '') as parent_email
-    FROM fees_generated fg
-    JOIN students s ON fg.student_id = s.id
-    LEFT JOIN parents p ON s.parent_id = p.id
-    WHERE fg.id = ?
-");
-$stmt->bind_param("i", $bill_id);
+if ($bill_id > 0) {
+    $stmt = $conn->prepare("
+        SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, s.guardian_email,
+               COALESCE(p.phone, s.phone, '') AS phone, p.parent_name, COALESCE(p.email, s.guardian_email, '') as parent_email
+        FROM fees_generated fg
+        JOIN students s ON fg.student_id = s.id
+        LEFT JOIN parents p ON s.parent_id = p.id
+        WHERE fg.id = ?
+    ");
+    $stmt->bind_param("i", $bill_id);
+} else {
+    $stmt = $conn->prepare("
+        SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, s.guardian_email,
+               COALESCE(p.phone, s.phone, '') AS phone, p.parent_name, COALESCE(p.email, s.guardian_email, '') as parent_email
+        FROM fees_generated fg
+        JOIN students s ON fg.student_id = s.id
+        LEFT JOIN parents p ON s.parent_id = p.id
+        WHERE fg.invoice_no = ?
+    ");
+    $stmt->bind_param("s", $inv_param);
+}
 $stmt->execute();
 $bill = $stmt->get_result()->fetch_assoc();
 
@@ -93,7 +105,7 @@ $fine_amount = ($bill['status'] === 'unpaid') ? $fine_calc['fine_amount'] : 0.00
 $total_payable_amount = (float)$bill['amount'] + $fine_amount;
 
 $amount_in_words = amountToWords($total_payable_amount);
-$invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . str_pad($bill['id'], 5, '0', STR_PAD_LEFT);
+$invoice_no = get_invoice_no($bill);
 $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
 ?>
 

@@ -1,6 +1,6 @@
 <?php
 // parent/includes/sidebar.php - Parent Navigation & Mobile Bottom Bar
-$current_page = basename($_SERVER['PHP_SELF']);
+$current_page = str_replace('.php', '', basename($_SERVER['PHP_SELF']));
 ?>
 
 <!-- Mobile Top Header -->
@@ -24,25 +24,25 @@ $current_page = basename($_SERVER['PHP_SELF']);
 <nav class="mobile-bottom-nav">
     <ul>
         <li>
-            <a href="dashboard.php" class="<?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
+            <a href="dashboard" class="<?php echo $current_page == 'dashboard' ? 'active' : ''; ?>">
                 <i class="fas fa-th-large"></i>
                 <span>Overview</span>
             </a>
         </li>
         <li>
-            <a href="fees.php" class="<?php echo $current_page == 'fees.php' ? 'active' : ''; ?>">
+            <a href="fees" class="<?php echo $current_page == 'fees' ? 'active' : ''; ?>">
                 <i class="fas fa-wallet"></i>
                 <span>Fees</span>
             </a>
         </li>
         <li>
-            <a href="results.php" class="<?php echo $current_page == 'results.php' ? 'active' : ''; ?>">
+            <a href="results" class="<?php echo $current_page == 'results' ? 'active' : ''; ?>">
                 <i class="fas fa-award"></i>
                 <span>Results</span>
             </a>
         </li>
         <li>
-            <a href="gallery.php" class="<?php echo $current_page == 'gallery.php' ? 'active' : ''; ?>">
+            <a href="gallery" class="<?php echo $current_page == 'gallery' ? 'active' : ''; ?>">
                 <i class="fas fa-photo-video"></i>
                 <span>Gallery</span>
             </a>
@@ -83,7 +83,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
     <ul class="nav-menu">
         <li class="nav-item">
-            <a href="dashboard.php" class="nav-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
+            <a href="dashboard" class="nav-link <?php echo $current_page == 'dashboard' ? 'active' : ''; ?>">
                 <i class="fas fa-th-large"></i> Overview Dashboard
             </a>
         </li>
@@ -94,43 +94,43 @@ $current_page = basename($_SERVER['PHP_SELF']);
             </a>
         </li>
         <li class="nav-item">
-            <a href="documents.php" class="nav-link <?php echo $current_page == 'documents.php' ? 'active' : ''; ?>">
+            <a href="documents" class="nav-link <?php echo $current_page == 'documents' ? 'active' : ''; ?>">
                 <i class="fas fa-file-alt"></i> Required Documents
             </a>
         </li>
         <li class="nav-item">
-            <a href="results.php" class="nav-link <?php echo $current_page == 'results.php' ? 'active' : ''; ?>">
+            <a href="results" class="nav-link <?php echo $current_page == 'results' ? 'active' : ''; ?>">
                 <i class="fas fa-award"></i> Academic Performance
             </a>
         </li>
         <li class="nav-item">
-            <a href="fees.php" class="nav-link <?php echo $current_page == 'fees.php' ? 'active' : ''; ?>">
+            <a href="fees" class="nav-link <?php echo $current_page == 'fees' ? 'active' : ''; ?>">
                 <i class="fas fa-wallet"></i> Dues & Fees Ledger
             </a>
         </li>
         <li class="nav-item">
-            <a href="notices.php" class="nav-link <?php echo $current_page == 'notices.php' ? 'active' : ''; ?>">
+            <a href="notices" class="nav-link <?php echo $current_page == 'notices' ? 'active' : ''; ?>">
                 <i class="fas fa-bullhorn"></i> Notice Board
             </a>
         </li>
         <li class="nav-item">
-            <a href="gallery.php" class="nav-link <?php echo $current_page == 'gallery.php' ? 'active' : ''; ?>">
+            <a href="gallery" class="nav-link <?php echo $current_page == 'gallery' ? 'active' : ''; ?>">
                 <i class="fas fa-photo-video"></i> Gallery & Videos
             </a>
         </li>
         <li class="nav-item">
-            <a href="tickets.php" class="nav-link <?php echo $current_page == 'tickets.php' ? 'active' : ''; ?>">
+            <a href="tickets" class="nav-link <?php echo $current_page == 'tickets' ? 'active' : ''; ?>">
                 <i class="fas fa-headset"></i> Helpdesk Support
             </a>
         </li>
         <li class="nav-item">
-            <a href="settings.php" class="nav-link <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>">
+            <a href="settings" class="nav-link <?php echo $current_page == 'settings' ? 'active' : ''; ?>">
                 <i class="fas fa-cog"></i> Portal Settings
             </a>
         </li>
     </ul>
     
-    <a href="logout.php" class="nav-link logout-link">
+    <a href="logout" class="nav-link logout-link">
         <i class="fas fa-sign-out-alt"></i> Logout Portal
     </a>
 </div>
@@ -725,3 +725,25 @@ $current_page = basename($_SERVER['PHP_SELF']);
 </script>
 <?php unset($_SESSION['show_missing_docs_popup']); ?>
 <?php endif; ?>
+
+<?php
+$fcm_pId = (int)($_SESSION['parent_id'] ?? 0);
+$fcm_sId = 0;
+if ($fcm_pId > 0) {
+    if (isset($children[0]['id'])) {
+        $fcm_sId = (int)$children[0]['id'];
+    } elseif (isset($conn)) {
+        $fcm_sq = $conn->query("SELECT id FROM students WHERE parent_id = $fcm_pId AND status = 'active' LIMIT 1");
+        if ($fcm_sq && $fcm_sr = $fcm_sq->fetch_assoc()) {
+            $fcm_sId = (int)$fcm_sr['id'];
+        }
+    }
+}
+?>
+<!-- ABSS FCM Device Token Engine & Auto-Linking -->
+<script>
+    window.ABSS_PARENT_ID = <?php echo $fcm_pId; ?>;
+    window.ABSS_STUDENT_ID = <?php echo $fcm_sId; ?>;
+</script>
+<script src="../js/fcm-client.js"></script>
+

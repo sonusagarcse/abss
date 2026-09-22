@@ -8,7 +8,7 @@ verify_and_restore_admin_session();
 
 if (!isset($_SESSION['admin_id'])) {
     $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
-    $login_path = (strpos($host, 'localhost') !== false) ? '/abss/admin/login.php' : '/admin/login.php';
+    $login_path = (strpos($host, 'localhost') !== false) ? '/abss/admin/login' : '/admin/login';
     header("Location: $login_path");
     exit();
 }

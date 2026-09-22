@@ -115,7 +115,7 @@ include 'includes/header.php';
 
                                 <div  class="adm-field-group" style="margin-bottom: 15px;">
                                     <label class="adm-label">Student Full Name <span style="color:#ef4444;">*</span></label>
-                                    <input type="text" name="student_name" class="adm-input" placeholder="Rahul Kumar" required>
+                                    <input type="text" name="student_name" id="student_name" class="adm-input" placeholder="RAHUL KUMAR" required style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase();">
                                 </div>
 
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 15px;">

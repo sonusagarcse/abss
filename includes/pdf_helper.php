@@ -380,7 +380,7 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
     $total_payable_amount = (float)$bill['amount'] + $fine_amount;
 
     $amount_in_words = abss_amount_to_words_pdf($total_payable_amount);
-    $invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . str_pad($bill['id'], 5, '0', STR_PAD_LEFT);
+    $invoice_no = get_invoice_no($bill);
     $billed_on_date = date('d M, Y', strtotime($bill['billing_date']));
 
     // Initialize PDF Document

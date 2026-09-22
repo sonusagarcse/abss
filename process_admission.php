@@ -15,7 +15,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $conn = getDB();
 
     // Student info
-    $student_name   = trim($_POST['student_name'] ?? '');
+    $student_name   = mb_strtoupper(trim($_POST['student_name'] ?? ''), 'UTF-8');
     $dob            = trim($_POST['dob'] ?? '');
     $gender         = trim($_POST['gender'] ?? '');
     $home_address   = trim($_POST['home_address'] ?? '');

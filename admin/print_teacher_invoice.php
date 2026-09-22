@@ -33,6 +33,17 @@ while ($e = $res->fetch_assoc()) {
     $expenses[] = $e;
 }
 
+$payments = [];
+$pay_stmt = $conn->prepare("SELECT * FROM teacher_invoice_payments WHERE invoice_id = ? ORDER BY payment_date ASC, id ASC");
+if ($pay_stmt) {
+    $pay_stmt->bind_param("i", $invoice_id);
+    $pay_stmt->execute();
+    $pay_res = $pay_stmt->get_result();
+    while ($p = $pay_res->fetch_assoc()) {
+        $payments[] = $p;
+    }
+}
+
 require_once __DIR__ . '/../config/db.php';
 $settings = getAllSettings();
 $school_name = $settings['school_name'] ?? 'Awasiya Bal Shikshan Sansthan';
@@ -261,6 +272,42 @@ $invoice_no = $invoice['invoice_number'];
             </tbody>
         </table>
 
+        <?php if (!empty($payments)): ?>
+        <!-- Payment Installments Breakdown -->
+        <table class="item-table" style="margin-top: 20px;">
+            <thead>
+                <tr>
+                    <th class="text-center" style="width: 8%;">#</th>
+                    <th>Payment Date</th>
+                    <th>Payment Method</th>
+                    <th>Notes / Ref</th>
+                    <th class="text-right" style="width: 25%;">Amount Paid</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td colspan="5" style="background:#f0fdf4; color:#166534; font-weight:800; font-size:0.85rem; text-transform:uppercase;">
+                        Payment Transactions (<?php echo count($payments); ?> <?php echo count($payments) > 1 ? 'Installments' : 'Payment'; ?>)
+                    </td>
+                </tr>
+                <?php 
+                $p_sno = 1;
+                foreach($payments as $p): 
+                ?>
+                <tr>
+                    <td class="text-center"><?php echo $p_sno++; ?></td>
+                    <td style="font-weight: 700; color: #1e293b;">
+                        <?php echo date('d M, Y', strtotime($p['payment_date'])); ?>
+                    </td>
+                    <td><span style="font-weight: 600; color: #475569;"><?php echo htmlspecialchars($p['payment_method'] ?? 'Cash'); ?></span></td>
+                    <td style="color: #64748b;"><?php echo !empty($p['notes']) ? htmlspecialchars($p['notes']) : '-'; ?></td>
+                    <td class="text-right" style="font-weight: 700; color: #15803d;">₹ <?php echo number_format($p['amount'], 2); ?></td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php endif; ?>
+
         <!-- Grand Payout Summary -->
         <div style="background: #f8fafc; border: 1px solid #ffcdd2; border-radius: 8px; padding: 20px 25px; margin-bottom: 25px; position: relative; z-index: 2;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
@@ -269,7 +316,12 @@ $invoice_no = $invoice['invoice_number'];
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                 <span style="font-size: 1rem; font-weight: 700; color: #2e7d32;">Amount Paid:</span>
-                <span style="font-size: 1.1rem; font-weight: 700; color: #2e7d32;">₹ <?php echo number_format($invoice['paid_amount'], 2); ?></span>
+                <span style="font-size: 1.1rem; font-weight: 700; color: #2e7d32;">
+                    ₹ <?php echo number_format($invoice['paid_amount'], 2); ?>
+                    <?php if (!empty($invoice['paid_date'])): ?>
+                        <small style="font-size: 0.8rem; color: #15803d; font-weight: 600; margin-left: 6px;">(Paid on <?php echo date('d M Y', strtotime($invoice['paid_date'])); ?>)</small>
+                    <?php endif; ?>
+                </span>
             </div>
             <hr style="border: 0; border-top: 2px dashed #cbd5e1; margin: 12px 0;">
             <div style="display: flex; justify-content: space-between; align-items: center;">

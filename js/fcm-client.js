@@ -31,14 +31,35 @@
         return getBasePath() + 'api/register-token.php';
     }
 
+    function getCachedToken() {
+        try {
+            return localStorage.getItem('abss_fcm_token') || '';
+        } catch(e) { return ''; }
+    }
+
+    function setCachedToken(t) {
+        if (!t) return;
+        try {
+            localStorage.setItem('abss_fcm_token', t);
+            // Also store in cookie for seamless server-side PHP detection during logins
+            document.cookie = "abss_fcm_token=" + encodeURIComponent(t) + "; path=/; max-age=31536000; SameSite=Lax";
+        } catch(e) {}
+    }
+
     // Register FCM Token to MySQL Database (`fcm_tokens`)
-    window.registerFcmDeviceToken = function(fcmToken, deviceType, appVersion) {
+    window.registerFcmDeviceToken = function(fcmToken, deviceType, appVersion, parentId, studentId) {
         if (!fcmToken || fcmToken.length < 10) return;
+        setCachedToken(fcmToken);
+
+        const pId = parentId || window.ABSS_PARENT_ID || 0;
+        const sId = studentId || window.ABSS_STUDENT_ID || 0;
 
         const payload = {
             token: fcmToken,
             device_type: deviceType || 'android_app',
-            app_version: appVersion || '2.4.3'
+            app_version: appVersion || '2.4.3',
+            parent_id: pId ? parseInt(pId, 10) : undefined,
+            student_id: sId ? parseInt(sId, 10) : undefined
         };
 
         fetch(getApiUrl(), {
@@ -51,12 +72,24 @@
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (data && data.status) {
-                console.log('[ABSS FCM] Android App Device connected (ID: ' + data.token_id + ')');
+                const linkInfo = data.parent_id ? ' (Linked to Parent #' + data.parent_id + ' / Student #' + data.student_id + ')' : ' (Unlinked)';
+                console.log('[ABSS FCM] App Device connected (ID: ' + data.token_id + ')' + linkInfo);
             }
         })
         .catch(function(err) {
             console.warn('[ABSS FCM] Registration notice:', err);
         });
+    };
+
+    // Helper to manually link currently cached or detected token to a parent
+    window.linkFcmToParent = function(parentId, studentId) {
+        let t = getCachedToken();
+        if (!t && window.Android && typeof window.Android.getFcmToken === 'function') {
+            try { t = window.Android.getFcmToken(); } catch(e) {}
+        }
+        if (t) {
+            window.registerFcmDeviceToken(t, 'android_app', '2.4.3', parentId, studentId);
+        }
     };
 
     // 1. Capture FCM Token from URL Parameters (Shiaho WebToApp URL Injection)
@@ -119,6 +152,12 @@
     function initFcmClient() {
         captureTokenFromUrl();
         checkAndroidBridge();
+
+        // Auto-link device token to logged in parent profile if present
+        const cached = getCachedToken();
+        if (cached && (window.ABSS_PARENT_ID || window.ABSS_STUDENT_ID)) {
+            window.registerFcmDeviceToken(cached, 'android_app', '2.4.3', window.ABSS_PARENT_ID, window.ABSS_STUDENT_ID);
+        }
 
         if (!('serviceWorker' in navigator) || !('Notification' in window)) {
             return;

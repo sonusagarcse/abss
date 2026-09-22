@@ -41,10 +41,24 @@ function runAutoMigrator($conn) {
             token VARCHAR(255) NOT NULL UNIQUE,
             device_type VARCHAR(50) DEFAULT 'android',
             app_version VARCHAR(20) DEFAULT '1.0.0',
+            parent_id INT(11) DEFAULT NULL,
+            student_id INT(11) DEFAULT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-            INDEX idx_token (token)
+            INDEX idx_token (token),
+            INDEX idx_parent (parent_id),
+            INDEX idx_student (student_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        // Ensure parent_id and student_id exist in fcm_tokens if table was created previously
+        $chkP = $conn->query("SHOW COLUMNS FROM fcm_tokens LIKE 'parent_id'");
+        if ($chkP && $chkP->num_rows == 0) {
+            $conn->query("ALTER TABLE fcm_tokens ADD COLUMN parent_id INT(11) NULL AFTER app_version, ADD INDEX (parent_id)");
+        }
+        $chkS = $conn->query("SHOW COLUMNS FROM fcm_tokens LIKE 'student_id'");
+        if ($chkS && $chkS->num_rows == 0) {
+            $conn->query("ALTER TABLE fcm_tokens ADD COLUMN student_id INT(11) NULL AFTER parent_id, ADD INDEX (student_id)");
+        }
 
         $conn->query("CREATE TABLE IF NOT EXISTS notification_history (
             id INT AUTO_INCREMENT PRIMARY KEY,
@@ -58,6 +72,39 @@ function runAutoMigrator($conn) {
             failed_count INT DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        // Ensure teacher invoices & payment installments tables exist
+        $conn->query("CREATE TABLE IF NOT EXISTS teacher_invoice_payments (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            invoice_id INT NOT NULL,
+            teacher_id INT NOT NULL,
+            amount DECIMAL(10,2) NOT NULL,
+            payment_date DATE NOT NULL,
+            payment_method VARCHAR(50) DEFAULT 'Cash',
+            notes VARCHAR(255) DEFAULT '',
+            created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_inv (invoice_id),
+            INDEX idx_tchr (teacher_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        $chkInvPaid = $conn->query("SHOW COLUMNS FROM teacher_invoices LIKE 'paid_amount'");
+        if ($chkInvPaid && $chkInvPaid->num_rows == 0) {
+            $conn->query("ALTER TABLE teacher_invoices ADD COLUMN paid_amount DECIMAL(10,2) DEFAULT 0.00 AFTER amount");
+        }
+        $chkInvDate = $conn->query("SHOW COLUMNS FROM teacher_invoices LIKE 'paid_date'");
+        if ($chkInvDate && $chkInvDate->num_rows == 0) {
+            $conn->query("ALTER TABLE teacher_invoices ADD COLUMN paid_date DATE DEFAULT NULL AFTER paid_amount");
+        }
+
+        // Ensure teachers password & department exist
+        $chkTchrPass = $conn->query("SHOW COLUMNS FROM teachers LIKE 'password'");
+        if ($chkTchrPass && $chkTchrPass->num_rows == 0) {
+            $conn->query("ALTER TABLE teachers ADD COLUMN password VARCHAR(255) NULL AFTER phone");
+        }
+        $chkTchrDept = $conn->query("SHOW COLUMNS FROM teachers LIKE 'department'");
+        if ($chkTchrDept && $chkTchrDept->num_rows == 0) {
+            $conn->query("ALTER TABLE teachers ADD COLUMN department VARCHAR(100) DEFAULT NULL AFTER password");
+        }
 
         // 1. Check and upgrade Parent and Billing ledgers
         $check = $conn->query("SHOW COLUMNS FROM students LIKE 'parent_id'");
@@ -121,31 +168,6 @@ function runAutoMigrator($conn) {
                 status TINYINT(1) DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 INDEX idx_status_id (status, id)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-
-            // Create fcm_tokens table
-            $conn->query("CREATE TABLE IF NOT EXISTS fcm_tokens (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                token VARCHAR(255) NOT NULL UNIQUE,
-                device_type VARCHAR(50) DEFAULT 'android',
-                app_version VARCHAR(20) DEFAULT '1.0.0',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                INDEX idx_token (token)
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
-
-            // Create notification_history table
-            $conn->query("CREATE TABLE IF NOT EXISTS notification_history (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                title VARCHAR(255) NOT NULL,
-                message TEXT NOT NULL,
-                image VARCHAR(500) DEFAULT NULL,
-                url VARCHAR(500) DEFAULT NULL,
-                category VARCHAR(50) DEFAULT 'General',
-                target_audience VARCHAR(50) DEFAULT 'All Users',
-                sent_count INT DEFAULT 0,
-                failed_count INT DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
             // Seed settings defaults for SMTP
@@ -686,6 +708,26 @@ function runAutoMigrator($conn) {
             }
         }
 
+        // 15. Ensure all existing and future student and admission names are converted to UPPERCASE
+        $conn->query("UPDATE students SET name = UPPER(TRIM(name)) WHERE name IS NOT NULL AND name != UPPER(TRIM(name))");
+        $conn->query("UPDATE admissions SET student_name = UPPER(TRIM(student_name)) WHERE student_name IS NOT NULL AND student_name != UPPER(TRIM(student_name))");
+
+        // 16. Ensure fees_generated has invoice_no column and all records have format INV<YY><MM><XXXX> (e.g. INV26090001)
+        $checkInvNo = $conn->query("SHOW COLUMNS FROM fees_generated LIKE 'invoice_no'");
+        if ($checkInvNo && $checkInvNo->num_rows == 0) {
+            $conn->query("ALTER TABLE fees_generated ADD COLUMN invoice_no VARCHAR(50) NULL AFTER id");
+            $conn->query("ALTER TABLE fees_generated ADD INDEX idx_invoice_no (invoice_no)");
+        }
+        $unnum_res = $conn->query("SELECT id, billing_date FROM fees_generated WHERE invoice_no IS NULL OR invoice_no = '' OR invoice_no LIKE 'ABSS%' ORDER BY id ASC");
+        if ($unnum_res && $unnum_res->num_rows > 0) {
+            while ($un = $unnum_res->fetch_assoc()) {
+                $ym = date('ym', strtotime(!empty($un['billing_date']) ? $un['billing_date'] : date('Y-m-d')));
+                $inv_seq = str_pad($un['id'], 4, '0', STR_PAD_LEFT);
+                $new_inv = 'INV' . $ym . $inv_seq;
+                $conn->query("UPDATE fees_generated SET invoice_no = '$new_inv' WHERE id = " . (int)$un['id']);
+            }
+        }
+
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
         
@@ -753,4 +795,43 @@ require_once __DIR__ . '/../includes/notification_helper.php';
 
 // Auto-load Late Fine Management System
 require_once __DIR__ . '/../includes/fine_helper.php';
+
+/**
+ * Generate Next Formatted Invoice Number: INV<YY><MM><XXXX> (e.g. INV26090001)
+ */
+function generate_invoice_number($billing_date = null, $conn = null) {
+    if (!$conn) {
+        $conn = getDB();
+    }
+    $b_date = !empty($billing_date) ? $billing_date : date('Y-m-d');
+    $prefix = 'INV' . date('ym', strtotime($b_date));
+    
+    // Find the highest existing invoice number starting with this prefix
+    $stmt = $conn->prepare("SELECT invoice_no FROM fees_generated WHERE invoice_no LIKE CONCAT(?, '%') ORDER BY invoice_no DESC LIMIT 1");
+    $stmt->bind_param("s", $prefix);
+    $stmt->execute();
+    $res = $stmt->get_result();
+    
+    if ($res && $row = $res->fetch_assoc()) {
+        $last_seq = (int)substr($row['invoice_no'], 7);
+        $next_seq = $last_seq + 1;
+    } else {
+        $next_seq = 1;
+    }
+    
+    return $prefix . str_pad($next_seq, 4, '0', STR_PAD_LEFT);
+}
+
+/**
+ * Safely format and return an invoice number for display (Fallback-safe)
+ */
+function get_invoice_no($bill) {
+    if (!empty($bill['invoice_no'])) {
+        return $bill['invoice_no'];
+    }
+    $b_date = !empty($bill['billing_date']) ? $bill['billing_date'] : (!empty($bill['created_at']) ? $bill['created_at'] : date('Y-m-d'));
+    $ym = date('ym', strtotime($b_date));
+    $id = isset($bill['id']) ? (int)$bill['id'] : 1;
+    return 'INV' . $ym . str_pad($id, 4, '0', STR_PAD_LEFT);
+}
 ?>

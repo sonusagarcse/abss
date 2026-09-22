@@ -73,13 +73,22 @@ AddType application/vnd.android.package-archive .apk .APK
     Options -MultiViews
     RewriteEngine On
 
-    # Exclude existing files and directories from rewrite
-    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    # 1. External 301 Redirect: Remove .php from URL if requested directly by browser
+    # 1a. If index.php is requested, redirect to directory root
+    RewriteCond %{REQUEST_METHOD} !POST
+    RewriteCond %{THE_REQUEST} \s/+(.*?/)?index\.php[\s?] [NC]
+    RewriteRule ^ /%1 [R=301,L,NE]
+
+    # 1b. Remove .php from all other URLs
+    RewriteCond %{REQUEST_METHOD} !POST
+    RewriteCond %{THE_REQUEST} \s/+(.+?)\.php[\s?] [NC]
+    RewriteRule ^ /%1 [R=301,L,NE]
+
+    # 2. Exclude existing actual directories from rewrite
     RewriteCond %{REQUEST_FILENAME} -d
     RewriteRule ^ - [L]
 
-    # Internally point clean URLs to .php files if file exists
-    # Example: /about -> /about.php, /admin/notifications/index -> /admin/notifications/index.php
+    # 3. Internally point clean URLs to .php files if file exists
     RewriteCond %{REQUEST_FILENAME}.php -f
     RewriteRule ^(.*?)/?$ $1.php [L,QSA]
 

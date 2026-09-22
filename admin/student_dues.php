@@ -34,7 +34,11 @@ $dues_query = $conn->query("
         COALESCE(unpaid.latest_bill_id, 0) AS latest_bill_id,
         COALESCE(unpaid.total_due, 0) AS total_due,
         COALESCE(unpaid.unpaid_count, 0) AS unpaid_count,
-        COALESCE(unpaid.due_months, '') AS due_months
+        COALESCE(unpaid.due_months, '') AS due_months,
+        COALESCE((
+            SELECT COUNT(*) FROM fcm_tokens f 
+            WHERE f.student_id = s.id OR (f.parent_id > 0 AND f.parent_id = s.parent_id)
+        ), 0) AS fcm_device_count
     FROM students s
     LEFT JOIN parents p ON s.parent_id = p.id
     INNER JOIN (
@@ -603,7 +607,7 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                             <th>Class / Mode</th>
                             <th>Total Due Till Date</th>
                             <th>Due Months Breakdown</th>
-                            <th class="no-print" style="text-align: right; width: 110px;">Actions</th>
+                            <th class="no-print" style="text-align: right; min-width: 180px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -657,8 +661,13 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                     <td style="font-weight: 800; color: #94a3b8;"><?php echo $s_idx++; ?></td>
 
                                     <td>
-                                        <div style="font-weight: 800; color: var(--portal-dark); font-size: 0.98rem;">
-                                            <?php echo htmlspecialchars($row['name']); ?>
+                                        <div style="font-weight: 800; color: var(--portal-dark); font-size: 0.98rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                            <span><?php echo htmlspecialchars($row['name']); ?></span>
+                                            <?php if (!empty($row['fcm_device_count']) && (int)$row['fcm_device_count'] > 0): ?>
+                                                <span class="badge" title="Parent Mobile App Active (<?php echo (int)$row['fcm_device_count']; ?> Device<?php echo (int)$row['fcm_device_count'] > 1 ? 's' : ''; ?> Linked)" style="background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; font-size: 0.72rem; padding: 2px 7px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700;">
+                                                    <i class="fab fa-android"></i> App
+                                                </span>
+                                            <?php endif; ?>
                                         </div>
                                         <?php if (!empty($row['reg_no'])): ?>
                                             <small style="color: var(--portal-blue); font-weight: 800; font-family: monospace;"><?php echo htmlspecialchars($row['reg_no']); ?></small>
@@ -707,7 +716,7 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                     <td>
                                         <div style="max-width: 240px;">
                                             <?php 
-                                            $months_arr = explode(', ', $row['due_months']);
+                                             $months_arr = explode(', ', $row['due_months']);
                                             foreach ($months_arr as $m) {
                                                 if (!empty($m)) {
                                                     echo '<span class="due-month-tag">' . htmlspecialchars($m) . '</span>';
@@ -741,6 +750,18 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                                 <i class="fas fa-file-pdf"></i>
                                             </a>
 
+                                            <!-- Direct Realtime Dues SMS -->
+                                            <?php if (!empty($phone_digits)): ?>
+                                                <button type="button" 
+                                                        class="act-btn" 
+                                                        onclick="openSmsDuesModal(<?php echo (int)$row['id']; ?>, '<?php echo htmlspecialchars(addslashes($s_name)); ?>', '<?php echo htmlspecialchars(addslashes($p_name)); ?>', '<?php echo htmlspecialchars(addslashes($phone_digits)); ?>', <?php echo (float)$row['total_due']; ?>, <?php echo (float)$row['base_due']; ?>, <?php echo (float)$row['fine_amount']; ?>, '<?php echo htmlspecialchars(addslashes($d_months)); ?>', '<?php echo htmlspecialchars(addslashes($r_reg)); ?>', '<?php echo htmlspecialchars(addslashes($row['class_admitted'] ?? '')); ?>', <?php echo (int)($row['fcm_device_count'] ?? 0); ?>)" 
+                                                        style="background: #e0f2fe; color: #0284c7; width: 34px; height: 34px; border-radius: 8px; border: none; cursor: pointer;" 
+                                                        title="Send Realtime Dues SMS">
+                                                    <i class="fas fa-sms"></i>
+                                                </button>
+                                            <?php endif; ?>
+
+                                            <!-- Direct WhatsApp Due Alert -->
                                             <?php if (!empty($phone_digits)): ?>
                                                 <a href="https://api.whatsapp.com/send?phone=<?php echo (strlen($phone_digits) == 10 ? '91' . $phone_digits : $phone_digits); ?>&text=<?php echo $encoded_wa; ?>" 
                                                    target="_blank" 
@@ -749,6 +770,17 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                                    title="Send Due Fee WhatsApp Alert">
                                                     <i class="fab fa-whatsapp"></i>
                                                 </a>
+                                            <?php endif; ?>
+
+                                            <!-- Direct App Push Due Alert (ONLY IF FCM TOKEN LINKED) -->
+                                            <?php if (!empty($row['fcm_device_count']) && (int)$row['fcm_device_count'] > 0): ?>
+                                                <button type="button" 
+                                                        class="act-btn" 
+                                                        onclick="directSendDuePush(<?php echo (int)$row['id']; ?>, '<?php echo htmlspecialchars(addslashes($s_name)); ?>', <?php echo (float)$row['total_due']; ?>, '<?php echo htmlspecialchars(addslashes($d_months)); ?>')" 
+                                                        style="background: #faf5ff; color: #7c3aed; width: 34px; height: 34px; border-radius: 8px; border: 1px solid #e9d5ff; cursor: pointer;" 
+                                                        title="Push Alert: <?php echo (int)$row['fcm_device_count']; ?> Parent App Device(s) Linked">
+                                                    <i class="fas fa-bell"></i>
+                                                </button>
                                             <?php endif; ?>
 
                                             <a href="<?php echo ($latest_bid > 0 ? 'view_bill.php?id=' . $latest_bid : 'fees.php'); ?>" 
@@ -1108,5 +1140,307 @@ $parent_portal_url = "$base_app_url/parent/login.php";
             </form>
         </div>
     </div>
+
+    <!-- Realtime Dues SMS Modal -->
+    <div class="modal-overlay" id="smsDueModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
+        <div class="modal-card" style="background: #ffffff; width: 100%; max-width: 520px; border-radius: 24px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #e2e8f0; overflow: hidden; animation: popIn 0.2s ease-out;">
+            <div class="modal-header" style="background: #f8fafc; padding: 18px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                <h3 class="modal-title" style="margin: 0; font-size: 1.12rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-sms" style="color: #0284c7; font-size: 1.25rem;"></i> Send Realtime Dues SMS
+                </h3>
+                <button type="button" class="modal-close-btn" onclick="closeSmsDuesModal()" style="background: none; border: none; font-size: 1.3rem; color: #94a3b8; cursor: pointer;">&times;</button>
+            </div>
+
+            <div style="padding: 24px;">
+                <!-- Realtime Due Summary Card -->
+                <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 14px; padding: 14px 18px; margin-bottom: 18px;">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85rem;">
+                        <div>
+                            <span style="color: #0369a1; font-weight: 700; font-size: 0.72rem; text-transform: uppercase;">Student</span>
+                            <strong id="smsStudentName" style="color: #0f172a; font-size: 0.95rem; display: block;">-</strong>
+                            <small id="smsStudentMeta" style="color: #64748b; font-weight: 600;">-</small>
+                        </div>
+                        <div>
+                            <span style="color: #0369a1; font-weight: 700; font-size: 0.72rem; text-transform: uppercase;">Parent / Guardian</span>
+                            <strong id="smsParentName" style="color: #0f172a; font-size: 0.95rem; display: block;">-</strong>
+                        </div>
+                        <div>
+                            <span style="color: #0369a1; font-weight: 700; font-size: 0.72rem; text-transform: uppercase;">Realtime Total Due</span>
+                            <strong id="smsTotalDue" style="color: #dc2626; font-size: 1.15rem; font-weight: 900; display: block;">₹ 0.00</strong>
+                            <small id="smsFineBreakup" style="color: #ea580c; font-weight: 700; font-size: 0.72rem;"></small>
+                        </div>
+                        <div>
+                            <span style="color: #0369a1; font-weight: 700; font-size: 0.72rem; text-transform: uppercase;">Due Months</span>
+                            <strong id="smsDueMonths" style="color: #0f172a; font-size: 0.88rem; display: block;">-</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recipient Mobile Number -->
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 0.82rem; font-weight: 800; color: #334155; margin-bottom: 6px; text-transform: uppercase;">
+                        Recipient Mobile Number (10 Digits) <span style="color: #ef4444;">*</span>
+                    </label>
+                    <div style="position: relative;">
+                        <span style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); font-weight: 800; color: #64748b; font-size: 0.9rem;">+91</span>
+                        <input type="tel" id="smsRecipientPhone" maxlength="10" placeholder="e.g. 9523012888" style="width: 100%; padding: 12px 14px 12px 50px; border: 2px solid #cbd5e1; border-radius: 12px; font-size: 0.95rem; font-weight: 800; font-family: monospace; color: #0f172a; outline: none; box-sizing: border-box;">
+                    </div>
+                </div>
+
+                <!-- Live Editable SMS Message Body -->
+                <div style="margin-bottom: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label style="font-size: 0.82rem; font-weight: 800; color: #334155; text-transform: uppercase;">
+                            SMS Message Text (Realtime Pre-filled)
+                        </label>
+                        <span id="smsCharCount" style="font-size: 0.74rem; font-weight: 700; color: #64748b;">0 chars</span>
+                    </div>
+                    <textarea id="smsMessageText" oninput="updateCharCount()" rows="5" style="width: 100%; padding: 12px 14px; border: 2px solid #cbd5e1; border-radius: 12px; font-size: 0.86rem; font-family: inherit; font-weight: 600; color: #0f172a; line-height: 1.45; outline: none; box-sizing: border-box; resize: vertical;"></textarea>
+                </div>
+
+                <div id="smsStatusAlert" style="display: none; padding: 10px 14px; border-radius: 10px; font-size: 0.82rem; font-weight: 700; margin-bottom: 15px;"></div>
+
+                <!-- Action Buttons Grid -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                    <!-- 1. Open SMS App -->
+                    <button type="button" id="btnOpenSmsApp" onclick="triggerNativeSmsApp()" style="padding: 12px 14px; border-radius: 12px; border: none; background: #0284c7; color: #fff; font-weight: 800; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);">
+                        <i class="fas fa-paper-plane"></i> Open SMS App
+                    </button>
+
+                    <!-- 2. Copy Text -->
+                    <button type="button" id="btnCopySms" onclick="copySmsTextToClipboard()" style="padding: 12px 14px; border-radius: 12px; border: 1px solid #cbd5e1; background: #f8fafc; color: #334155; font-weight: 800; font-size: 0.88rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class="fas fa-copy"></i> Copy SMS Text
+                    </button>
+                </div>
+
+                <!-- 3. Also Send App Push Alert -->
+                <button type="button" id="btnSendAppPushAlert" onclick="dispatchAppPushDueAlert()" style="width: 100%; padding: 10px 14px; border-radius: 12px; border: 1px solid #e9d5ff; background: #faf5ff; color: #7c3aed; font-weight: 800; font-size: 0.82rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <i class="fas fa-bell"></i> Also Send Push Alert to Parent Mobile App
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentSmsStudentId = 0;
+        let currentSmsData = {};
+
+        function openSmsDuesModal(studentId, studentName, parentName, phone, totalDue, baseDue, fineAmount, dueMonths, regNo, className, fcmDeviceCount) {
+            currentSmsStudentId = studentId;
+            currentSmsData = {
+                studentId: studentId,
+                studentName: studentName,
+                parentName: parentName,
+                phone: phone,
+                totalDue: Number(totalDue),
+                baseDue: Number(baseDue),
+                fineAmount: Number(fineAmount),
+                dueMonths: dueMonths,
+                regNo: regNo,
+                className: className,
+                fcmDeviceCount: Number(fcmDeviceCount || 0)
+            };
+
+            document.getElementById('smsStudentName').textContent = studentName;
+            document.getElementById('smsStudentMeta').textContent = (regNo ? 'Reg: ' + regNo : '') + (className ? ' • ' + className : '');
+            document.getElementById('smsParentName').textContent = parentName || 'Parent / Guardian';
+            document.getElementById('smsTotalDue').textContent = '₹ ' + Number(totalDue).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            
+            const fineEl = document.getElementById('smsFineBreakup');
+            if (fineAmount > 0) {
+                fineEl.textContent = `(Base: ₹${Number(baseDue).toLocaleString('en-IN', { minimumFractionDigits: 2 })} + Fine: ₹${Number(fineAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })})`;
+                fineEl.style.display = 'block';
+            } else {
+                fineEl.style.display = 'none';
+            }
+
+            document.getElementById('smsDueMonths').textContent = dueMonths || 'Current Session';
+            
+            // Clean 10-digit phone
+            const cleanPhone = (phone || '').replace(/[^0-9]/g, '');
+            const tenDigit = cleanPhone.length > 10 ? cleanPhone.slice(-10) : cleanPhone;
+            document.getElementById('smsRecipientPhone').value = tenDigit;
+
+            // Generate Pre-filled Realtime Dues SMS Template
+            generateDefaultSmsText();
+
+            // Conditionally show or hide Push Alert button based on linked FCM tokens
+            const pushBtn = document.getElementById('btnSendAppPushAlert');
+            if (pushBtn) {
+                const count = Number(fcmDeviceCount || 0);
+                if (count > 0) {
+                    pushBtn.style.display = 'flex';
+                    pushBtn.innerHTML = `<i class="fas fa-bell"></i> Also Send Push Alert to Parent Mobile App (${count} Device${count > 1 ? 's' : ''})`;
+                } else {
+                    pushBtn.style.display = 'none';
+                }
+            }
+
+            const statusAlert = document.getElementById('smsStatusAlert');
+            if (statusAlert) statusAlert.style.display = 'none';
+
+            document.getElementById('smsDueModal').style.display = 'flex';
+        }
+
+        function closeSmsDuesModal() {
+            document.getElementById('smsDueModal').style.display = 'none';
+        }
+
+        function generateDefaultSmsText() {
+            const d = currentSmsData;
+            const dueFormatted = 'Rs. ' + d.totalDue.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            const regStr = d.regNo ? ` (${d.regNo})` : '';
+            const classStr = d.className ? `, ${d.className}` : '';
+            
+            const sms = `Dear ${d.parentName || 'Parent'},\n`
+                      + `Outstanding fee of ${dueFormatted} for student ${d.studentName}${regStr}${classStr} is pending at ABSS Imamganj.\n`
+                      + `Months: ${d.dueMonths || 'Current Session'}\n`
+                      + `Kindly clear the dues at earliest.\n`
+                      + `Pay online: <?php echo $parent_portal_url; ?>\n`
+                      + `Help: +91 9523012888 - ABSS School`;
+
+            document.getElementById('smsMessageText').value = sms;
+            updateCharCount();
+        }
+
+        function updateCharCount() {
+            const text = document.getElementById('smsMessageText').value || '';
+            const len = text.length;
+            const credits = Math.ceil(len / 160) || 1;
+            document.getElementById('smsCharCount').textContent = `${len} chars (${credits} SMS)`;
+        }
+
+        function triggerNativeSmsApp() {
+            const phone = (document.getElementById('smsRecipientPhone').value || '').trim();
+            const text = (document.getElementById('smsMessageText').value || '').trim();
+
+            if (!phone || phone.length < 10) {
+                alert('Please enter a valid 10-digit mobile number.');
+                document.getElementById('smsRecipientPhone').focus();
+                return;
+            }
+
+            const encoded = encodeURIComponent(text);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+            const sep = isIOS ? '&' : '?';
+            const smsUrl = `sms:+91${phone}${sep}body=${encoded}`;
+
+            window.location.href = smsUrl;
+
+            // Log the event via AJAX in background
+            fetch('ajax_send_due_email.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({
+                    action: 'log_due_sms',
+                    student_id: currentSmsStudentId,
+                    phone: phone,
+                    amount: currentSmsData.totalDue || 0
+                })
+            }).catch(() => {});
+        }
+
+        function copySmsTextToClipboard() {
+            const text = document.getElementById('smsMessageText').value || '';
+            navigator.clipboard.writeText(text).then(function() {
+                const btn = document.getElementById('btnCopySms');
+                const orig = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check" style="color:#16a34a;"></i> Copied!';
+                setTimeout(function() {
+                    btn.innerHTML = orig;
+                }, 2000);
+            }).catch(function() {
+                alert('Please select and copy the text manually.');
+            });
+        }
+
+        function dispatchAppPushDueAlert() {
+            const btn = document.getElementById('btnSendAppPushAlert');
+            const alertBox = document.getElementById('smsStatusAlert');
+            const origHtml = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Dispatching Push Alert...';
+
+            const formData = new FormData();
+            formData.append('action', 'send_student_due_push');
+            formData.append('student_id', currentSmsStudentId);
+            formData.append('amount', currentSmsData.totalDue || 0);
+            formData.append('due_months', currentSmsData.dueMonths || '');
+
+            fetch('ajax_send_due_email.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+                alertBox.style.display = 'block';
+                if (data && data.success) {
+                    alertBox.style.background = '#dcfce7';
+                    alertBox.style.color = '#15803d';
+                    alertBox.style.border = '1px solid #bbf7d0';
+                    alertBox.innerHTML = '<i class="fas fa-check-circle"></i> ' + data.message;
+                } else {
+                    alertBox.style.background = '#fef3c7';
+                    alertBox.style.color = '#b45309';
+                    alertBox.style.border = '1px solid #fde68a';
+                    alertBox.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + ((data && data.error) ? data.error : 'Push notification could not be delivered.');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+                alertBox.style.display = 'block';
+                alertBox.style.background = '#fee2e2';
+                alertBox.style.color = '#b91c1c';
+                alertBox.style.border = '1px solid #fca5a5';
+                alertBox.innerHTML = '<i class="fas fa-exclamation-circle"></i> Request error: ' + err.message;
+            });
+        }
+
+        // Direct Push dispatch from table action button (Only available for linked devices)
+        function directSendDuePush(studentId, studentName, amount, dueMonths) {
+            const formattedAmt = '₹ ' + Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (!confirm(`Send instant Realtime Due Push Notification to registered mobile app(s) for ${studentName} (${formattedAmt})?`)) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('action', 'send_student_due_push');
+            formData.append('student_id', studentId);
+            formData.append('amount', amount);
+            formData.append('due_months', dueMonths);
+
+            fetch('ajax_send_due_email.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.success) {
+                    alert('🔔 ' + data.message);
+                } else {
+                    alert('⚠️ ' + ((data && data.error) ? data.error : 'Could not dispatch push notification.'));
+                }
+            })
+            .catch(err => {
+                alert('Request error: ' + err.message);
+            });
+        }
+
+        // Close on backdrop or escape
+        document.addEventListener('click', function(e) {
+            const smsModal = document.getElementById('smsDueModal');
+            if (e.target === smsModal) {
+                closeSmsDuesModal();
+            }
+        });
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && document.getElementById('smsDueModal').style.display === 'flex') {
+                closeSmsDuesModal();
+            }
+        });
+    </script>
 </body>
 </html>

@@ -1,6 +1,11 @@
 <?php
 require_once 'includes/auth.php';
 
+if (isset($_GET['export']) && $_GET['export'] === 'excel') {
+    require_once 'export_students_excel.php';
+    exit();
+}
+
 $msg = '';
 
 // Handle Deactivate / Reactivate Student Action
@@ -28,7 +33,7 @@ if (!is_dir($upload_dir)) {
 
 // Handle Add/Edit Student
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
-    $name               = trim($_POST['name']);
+    $name               = mb_strtoupper(trim($_POST['name'] ?? ''), 'UTF-8');
     $dob                = trim($_POST['dob'] ?? '');
     $gender             = trim($_POST['gender'] ?? '');
     $home_address       = trim($_POST['home_address'] ?? '');
@@ -289,9 +294,13 @@ if ($students_query) {
         } else {
             $total_active_count++;
             $mode = $row['scholar_mode'] ?? 'Day Scholar';
-            if (strcasecmp($mode, 'Hostler') === 0) $hostlers_count++;
-            elseif (strcasecmp($mode, 'Tuition') === 0) $tuition_count++;
-            else $day_scholars_count++;
+            if (strcasecmp($mode, 'Hostler') === 0) {
+                $hostlers_count++;
+            } elseif (stripos($mode, 'tuition') !== false || stripos($mode, 'tution') !== false) {
+                $tuition_count++;
+            } else {
+                $day_scholars_count++;
+            }
 
             if (!empty($row['class_admitted'])) $unique_classes[$row['class_admitted']] = true;
             if (!empty($row['target_school'])) $unique_schools[$row['target_school']] = true;
@@ -342,9 +351,35 @@ if (!empty($site_settings['tuition_modes'])) {
 
         .stats-kpi-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 14px;
             margin-bottom: 25px;
+        }
+        @media (max-width: 1200px) {
+            .stats-kpi-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+        @media (max-width: 768px) {
+            .stats-kpi-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        .stat-card.kpi-clickable {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+            padding: 16px 18px;
+            position: relative;
+        }
+        .stat-card.kpi-clickable:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 24px rgba(37, 99, 235, 0.12);
+        }
+        .stat-card.kpi-clickable.active-kpi-filter {
+            border-color: var(--portal-blue);
+            background: #eff6ff;
+            box-shadow: 0 0 0 2px var(--portal-blue), 0 8px 20px rgba(37, 99, 235, 0.12);
         }
 
         /* Filter Controls Glass Box */
@@ -503,18 +538,34 @@ if (!empty($site_settings['tuition_modes'])) {
             color: var(--portal-dark);
             line-height: 1.2;
             margin-bottom: 4px;
+            text-transform: uppercase;
         }
 
         .reg-badge-pill {
-            display: inline-block;
-            background: #eff6ff;
-            color: var(--portal-blue);
-            padding: 2px 8px;
-            border-radius: 6px;
-            font-weight: 800;
-            font-size: 0.76rem;
-            font-family: monospace;
-            border: 1px solid #dbeafe;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            background: #0f172a;
+            color: #ffffff;
+            padding: 4px 11px;
+            border-radius: 8px;
+            font-weight: 900;
+            font-size: 0.90rem;
+            letter-spacing: 0.05em;
+            font-family: 'Consolas', 'Courier New', monospace;
+            border: 1.5px solid #1e293b;
+            box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+            line-height: 1.2;
+        }
+        .reg-badge-pill b,
+        .reg-badge-pill strong {
+            font-weight: 900;
+            color: #ffffff;
+            letter-spacing: 0.05em;
+        }
+        .reg-badge-pill i {
+            color: #38bdf8;
+            font-size: 0.78rem;
         }
 
         .scholar-badge {
@@ -529,7 +580,7 @@ if (!empty($site_settings['tuition_modes'])) {
         }
         .scholar-hostler { background: #f3e8ff; color: #7c3aed; }
         .scholar-day { background: #dcfce7; color: #166534; }
-        .scholar-tuition { background: #dbeafe; color: #1e40af; }
+        .scholar-tuition { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
 
         .student-details-list {
             background: rgba(248, 250, 252, 0.8);
@@ -705,41 +756,54 @@ if (!empty($site_settings['tuition_modes'])) {
                 <p style="margin: 4px 0 0; color: #64748b; font-size: 0.95rem;">Manage academic enrollment records, medical profiles, and fee configurations.</p>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <a href="export_students_excel.php" class="btn-portal" style="background: #107c41; color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-file-excel"></i> Export Excel
+                </a>
+                <a href="print_students.php" target="_blank" class="btn-portal" style="background: #0f172a; color: #ffffff; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-print"></i> Print / PDF
+                </a>
                 <button class="btn-portal" onclick="showModal()">
                     <i class="fas fa-user-plus"></i> New Enrollment
                 </button>
             </div>
         </div>
 
-        <!-- KPI Metrics Grid -->
+        <!-- KPI Metrics Grid (1 Row, 5 Interactive Filter Cards) -->
         <div class="stats-kpi-grid">
-            <div class="stat-card">
+            <div class="stat-card kpi-clickable active-kpi-filter" id="kpi-card-all" onclick="applyKpiFilter('active', '')" title="Click to view all active students">
                 <div class="stat-icon icon-blue"><i class="fas fa-user-graduate"></i></div>
                 <div class="stat-info">
                     <h3><?php echo number_format($total_active_count); ?></h3>
                     <span>Active Enrolled</span>
                 </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card kpi-clickable" id="kpi-card-day" onclick="applyKpiFilter('active', 'Day Scholar')" title="Click to filter by Day Scholars">
                 <div class="stat-icon icon-green"><i class="fas fa-sun"></i></div>
                 <div class="stat-info">
                     <h3><?php echo number_format($day_scholars_count); ?></h3>
                     <span>Day Scholars</span>
                 </div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card kpi-clickable" id="kpi-card-hostler" onclick="applyKpiFilter('active', 'Hostler')" title="Click to filter by Hostlers (Boarders)">
                 <div class="stat-icon icon-purple"><i class="fas fa-bed"></i></div>
                 <div class="stat-info">
                     <h3><?php echo number_format($hostlers_count); ?></h3>
-                    <span>Hostlers (Boarders)</span>
+                    <span>Hostlers</span>
                 </div>
             </div>
-            <div class="stat-card" onclick="if(document.getElementById('statusFilterSelect')){document.getElementById('statusFilterSelect').value='inactive'; filterStudents();}" style="cursor: pointer;" title="Click to view inactive / deactivated candidates">
+            <div class="stat-card kpi-clickable" id="kpi-card-tuition" onclick="applyKpiFilter('active', 'Tuition')" title="Click to filter by Tuition Only students">
+                <div class="stat-icon icon-orange"><i class="fas fa-book-reader"></i></div>
+                <div class="stat-info">
+                    <h3><?php echo number_format($tuition_count); ?></h3>
+                    <span>Tuition Only</span>
+                </div>
+            </div>
+            <div class="stat-card kpi-clickable" id="kpi-card-inactive" onclick="applyKpiFilter('inactive', '')" title="Click to view inactive / deactivated candidates">
                 <div class="stat-icon" style="background: rgba(239, 68, 68, 0.12); color: #ef4444;"><i class="fas fa-user-slash"></i></div>
                 <div class="stat-info">
                     <h3><?php echo number_format($inactive_count); ?></h3>
-                    <span>Inactive Candidates</span>
+                    <span>Inactive</span>
                 </div>
             </div>
         </div>
@@ -765,11 +829,11 @@ if (!empty($site_settings['tuition_modes'])) {
 
                 <!-- Mode Filter -->
                 <div>
-                    <select id="modeFilterSelect" class="filter-select" onchange="filterStudents()">
+                    <select id="modeFilterSelect" class="filter-select" onchange="updateKpiActiveState(); filterStudents()">
                         <option value="">-- All Modes --</option>
                         <option value="Day Scholar">Day Scholar</option>
                         <option value="Hostler">Hostler</option>
-                        <option value="Tuition">Tuition</option>
+                        <option value="Tuition">Tuition Only</option>
                     </select>
                 </div>
 
@@ -796,7 +860,7 @@ if (!empty($site_settings['tuition_modes'])) {
 
                 <!-- Active / Inactive Status Filter -->
                 <div>
-                    <select id="statusFilterSelect" class="filter-select" onchange="filterStudents()">
+                    <select id="statusFilterSelect" class="filter-select" onchange="updateKpiActiveState(); filterStudents()">
                         <option value="active" selected>Active Candidates</option>
                         <option value="inactive">Inactive / Deactivated</option>
                         <option value="">-- All Statuses --</option>
@@ -814,12 +878,20 @@ if (!empty($site_settings['tuition_modes'])) {
                 </div>
             </div>
 
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 1px solid #f1f5f9; font-size: 0.85rem; color: #64748b; font-weight: 700;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 14px; padding-top: 12px; border-top: 1px solid #f1f5f9; font-size: 0.85rem; color: #64748b; font-weight: 700; flex-wrap: wrap; gap: 12px;">
                 <div>
                     Showing <span id="visibleCount" style="color: var(--portal-blue); font-weight: 800;"><?php echo $total_count; ?></span> of <?php echo $total_count; ?> registered candidates
                 </div>
-                <div>
-                    <a href="javascript:void(0);" onclick="resetAllFilters()" style="color: var(--portal-blue); text-decoration: none;"><i class="fas fa-undo"></i> Reset Filters</a>
+                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                    <a href="javascript:void(0);" onclick="printFilteredDirectory()" style="color: #0f172a; text-decoration: none; font-weight: 800; display: inline-flex; align-items: center; gap: 5px;">
+                        <i class="fas fa-print"></i> Print Current View
+                    </a>
+                    <a href="javascript:void(0);" onclick="exportFilteredExcel()" style="color: #107c41; text-decoration: none; font-weight: 800; display: inline-flex; align-items: center; gap: 5px;">
+                        <i class="fas fa-file-excel"></i> Export Filtered Excel
+                    </a>
+                    <a href="javascript:void(0);" onclick="resetAllFilters()" style="color: var(--portal-blue); text-decoration: none; display: inline-flex; align-items: center; gap: 5px;">
+                        <i class="fas fa-undo"></i> Reset Filters
+                    </a>
                 </div>
             </div>
         </div>
@@ -842,7 +914,7 @@ if (!empty($site_settings['tuition_modes'])) {
                     $mode = $row['scholar_mode'] ?? 'Day Scholar';
                     $scholar_class = 'scholar-day';
                     if (strcasecmp($mode, 'Hostler') === 0) $scholar_class = 'scholar-hostler';
-                    elseif (strcasecmp($mode, 'Tuition') === 0) $scholar_class = 'scholar-tuition';
+                    elseif (strcasecmp($mode, 'Tuition') === 0 || stripos($mode, 'tuition') !== false || stripos($mode, 'tution') !== false) $scholar_class = 'scholar-tuition';
 
                     $initials = '';
                     $parts = explode(' ', trim($row['name']));
@@ -860,8 +932,8 @@ if (!empty($site_settings['tuition_modes'])) {
                             $st_base = (float)$tuition_modes[$mode];
                         } elseif (strcasecmp($mode, 'Hostler') === 0) {
                             $st_base = (float)($app_settings['fee_hostler'] ?? 5000);
-                        } elseif (strcasecmp($mode, 'Tuition') === 0) {
-                            $st_base = (float)($app_settings['fee_tuition'] ?? 1500);
+                        } elseif (strcasecmp($mode, 'Tuition') === 0 || stripos($mode, 'tuition') !== false || stripos($mode, 'tution') !== false) {
+                            $st_base = (float)($tuition_modes['Tuition'] ?? ($app_settings['fee_tuition'] ?? 1000));
                         } else {
                             $st_base = (float)($app_settings['fee_day_scholar'] ?? 3000);
                         }
@@ -892,7 +964,7 @@ if (!empty($site_settings['tuition_modes'])) {
                                     <div class="student-name-text"><?php echo htmlspecialchars($row['name']); ?></div>
                                     <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
                                         <?php if(!empty($row['reg_no'])): ?>
-                                            <span class="reg-badge-pill"><?php echo htmlspecialchars($row['reg_no']); ?></span>
+                                            <span class="reg-badge-pill"><i class="fas fa-id-badge"></i> <b><?php echo htmlspecialchars($row['reg_no']); ?></b></span>
                                         <?php endif; ?>
                                         <span class="scholar-badge <?php echo $scholar_class; ?>">
                                             <i class="fas fa-circle" style="font-size: 0.45rem;"></i> <?php echo htmlspecialchars($mode); ?>
@@ -1009,7 +1081,7 @@ if (!empty($site_settings['tuition_modes'])) {
                             $mode = $row['scholar_mode'] ?? 'Day Scholar';
                             $scholar_class = 'scholar-day';
                             if (strcasecmp($mode, 'Hostler') === 0) $scholar_class = 'scholar-hostler';
-                            elseif (strcasecmp($mode, 'Tuition') === 0) $scholar_class = 'scholar-tuition';
+                            elseif (strcasecmp($mode, 'Tuition') === 0 || stripos($mode, 'tuition') !== false || stripos($mode, 'tution') !== false) $scholar_class = 'scholar-tuition';
 
                             $initials = '';
                             $parts = explode(' ', trim($row['name']));
@@ -1031,7 +1103,7 @@ if (!empty($site_settings['tuition_modes'])) {
 
                                 <td style="padding: 16px; background: #ffffff; border-top: 1px solid #f1f5f9; border-bottom: 1px solid #f1f5f9; border-left: 1px solid #f1f5f9; border-radius: 14px 0 0 14px;">
                                     <?php if(!empty($row['reg_no'])): ?>
-                                        <span class="reg-badge-pill"><?php echo htmlspecialchars($row['reg_no']); ?></span>
+                                        <span class="reg-badge-pill"><i class="fas fa-id-badge"></i> <b><?php echo htmlspecialchars($row['reg_no']); ?></b></span>
                                     <?php else: ?>
                                         <span style="color:#94a3b8; font-size:0.8rem;">—</span>
                                     <?php endif; ?>
@@ -1156,7 +1228,7 @@ if (!empty($site_settings['tuition_modes'])) {
                         <div style="flex: 1;">
                             <div class="portal-input-group" style="margin-bottom: 0;">
                                 <label>Candidate Full Legal Name <span style="color: #ef4444;">*</span></label>
-                                <input type="text" name="name" id="name" placeholder="Candidate's full name" required>
+                                <input type="text" name="name" id="name" placeholder="CANDIDATE'S FULL NAME" required style="text-transform: uppercase;" oninput="this.value = this.value.toUpperCase();">
                             </div>
                         </div>
                     </div>
@@ -1222,12 +1294,18 @@ if (!empty($site_settings['tuition_modes'])) {
 
                     <div class="portal-form-row" style="grid-template-columns: 1fr 1fr 1fr;">
                         <div class="portal-input-group">
-                            <label>Class for Admission</label>
-                            <select name="class_admitted" id="class_admitted">
-                                <option>Class 5 (Preparation)</option>
-                                <option>Class 6</option>
-                                <option>Class 7</option>
-                                <option>Senior Section</option>
+                            <label>Class for Admission <span style="color: #ef4444;">*</span></label>
+                            <select name="class_admitted" id="class_admitted" required>
+                                <option value="">Select Class...</option>
+                                <option value="Junior">Junior Section</option>
+                                <option value="Class 1">Class 1</option>
+                                <option value="Class 2">Class 2</option>
+                                <option value="Class 3">Class 3</option>
+                                <option value="Class 4">Class 4</option>
+                                <option value="Class 5">Class 5</option>
+                                <option value="Class 6">Class 6</option>
+                                <option value="Class 7">Class 7</option>
+                                <option value="Class 8">Class 8</option>
                             </select>
                         </div>
                         <div class="portal-input-group">
@@ -1516,7 +1594,7 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('existing_admission_test_paper').value = data.admission_test_paper || '';
 
             // Student info
-            document.getElementById('name').value = data.name || '';
+            document.getElementById('name').value = (data.name || '').toUpperCase();
             document.getElementById('dob').value = data.dob || '';
             document.getElementById('gender').value = data.gender || '';
             document.getElementById('home_address').value = data.home_address || '';
@@ -1525,7 +1603,19 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('zip_code').value = data.zip_code || '';
             document.getElementById('prev_school').value = data.prev_school || '';
             document.getElementById('target_school').value = data.target_school || '';
-            document.getElementById('class_admitted').value = data.class_admitted || '';
+            var classSelect = document.getElementById('class_admitted');
+            if (classSelect) {
+                var cVal = data.class_admitted || '';
+                classSelect.value = cVal;
+                if (cVal && classSelect.value !== cVal) {
+                    if (classSelect.querySelector('option[value="Class ' + cVal + '"]')) {
+                        classSelect.value = 'Class ' + cVal;
+                    } else {
+                        var newOpt = new Option(cVal, cVal, true, true);
+                        classSelect.add(newOpt);
+                    }
+                }
+            }
             document.getElementById('scholar_mode').value = data.scholar_mode || 'Day Scholar';
             if (document.getElementById('academic_group')) {
                 document.getElementById('academic_group').value = data.academic_group || 'Group A';
@@ -1653,7 +1743,20 @@ if (!empty($site_settings['tuition_modes'])) {
                     email.includes(query);
 
                 const classMatch = classVal === '' || cls === classVal;
-                const modeMatch = modeVal === '' || mode === modeVal;
+                
+                let modeMatch = false;
+                if (modeVal === '') {
+                    modeMatch = true;
+                } else if (modeVal.includes('tuition') || modeVal.includes('tution')) {
+                    modeMatch = mode.includes('tuition') || mode.includes('tution');
+                } else if (modeVal.includes('hostler')) {
+                    modeMatch = mode.includes('hostler');
+                } else if (modeVal.includes('day')) {
+                    modeMatch = mode.includes('day');
+                } else {
+                    modeMatch = (mode === modeVal);
+                }
+
                 const schoolMatch = schoolVal === '' || school === schoolVal;
                 const groupMatch = groupVal === '' || group === groupVal;
                 const statusMatch = statusVal === '' || status === statusVal;
@@ -1677,6 +1780,49 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('visibleCount').textContent = visibleCount;
         }
 
+        // Apply Clickable KPI Card Filter
+        function applyKpiFilter(status, mode) {
+            const modeSelect = document.getElementById('modeFilterSelect');
+            const statusSelect = document.getElementById('statusFilterSelect');
+
+            // Toggle back to All Active if clicked again
+            if (statusSelect && modeSelect && statusSelect.value === status && modeSelect.value.toLowerCase() === mode.toLowerCase()) {
+                statusSelect.value = 'active';
+                modeSelect.value = '';
+            } else {
+                if (statusSelect) statusSelect.value = status;
+                if (modeSelect) modeSelect.value = mode;
+            }
+
+            updateKpiActiveState();
+            filterStudents();
+        }
+
+        // Synchronize Active Highlight on KPI Cards
+        function updateKpiActiveState() {
+            const statusVal = document.getElementById('statusFilterSelect') ? document.getElementById('statusFilterSelect').value.toLowerCase().trim() : 'active';
+            const modeVal = document.getElementById('modeFilterSelect') ? document.getElementById('modeFilterSelect').value.toLowerCase().trim() : '';
+
+            document.querySelectorAll('.stat-card.kpi-clickable').forEach(c => c.classList.remove('active-kpi-filter'));
+
+            if (statusVal === 'inactive') {
+                const c = document.getElementById('kpi-card-inactive');
+                if (c) c.classList.add('active-kpi-filter');
+            } else if (modeVal.includes('hostler')) {
+                const c = document.getElementById('kpi-card-hostler');
+                if (c) c.classList.add('active-kpi-filter');
+            } else if (modeVal.includes('day')) {
+                const c = document.getElementById('kpi-card-day');
+                if (c) c.classList.add('active-kpi-filter');
+            } else if (modeVal.includes('tuition') || modeVal.includes('tution')) {
+                const c = document.getElementById('kpi-card-tuition');
+                if (c) c.classList.add('active-kpi-filter');
+            } else {
+                const c = document.getElementById('kpi-card-all');
+                if (c) c.classList.add('active-kpi-filter');
+            }
+        }
+
         function resetAllFilters() {
             document.getElementById('studentSearchInput').value = '';
             document.getElementById('classFilterSelect').value = '';
@@ -1688,11 +1834,38 @@ if (!empty($site_settings['tuition_modes'])) {
             if (document.getElementById('statusFilterSelect')) {
                 document.getElementById('statusFilterSelect').value = 'active';
             }
+            updateKpiActiveState();
             filterStudents();
+        }
+
+        function printFilteredDirectory() {
+            const statusVal = document.getElementById('statusFilterSelect') ? document.getElementById('statusFilterSelect').value : 'active';
+            const modeVal = document.getElementById('modeFilterSelect') ? document.getElementById('modeFilterSelect').value : '';
+            const classVal = document.getElementById('classFilterSelect') ? document.getElementById('classFilterSelect').value : '';
+            const query = document.getElementById('studentSearchInput') ? document.getElementById('studentSearchInput').value.trim() : '';
+
+            let url = 'print_students.php?status=' + encodeURIComponent(statusVal);
+            if (modeVal) url += '&mode=' + encodeURIComponent(modeVal);
+            if (classVal) url += '&class=' + encodeURIComponent(classVal);
+            if (query) url += '&q=' + encodeURIComponent(query);
+            url += '&autoprint=1';
+            window.open(url, '_blank');
+        }
+
+        function exportFilteredExcel() {
+            const statusVal = document.getElementById('statusFilterSelect') ? document.getElementById('statusFilterSelect').value : 'active';
+            const modeVal = document.getElementById('modeFilterSelect') ? document.getElementById('modeFilterSelect').value : '';
+            const classVal = document.getElementById('classFilterSelect') ? document.getElementById('classFilterSelect').value : '';
+
+            let url = 'export_students_excel.php?status=' + encodeURIComponent(statusVal);
+            if (modeVal) url += '&mode=' + encodeURIComponent(modeVal);
+            if (classVal) url += '&class=' + encodeURIComponent(classVal);
+            window.location.href = url;
         }
 
         // Run filter on initial page load
         document.addEventListener('DOMContentLoaded', function() {
+            updateKpiActiveState();
             filterStudents();
         });
     </script>

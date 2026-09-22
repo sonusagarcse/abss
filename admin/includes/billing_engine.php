@@ -105,6 +105,9 @@ if ($active_students && $active_students->num_rows > 0) {
                     $s = $conn->prepare("INSERT INTO fees_generated (student_id, amount, month_for, billing_date, remark, status) VALUES (?, ?, ?, ?, ?, 'unpaid')");
                     $s->bind_param("idsss", $sid, $exp_amount, $current_eval_name, $billing_date, $final_remark);
                     $s->execute();
+                    $new_exp_bill_id = $conn->insert_id;
+                    $new_inv_no = generate_invoice_number($billing_date, $conn);
+                    $conn->query("UPDATE fees_generated SET invoice_no = '$new_inv_no' WHERE id = $new_exp_bill_id");
                 }
                 $ids_str = implode(",", $exp_ids);
                 $conn->query("UPDATE student_expenses SET status = 'billed', billed_at = NOW() WHERE id IN ($ids_str)");
@@ -221,6 +224,8 @@ if ($active_students && $active_students->num_rows > 0) {
                 $stmt->bind_param("idsss", $sid, $total_amount, $month_for, $bill_month_date, $final_remark);
                 $stmt->execute();
                 $invoice_id = $conn->insert_id;
+                $new_inv_no = generate_invoice_number($bill_month_date, $conn);
+                $conn->query("UPDATE fees_generated SET invoice_no = '$new_inv_no' WHERE id = $invoice_id");
             }
 
             if (!empty($exp_ids)) {

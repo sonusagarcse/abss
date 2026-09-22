@@ -1,5 +1,5 @@
 <?php
-$current_page = basename($_SERVER['PHP_SELF']);
+$current_page = str_replace('.php', '', basename($_SERVER['PHP_SELF']));
 $faculty_name = $_SESSION['teacher_name'] ?? 'Faculty Member';
 ?>
 <!-- Mobile Top Navigation Bar -->
@@ -20,25 +20,25 @@ $faculty_name = $_SESSION['teacher_name'] ?? 'Faculty Member';
 <nav class="mobile-bottom-nav">
     <ul>
         <li>
-            <a href="dashboard.php" class="<?= $current_page == 'dashboard.php' ? 'active' : '' ?>">
+            <a href="dashboard" class="<?= $current_page == 'dashboard' ? 'active' : '' ?>">
                 <i class="fas fa-th-large"></i>
                 <span>Overview</span>
             </a>
         </li>
         <li>
-            <a href="attendance.php" class="<?= $current_page == 'attendance.php' ? 'active' : '' ?>">
+            <a href="attendance" class="<?= $current_page == 'attendance' ? 'active' : '' ?>">
                 <i class="fas fa-calendar-check"></i>
                 <span>Attendance</span>
             </a>
         </li>
         <li>
-            <a href="results.php" class="<?= $current_page == 'results.php' ? 'active' : '' ?>">
+            <a href="results" class="<?= $current_page == 'results' ? 'active' : '' ?>">
                 <i class="fas fa-award"></i>
                 <span>Marks</span>
             </a>
         </li>
         <li>
-            <a href="expenses.php" class="<?= $current_page == 'expenses.php' ? 'active' : '' ?>">
+            <a href="expenses" class="<?= $current_page == 'expenses' ? 'active' : '' ?>">
                 <i class="fas fa-receipt"></i>
                 <span>Expenses</span>
             </a>
@@ -85,38 +85,38 @@ $faculty_name = $_SESSION['teacher_name'] ?? 'Faculty Member';
 
     <ul class="nav-menu">
         <li class="nav-item">
-            <a href="dashboard.php" class="nav-link <?= $current_page == 'dashboard.php' ? 'active' : '' ?>">
+            <a href="dashboard" class="nav-link <?= $current_page == 'dashboard' ? 'active' : '' ?>">
                 <i class="fas fa-th-large"></i> Dashboard
             </a>
         </li>
         <li class="nav-item">
-            <a href="attendance.php" class="nav-link <?= $current_page == 'attendance.php' ? 'active' : '' ?>">
+            <a href="attendance" class="nav-link <?= $current_page == 'attendance' ? 'active' : '' ?>">
                 <i class="fas fa-calendar-check"></i> Student Attendance
             </a>
         </li>
         <li class="nav-item">
-            <a href="results.php" class="nav-link <?= $current_page == 'results.php' ? 'active' : '' ?>">
+            <a href="results" class="nav-link <?= $current_page == 'results' ? 'active' : '' ?>">
                 <i class="fas fa-award"></i> Examination Marks
             </a>
         </li>
         <li class="nav-item">
-            <a href="expenses.php" class="nav-link <?= $current_page == 'expenses.php' ? 'active' : '' ?>">
+            <a href="expenses" class="nav-link <?= $current_page == 'expenses' ? 'active' : '' ?>">
                 <i class="fas fa-receipt"></i> Expense Claims
             </a>
         </li>
         <li class="nav-item">
-            <a href="invoices.php" class="nav-link <?= $current_page == 'invoices.php' ? 'active' : '' ?>">
+            <a href="invoices" class="nav-link <?= $current_page == 'invoices' ? 'active' : '' ?>">
                 <i class="fas fa-file-invoice-dollar"></i> Salary Invoices
             </a>
         </li>
         <li class="nav-item">
-            <a href="notices.php" class="nav-link <?= $current_page == 'notices.php' ? 'active' : '' ?>">
+            <a href="notices" class="nav-link <?= $current_page == 'notices' ? 'active' : '' ?>">
                 <i class="fas fa-bullhorn"></i> Notice Board
             </a>
         </li>
     </ul>
 
-    <a href="logout.php" class="nav-link logout-link">
+    <a href="logout" class="nav-link logout-link">
         <i class="fas fa-sign-out-alt"></i> Logout Faculty
     </a>
 </div>

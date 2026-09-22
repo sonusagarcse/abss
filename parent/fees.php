@@ -423,8 +423,12 @@ if (!empty($settings['tuition_modes'])) {
                                     </tr>
                                 <?php else: ?>
                                     <?php foreach ($unpaid_bills as $bill): ?>
+                                        <?php $inv_display = get_invoice_no($bill); ?>
                                         <tr>
-                                            <td style="color:var(--portal-dark); font-weight:800;"><?php echo htmlspecialchars($bill['month_for']); ?></td>
+                                            <td style="color:var(--portal-dark); font-weight:800;">
+                                                <?php echo htmlspecialchars($bill['month_for']); ?>
+                                                <div style="font-size:0.75rem; color:var(--portal-blue); font-weight:700;"><?php echo htmlspecialchars($inv_display); ?></div>
+                                            </td>
                                             <td><span class="amount-tag" style="background:#f1f5f9; color:#334155;">₹ <?php echo number_format($bill['amount'], 2); ?></span></td>
                                             <td>
                                                 <?php if ($bill['fine_amount'] > 0): ?>
@@ -472,7 +476,7 @@ if (!empty($settings['tuition_modes'])) {
                                         <?php endif; ?>
                                     </div>
                                     <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:12px;">
-                                        Inv #<?php echo $bill['id']; ?> • Billed: <?php echo date('d M, Y', strtotime($bill['billing_date'])); ?>
+                                        <span style="color:var(--portal-blue); font-weight:700;"><?php echo htmlspecialchars($inv_display); ?></span> • Billed: <?php echo date('d M, Y', strtotime($bill['billing_date'])); ?>
                                     </div>
                                     <a href="view_bill.php?id=<?php echo $bill['id']; ?>" class="btn-receipt btn-pay-action" style="width:100%; justify-content:center; padding:10px;">
                                         <i class="fas fa-credit-card"></i> Pay Now (₹<?php echo number_format($bill['total_payable'], 2); ?>)

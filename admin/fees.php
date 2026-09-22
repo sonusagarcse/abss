@@ -299,7 +299,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
                 $insert_stmt->bind_param("idsss", $sid, $amount, $month_for_full, $billing_date, $final_remark);
                 $insert_stmt->execute();
                 $invoice_id = $conn->insert_id;
-                $msg = "Successfully generated new manual invoice of ₹" . number_format($amount, 2) . " for $st_name.";
+                $new_inv_no = generate_invoice_number($billing_date, $conn);
+                $conn->query("UPDATE fees_generated SET invoice_no = '$new_inv_no' WHERE id = $invoice_id");
+                $msg = "Successfully generated new manual invoice ($new_inv_no) of ₹" . number_format($amount, 2) . " for $st_name.";
             }
 
             if ($fee_type !== 'Custom') {
@@ -1442,7 +1444,8 @@ if (!empty($settings['tuition_modes'])) {
                                                     <?php if (!empty($b['parent_name'])): ?>
                                                         <div style="font-size:0.75rem; color:#64748b; font-weight:600;"><i class="fas fa-user-friends" style="font-size:0.7rem; color:#94a3b8;"></i> S/o <?php echo htmlspecialchars($b['parent_name']); ?></div>
                                                     <?php endif; ?>
-                                                    <small style="color:#64748b; font-weight:600;">Inv #<?php echo $b['id']; ?> • <?php echo date('d M, Y', strtotime($b['billing_date'])); ?></small>
+                                                    <?php $inv_display = get_invoice_no($b); ?>
+                                                    <small style="color:#64748b; font-weight:700;"><span style="color:var(--portal-blue);"><?php echo htmlspecialchars($inv_display); ?></span> • <?php echo date('d M, Y', strtotime($b['billing_date'])); ?></small>
                                                 </td>
                                                 <td>
                                                     <div style="font-weight:900; color:var(--portal-dark); font-size:1rem;">

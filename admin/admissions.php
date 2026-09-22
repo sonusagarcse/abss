@@ -17,7 +17,7 @@ if (isset($_POST['update_status']) && isset($_POST['admission_id'])) {
             // Fetch admission details
             $res = $conn->query("SELECT * FROM admissions WHERE id = $id");
             if ($row = $res->fetch_assoc()) {
-                $name = $row['student_name'];
+                $name = mb_strtoupper(trim($row['student_name']), 'UTF-8');
                 $parent = $row['parent_name'];
                 $phone = $row['phone'];
                 $school = $row['target_program'];

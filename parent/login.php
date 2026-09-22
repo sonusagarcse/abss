@@ -26,6 +26,21 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $result = authenticate_parent($username, $password);
     if ($result['success']) {
+        $pId = (int)$_SESSION['parent_id'];
+        $fcmToken = trim($_POST['fcm_token'] ?? $_GET['fcm_token'] ?? $_COOKIE['abss_fcm_token'] ?? '');
+        if ($pId > 0 && !empty($fcmToken) && strlen($fcmToken) >= 20) {
+            $conn = getDB();
+            $sQ = $conn->query("SELECT id FROM students WHERE parent_id = $pId ORDER BY CASE WHEN status = 'active' THEN 0 ELSE 1 END, id ASC LIMIT 1");
+            $sId = ($sQ && $sRow = $sQ->fetch_assoc()) ? (int)$sRow['id'] : null;
+            $upStmt = $conn->prepare("
+                INSERT INTO fcm_tokens (token, device_type, app_version, parent_id, student_id)
+                VALUES (?, 'android', '2.4.3', ?, ?)
+                ON DUPLICATE KEY UPDATE parent_id = VALUES(parent_id), student_id = VALUES(student_id), updated_at = NOW()
+            ");
+            $upStmt->bind_param("sii", $fcmToken, $pId, $sId);
+            $upStmt->execute();
+            $upStmt->close();
+        }
         header("Location: " . $result['redirect']);
         exit();
     } else {
@@ -94,6 +109,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
         <form action="login.php" method="POST">
             <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
+            <input type="hidden" name="fcm_token" id="login_fcm_token" value="">
             
             <div class="form-group">
                 <label for="username">Registered Email / Mobile Number</label>
@@ -123,5 +139,17 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             </div>
         </div>
     </div>
+
+    <!-- ABSS FCM Device Token Hook for Native Android WebView App -->
+    <script src="../js/fcm-client.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            var cached = localStorage.getItem('abss_fcm_token');
+            if (cached) {
+                var el = document.getElementById('login_fcm_token');
+                if (el) el.value = cached;
+            }
+        });
+    </script>
 </body>
 </html>

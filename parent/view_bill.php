@@ -8,17 +8,28 @@ if (!isset($_GET['id'])) {
     exit();
 }
 
-$bill_id = (int)$_GET['id'];
+$bill_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$inv_param = isset($_GET['inv']) ? trim($_GET['inv']) : (isset($_GET['invoice']) ? trim($_GET['invoice']) : '');
 
-// Fetch bill details with student scholar mode & class admitted
-$stmt = $conn->prepare("
-    SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, p.parent_name, p.phone, p.email as parent_email
-    FROM fees_generated fg
-    JOIN students s ON fg.student_id = s.id
-    LEFT JOIN parents p ON s.parent_id = p.id
-    WHERE fg.id = ? AND s.parent_id = ?
-");
-$stmt->bind_param("ii", $bill_id, $pid);
+if ($bill_id > 0) {
+    $stmt = $conn->prepare("
+        SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, p.parent_name, p.phone, p.email as parent_email
+        FROM fees_generated fg
+        JOIN students s ON fg.student_id = s.id
+        LEFT JOIN parents p ON s.parent_id = p.id
+        WHERE fg.id = ? AND s.parent_id = ?
+    ");
+    $stmt->bind_param("ii", $bill_id, $pid);
+} else {
+    $stmt = $conn->prepare("
+        SELECT fg.*, s.name as student_name, s.scholar_mode, s.class_admitted, p.parent_name, p.phone, p.email as parent_email
+        FROM fees_generated fg
+        JOIN students s ON fg.student_id = s.id
+        LEFT JOIN parents p ON s.parent_id = p.id
+        WHERE fg.invoice_no = ? AND s.parent_id = ?
+    ");
+    $stmt->bind_param("si", $inv_param, $pid);
+}
 $stmt->execute();
 $bill = $stmt->get_result()->fetch_assoc();
 
@@ -77,7 +88,7 @@ $fine_amount = ($bill['status'] === 'unpaid') ? $fine_calc['fine_amount'] : 0.00
 $total_payable_amount = (float)$bill['amount'] + $fine_amount;
 
 $amount_in_words = amountToWords($total_payable_amount);
-$invoice_no = "ABSS-INV-" . date('Y', strtotime($bill['billing_date'])) . "-" . str_pad($bill['id'], 5, '0', STR_PAD_LEFT);
+$invoice_no = get_invoice_no($bill);
 
 // Server-side Razorpay Order Generation for UPI Intent & WebViews
 $razorpay_order_id = '';

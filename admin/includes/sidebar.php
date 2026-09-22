@@ -1,18 +1,18 @@
 <?php
 // admin/includes/sidebar.php - Categorized Frosted Glass Admin Navigation Drawer
-$current_page = basename($_SERVER['PHP_SELF']);
+$current_page = str_replace('.php', '', basename($_SERVER['PHP_SELF']));
 $base_app_url = defined('APP_URL') ? rtrim(APP_URL, '/') : '/abss';
 $admin_url = $base_app_url . '/admin/';
 $assets_url = $base_app_url . '/assets/';
-$is_notif_page = (strpos($_SERVER['PHP_SELF'], 'notifications') !== false || $current_page == 'notifications.php');
+$is_notif_page = (strpos($_SERVER['PHP_SELF'], 'notifications') !== false || $current_page == 'notifications');
 
 // Define Active Category Groups
-$is_academics_active = in_array($current_page, ['students.php', 'attendance.php', 'assign_groups.php', 'results.php', 'syllabus.php']);
-$is_finance_active = in_array($current_page, ['fees.php', 'student_dues.php', 'fine_system.php', 'view_bill.php', 'receipt.php']);
-$is_teacher_active = in_array($current_page, ['teachers.php', 'teacher_expenses.php', 'teacher_invoices.php', 'print_teacher_invoice.php']);
-$is_parents_active = in_array($current_page, ['parents.php', 'documents.php', 'document_approvals.php']);
-$is_communication_active = in_array($current_page, ['whatsapp.php', 'notices.php', 'inquiries.php', 'tickets.php']) || $is_notif_page;
-$is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'achievers.php', 'gallery.php', 'visitors.php', 'settings.php']);
+$is_academics_active = in_array($current_page, ['students', 'attendance', 'assign_groups', 'results', 'syllabus']);
+$is_finance_active = in_array($current_page, ['fees', 'student_dues', 'fine_system', 'view_bill', 'receipt']);
+$is_teacher_active = in_array($current_page, ['teachers', 'teacher_expenses', 'teacher_invoices', 'print_teacher_invoice']);
+$is_parents_active = in_array($current_page, ['parents', 'documents', 'document_approvals']);
+$is_communication_active = in_array($current_page, ['whatsapp', 'notices', 'inquiries', 'tickets']) || $is_notif_page;
+$is_portal_active = in_array($current_page, ['admissions', 'schools', 'achievers', 'gallery', 'visitors', 'settings']);
 ?>
 
 <style>
@@ -145,7 +145,7 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
 
 <!-- Mobile Sticky Glass Header -->
 <div class="mobile-header">
-    <div class="mobile-brand" onclick="window.location.href='<?php echo $admin_url; ?>dashboard.php'" style="cursor:pointer;" title="Admin Dashboard">
+    <div class="mobile-brand" onclick="window.location.href='<?php echo $admin_url; ?>dashboard'" style="cursor:pointer;" title="Admin Dashboard">
         <img src="<?php echo $assets_url; ?>logo.png" alt="Logo">
         <span>ABSS Command Center</span>
     </div>
@@ -158,19 +158,19 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
 <nav class="mobile-bottom-nav" id="adminBottomNav">
     <ul>
         <li>
-            <a href="<?php echo $admin_url; ?>students.php" class="<?php echo $current_page == 'students.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>students" class="<?php echo $current_page == 'students' ? 'active' : ''; ?>">
                 <i class="fas fa-user-graduate"></i>
                 <span>Students</span>
             </a>
         </li>
         <li>
-            <a href="<?php echo $admin_url; ?>notifications.php" class="<?php echo $is_notif_page ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>notifications" class="<?php echo $is_notif_page ? 'active' : ''; ?>">
                 <i class="fas fa-bell"></i>
                 <span>Alerts</span>
             </a>
         </li>
         <li class="nav-center-item">
-            <a href="<?php echo $admin_url; ?>fees.php" class="<?php echo $current_page == 'fees.php' ? 'active' : ''; ?>" title="Fee Management &amp; Ledger">
+            <a href="<?php echo $admin_url; ?>fees" class="<?php echo $current_page == 'fees' ? 'active' : ''; ?>" title="Fee Management &amp; Ledger">
                 <div class="center-btn-bubble">
                     <i class="fas fa-wallet"></i>
                 </div>
@@ -178,7 +178,7 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
             </a>
         </li>
         <li>
-            <a href="<?php echo $admin_url; ?>gallery.php" class="<?php echo $current_page == 'gallery.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>gallery" class="<?php echo $current_page == 'gallery' ? 'active' : ''; ?>">
                 <i class="fas fa-images"></i>
                 <span>Gallery</span>
             </a>
@@ -220,7 +220,7 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
     <ul class="nav-menu">
         <!-- 1. MAIN OVERVIEW -->
         <li class="nav-item">
-            <a href="<?php echo $admin_url; ?>dashboard.php" class="nav-link <?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
+            <a href="<?php echo $admin_url; ?>dashboard" class="nav-link <?php echo $current_page == 'dashboard' ? 'active' : ''; ?>">
                 <i class="fas fa-th-large"></i> Dashboard
             </a>
         </li>
@@ -241,27 +241,27 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
             </div>
             <ul class="submenu-list">
                 <li>
-                    <a href="<?php echo $admin_url; ?>students.php" class="sub-link <?php echo $current_page == 'students.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>students" class="sub-link <?php echo $current_page == 'students' ? 'active' : ''; ?>">
                         <i class="fas fa-users"></i> Students Directory
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>attendance.php" class="sub-link <?php echo $current_page == 'attendance.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>attendance" class="sub-link <?php echo $current_page == 'attendance' ? 'active' : ''; ?>">
                         <i class="fas fa-calendar-check"></i> Attendance
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>assign_groups.php" class="sub-link <?php echo $current_page == 'assign_groups.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>assign_groups" class="sub-link <?php echo $current_page == 'assign_groups' ? 'active' : ''; ?>">
                         <i class="fas fa-users-gear"></i> Student Batches / Groups
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>results.php" class="sub-link <?php echo $current_page == 'results.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>results" class="sub-link <?php echo $current_page == 'results' ? 'active' : ''; ?>">
                         <i class="fas fa-award"></i> Examination Results
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>syllabus.php" class="sub-link <?php echo $current_page == 'syllabus.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>syllabus" class="sub-link <?php echo $current_page == 'syllabus' ? 'active' : ''; ?>">
                         <i class="fas fa-book-open"></i> Academic Syllabus
                     </a>
                 </li>
@@ -282,17 +282,17 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
             </div>
             <ul class="submenu-list">
                 <li>
-                    <a href="<?php echo $admin_url; ?>fees.php" class="sub-link <?php echo $current_page == 'fees.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>fees" class="sub-link <?php echo $current_page == 'fees' ? 'active' : ''; ?>">
                         <i class="fas fa-history"></i> Fee Ledger &amp; Collections
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>student_dues.php" class="sub-link <?php echo $current_page == 'student_dues.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>student_dues" class="sub-link <?php echo $current_page == 'student_dues' ? 'active' : ''; ?>">
                         <i class="fas fa-hand-holding-usd" style="color: #dc2626;"></i> Student Dues &amp; Fines
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>fine_system.php" class="sub-link <?php echo $current_page == 'fine_system.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>fine_system" class="sub-link <?php echo $current_page == 'fine_system' ? 'active' : ''; ?>">
                         <i class="fas fa-sliders-h" style="color: #ea580c;"></i> Fine System (ON / OFF)
                     </a>
                 </li>
@@ -313,17 +313,17 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
             </div>
             <ul class="submenu-list">
                 <li>
-                    <a href="<?php echo $admin_url; ?>teachers.php" class="sub-link <?php echo $current_page == 'teachers.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>teachers" class="sub-link <?php echo $current_page == 'teachers' ? 'active' : ''; ?>">
                         <i class="fas fa-user-tie"></i> Teachers Directory
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>teacher_expenses.php" class="sub-link <?php echo $current_page == 'teacher_expenses.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>teacher_expenses" class="sub-link <?php echo $current_page == 'teacher_expenses' ? 'active' : ''; ?>">
                         <i class="fas fa-receipt"></i> Expense Approvals
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>teacher_invoices.php" class="sub-link <?php echo $current_page == 'teacher_invoices.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>teacher_invoices" class="sub-link <?php echo $current_page == 'teacher_invoices' ? 'active' : ''; ?>">
                         <i class="fas fa-money-check-alt"></i> Salary Invoices
                     </a>
                 </li>
@@ -346,17 +346,17 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
             </div>
             <ul class="submenu-list">
                 <li>
-                    <a href="<?php echo $admin_url; ?>parents.php" class="sub-link <?php echo $current_page == 'parents.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>parents" class="sub-link <?php echo $current_page == 'parents' ? 'active' : ''; ?>">
                         <i class="fas fa-address-book"></i> Parent Registry
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>documents.php" class="sub-link <?php echo $current_page == 'documents.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>documents" class="sub-link <?php echo $current_page == 'documents' ? 'active' : ''; ?>">
                         <i class="fas fa-file-alt"></i> Required Documents
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>document_approvals.php" class="sub-link <?php echo $current_page == 'document_approvals.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>document_approvals" class="sub-link <?php echo $current_page == 'document_approvals' ? 'active' : ''; ?>">
                         <i class="fas fa-check-double"></i> Document Verification
                     </a>
                 </li>
@@ -377,27 +377,27 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
             </div>
             <ul class="submenu-list">
                 <li>
-                    <a href="<?php echo $admin_url; ?>whatsapp.php" class="sub-link <?php echo $current_page == 'whatsapp.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>whatsapp" class="sub-link <?php echo $current_page == 'whatsapp' ? 'active' : ''; ?>">
                         <i class="fab fa-whatsapp" style="color: #22c55e;"></i> WhatsApp Hub
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>notifications/index.php" class="sub-link <?php echo $is_notif_page ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>notifications" class="sub-link <?php echo $is_notif_page ? 'active' : ''; ?>">
                         <i class="fas fa-bell" style="color: #eab308;"></i> App Push Notifications
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>notices.php" class="sub-link <?php echo $current_page == 'notices.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>notices" class="sub-link <?php echo $current_page == 'notices' ? 'active' : ''; ?>">
                         <i class="fas fa-bullhorn"></i> Notice Board
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>inquiries.php" class="sub-link <?php echo $current_page == 'inquiries.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>inquiries" class="sub-link <?php echo $current_page == 'inquiries' ? 'active' : ''; ?>">
                         <i class="fas fa-envelope-open-text"></i> Inquiries
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>tickets.php" class="sub-link <?php echo $current_page == 'tickets.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>tickets" class="sub-link <?php echo $current_page == 'tickets' ? 'active' : ''; ?>">
                         <i class="fas fa-ticket-alt"></i> Helpdesk Tickets
                     </a>
                 </li>
@@ -418,32 +418,32 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
             </div>
             <ul class="submenu-list">
                 <li>
-                    <a href="<?php echo $admin_url; ?>admissions.php" class="sub-link <?php echo $current_page == 'admissions.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>admissions" class="sub-link <?php echo $current_page == 'admissions' ? 'active' : ''; ?>">
                         <i class="fas fa-user-plus"></i> Online Admissions
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>schools.php" class="sub-link <?php echo $current_page == 'schools.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>schools" class="sub-link <?php echo $current_page == 'schools' ? 'active' : ''; ?>">
                         <i class="fas fa-graduation-cap"></i> Coaching Programs
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>achievers.php" class="sub-link <?php echo $current_page == 'achievers.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>achievers" class="sub-link <?php echo $current_page == 'achievers' ? 'active' : ''; ?>">
                         <i class="fas fa-trophy" style="color:#eab308;"></i> Hall of Excellence
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>gallery.php" class="sub-link <?php echo $current_page == 'gallery.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>gallery" class="sub-link <?php echo $current_page == 'gallery' ? 'active' : ''; ?>">
                         <i class="fas fa-images"></i> Media Gallery
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>visitors.php" class="sub-link <?php echo $current_page == 'visitors.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>visitors" class="sub-link <?php echo $current_page == 'visitors' ? 'active' : ''; ?>">
                         <i class="fas fa-chart-line"></i> Visitor Analytics
                     </a>
                 </li>
                 <li>
-                    <a href="<?php echo $admin_url; ?>settings.php" class="sub-link <?php echo $current_page == 'settings.php' ? 'active' : ''; ?>">
+                    <a href="<?php echo $admin_url; ?>settings" class="sub-link <?php echo $current_page == 'settings' ? 'active' : ''; ?>">
                         <i class="fas fa-sliders-h"></i> Web Settings
                     </a>
                 </li>
@@ -451,7 +451,7 @@ $is_portal_active = in_array($current_page, ['admissions.php', 'schools.php', 'a
         </li>
     </ul>
 
-    <a href="<?php echo $admin_url; ?>logout.php" class="nav-link logout-link">
+    <a href="<?php echo $admin_url; ?>logout" class="nav-link logout-link">
         <i class="fas fa-sign-out-alt"></i> Logout Admin
     </a>
 </div>

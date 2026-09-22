@@ -159,7 +159,7 @@ function amountToWords($number) {
     <?php 
     $index = 0;
     while ($bill = $result->fetch_assoc()): 
-        $invoice_no = "ABSS-" . date('Ym', strtotime($bill['billing_date'])) . "-" . str_pad($bill['id'], 5, '0', STR_PAD_LEFT);
+        $invoice_no = get_invoice_no($bill);
         $amount_in_words = amountToWords($bill['amount']);
         $index++;
         

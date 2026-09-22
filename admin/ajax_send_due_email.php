@@ -316,6 +316,99 @@ try {
         ]);
         exit;
 
+    } elseif ($action === 'send_student_due_push') {
+        // C. Direct Push Notification Dispatch for Student Dues via FCM
+        require_once __DIR__ . '/../config/firebase.php';
+
+        $student_id = (int)($_POST['student_id'] ?? 0);
+        $amount = (float)($_POST['amount'] ?? 0);
+        $due_months = trim($_POST['due_months'] ?? 'Current Session');
+
+        if ($student_id <= 0) {
+            throw new Exception("Invalid student ID.");
+        }
+
+        // Fetch student & parent info
+        $stStmt = $conn->prepare("
+            SELECT s.name, s.reg_no, s.class_admitted, s.parent_id, p.parent_name 
+            FROM students s 
+            LEFT JOIN parents p ON s.parent_id = p.id 
+            WHERE s.id = ? LIMIT 1
+        ");
+        $stStmt->bind_param("i", $student_id);
+        $stStmt->execute();
+        $stRow = $stStmt->get_result()->fetch_assoc();
+        $stStmt->close();
+
+        if (!$stRow) {
+            throw new Exception("Student not found.");
+        }
+
+        $pId = (int)($stRow['parent_id'] ?? 0);
+        $sName = $stRow['name'];
+        $pName = $stRow['parent_name'] ?: 'Parent';
+
+        // Query linked device tokens
+        $tokensRes = $conn->query("
+            SELECT DISTINCT token 
+            FROM fcm_tokens 
+            WHERE student_id = $student_id OR (parent_id > 0 AND parent_id = $pId)
+        ");
+
+        $tokens = [];
+        if ($tokensRes) {
+            while ($tk = $tokensRes->fetch_assoc()) {
+                $tokens[] = $tk['token'];
+            }
+        }
+
+        if (empty($tokens)) {
+            echo json_encode([
+                'success' => false,
+                'error' => "No active app device registered for $sName. Please send via Phone SMS or WhatsApp."
+            ]);
+            exit;
+        }
+
+        $title = "Fee Reminder: ₹" . number_format($amount, 2) . " Pending";
+        $message = "Dear $pName, fee of ₹" . number_format($amount, 2) . " for student $sName (" . ($stRow['class_admitted'] ?: 'Class') . ") is pending for $due_months. Please clear at your earliest.";
+        
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'abss.lkvmbihar.in';
+        $clickUrl = (strpos($host, 'localhost') !== false) ? "http://localhost/abss/parent/fees" : "$protocol://$host/parent/fees";
+
+        $sentCount = 0;
+        foreach ($tokens as $tkStr) {
+            $fcmRes = sendSingleFcmNotification($tkStr, $title, $message, '', $clickUrl, 'Fee Reminder');
+            if ($fcmRes['success']) {
+                $sentCount++;
+            }
+        }
+
+        if (function_exists('log_activity')) {
+            log_activity('fcm_due_push_sent', "Dispatched fee due push notification for student $sName (₹$amount) to $sentCount device(s)");
+        }
+
+        echo json_encode([
+            'success' => $sentCount > 0,
+            'message' => "Push notification delivered to $sentCount app device(s) of $sName!",
+            'sent_count' => $sentCount
+        ]);
+        exit;
+
+    } elseif ($action === 'log_due_sms') {
+        // D. Log SMS reminder dispatch
+        $student_id = (int)($_POST['student_id'] ?? 0);
+        $phone = trim($_POST['phone'] ?? '');
+        $amount = (float)($_POST['amount'] ?? 0);
+
+        if (function_exists('log_activity')) {
+            log_activity('sms_due_sent', "Sent SMS dues reminder for student ID #$student_id to $phone (Due: ₹$amount)");
+        }
+
+        echo json_encode(['success' => true]);
+        exit;
+
     } else {
         throw new Exception("Unknown action parameter: " . htmlspecialchars($action));
     }

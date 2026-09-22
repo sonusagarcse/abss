@@ -70,9 +70,40 @@ if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['sync_live_tokens'])) 
     }
 }
 
+// Handle Manual Token to Student Assignment
+if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['assign_token_student'])) {
+    $targetTokenId = (int)($_POST['token_id'] ?? 0);
+    $assignStudentId = (int)($_POST['student_id'] ?? 0);
+
+    if ($targetTokenId > 0) {
+        if ($assignStudentId > 0) {
+            $stRow = $conn->query("SELECT id, parent_id FROM students WHERE id = $assignStudentId LIMIT 1")->fetch_assoc();
+            $assignParentId = $stRow && !empty($stRow['parent_id']) ? (int)$stRow['parent_id'] : null;
+            $uStmt = $conn->prepare("UPDATE fcm_tokens SET student_id = ?, parent_id = ?, updated_at = NOW() WHERE id = ?");
+            $uStmt->bind_param("iii", $assignStudentId, $assignParentId, $targetTokenId);
+            if ($uStmt->execute()) {
+                $msg = "Device token linked to student successfully!";
+            } else {
+                $err = "Database error linking token: " . $uStmt->error;
+            }
+            $uStmt->close();
+        } else {
+            // Unlink
+            if ($conn->query("UPDATE fcm_tokens SET student_id = NULL, parent_id = NULL, updated_at = NOW() WHERE id = $targetTokenId")) {
+                $msg = "Device token unlinked from student and parent.";
+            } else {
+                $err = "Error unlinking token: " . $conn->error;
+            }
+        }
+    }
+}
+
 // Fetch Stats
 $total_tokens_res = $conn->query("SELECT COUNT(*) AS total FROM fcm_tokens");
 $total_tokens = $total_tokens_res ? (int)$total_tokens_res->fetch_assoc()['total'] : 0;
+
+$linked_tokens_res = $conn->query("SELECT COUNT(*) AS linked FROM fcm_tokens WHERE student_id IS NOT NULL OR parent_id IS NOT NULL");
+$linked_tokens = $linked_tokens_res ? (int)$linked_tokens_res->fetch_assoc()['linked'] : 0;
 
 $sent_stats_res = $conn->query("SELECT SUM(sent_count) AS total_sent, COUNT(*) AS total_campaigns FROM notification_history");
 $sent_stats = $sent_stats_res ? $sent_stats_res->fetch_assoc() : ['total_sent' => 0, 'total_campaigns' => 0];
@@ -80,8 +111,37 @@ $sent_stats = $sent_stats_res ? $sent_stats_res->fetch_assoc() : ['total_sent' =
 // Fetch Notification History
 $history_query = $conn->query("SELECT * FROM notification_history ORDER BY id DESC");
 
-// Fetch Recent Device Tokens
-$tokens_query = $conn->query("SELECT * FROM fcm_tokens ORDER BY updated_at DESC LIMIT 50");
+// Fetch Device Tokens with Parent and Student Details
+$tokens_query = $conn->query("
+    SELECT 
+        f.*,
+        p.parent_name,
+        p.phone AS parent_phone,
+        p.email AS parent_email,
+        s.name AS student_name,
+        s.reg_no,
+        s.class_admitted,
+        s.scholar_mode
+    FROM fcm_tokens f
+    LEFT JOIN parents p ON f.parent_id = p.id
+    LEFT JOIN students s ON f.student_id = s.id
+    ORDER BY (f.student_id IS NOT NULL OR f.parent_id IS NOT NULL) DESC, f.updated_at DESC
+");
+
+// Fetch active students list for assignment dropdown
+$all_students_res = $conn->query("
+    SELECT s.id, s.name, s.reg_no, s.class_admitted, p.parent_name, p.phone AS parent_phone
+    FROM students s
+    LEFT JOIN parents p ON s.parent_id = p.id
+    WHERE s.status = 'active'
+    ORDER BY s.class_admitted ASC, s.name ASC
+");
+$all_students = [];
+if ($all_students_res) {
+    while ($st = $all_students_res->fetch_assoc()) {
+        $all_students[] = $st;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -362,12 +422,12 @@ $tokens_query = $conn->query("SELECT * FROM fcm_tokens ORDER BY updated_at DESC 
                 <div class="val"><?php echo number_format($total_tokens); ?></div>
             </div>
             <div class="stat-card">
-                <div class="lbl"><i class="fas fa-paper-plane" style="color: #16a34a;"></i> Total Sent Messages</div>
-                <div class="val"><?php echo number_format($sent_stats['total_sent'] ?? 0); ?></div>
+                <div class="lbl"><i class="fas fa-user-check" style="color: #16a34a;"></i> Linked to Students</div>
+                <div class="val" style="color: #16a34a;"><?php echo number_format($linked_tokens); ?> <span style="font-size: 0.9rem; color: #64748b; font-weight: 600;">/ <?php echo $total_tokens; ?></span></div>
             </div>
             <div class="stat-card">
-                <div class="lbl"><i class="fas fa-bullhorn" style="color: #7c3aed;"></i> Notification Campaigns</div>
-                <div class="val"><?php echo number_format($sent_stats['total_campaigns'] ?? 0); ?></div>
+                <div class="lbl"><i class="fas fa-paper-plane" style="color: #2563eb;"></i> Total Sent Messages</div>
+                <div class="val"><?php echo number_format($sent_stats['total_sent'] ?? 0); ?></div>
             </div>
             <div class="stat-card">
                 <div class="lbl"><i class="fas fa-shield-alt" style="color: #f59e0b;"></i> FCM Engine Status</div>
@@ -399,9 +459,25 @@ $tokens_query = $conn->query("SELECT * FROM fcm_tokens ORDER BY updated_at DESC 
             
             <!-- LEFT COL: REGISTERED APP DEVICES -->
             <div class="panel-card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
-                    <h3 style="margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a;"><i class="fas fa-mobile-alt" style="color: #2563eb;"></i> App Device Tokens</h3>
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #f1f5f9; padding-bottom: 12px;">
+                    <div>
+                        <h3 style="margin: 0; font-size: 1.05rem; font-weight: 800; color: #0f172a;"><i class="fas fa-mobile-alt" style="color: #2563eb;"></i> App Device Tokens</h3>
+                        <small style="color: #64748b; font-weight: 600; font-size: 0.76rem;">Linked directly to parent &amp; student profiles</small>
+                    </div>
                     <span style="background: #eff6ff; color: #2563eb; padding: 4px 10px; border-radius: 50px; font-weight: 800; font-size: 0.75rem;"><?php echo $total_tokens; ?> Devices</span>
+                </div>
+
+                <!-- Filter Pills: All / Linked / Unlinked -->
+                <div style="display: flex; gap: 6px; margin-bottom: 12px;">
+                    <button type="button" class="btn-token-filter active" onclick="filterDeviceCards('all', this)" style="flex: 1; padding: 6px 4px; font-size: 0.75rem; font-weight: 800; border-radius: 8px; border: 1px solid #cbd5e1; background: #2563eb; color: #fff; cursor: pointer;">
+                        All (<?php echo $total_tokens; ?>)
+                    </button>
+                    <button type="button" class="btn-token-filter" onclick="filterDeviceCards('linked', this)" style="flex: 1; padding: 6px 4px; font-size: 0.75rem; font-weight: 800; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; color: #15803d; cursor: pointer;">
+                        Linked (<?php echo $linked_tokens; ?>)
+                    </button>
+                    <button type="button" class="btn-token-filter" onclick="filterDeviceCards('unlinked', this)" style="flex: 1; padding: 6px 4px; font-size: 0.75rem; font-weight: 800; border-radius: 8px; border: 1px solid #cbd5e1; background: #f8fafc; color: #b45309; cursor: pointer;">
+                        Unlinked (<?php echo max(0, $total_tokens - $linked_tokens); ?>)
+                    </button>
                 </div>
 
                 <!-- Quick Actions: Add Token & Sync Live -->
@@ -434,18 +510,77 @@ $tokens_query = $conn->query("SELECT * FROM fcm_tokens ORDER BY updated_at DESC 
                     </form>
                 </div>
 
-                <div style="max-height: 520px; overflow-y: auto; -webkit-overflow-scrolling: touch;">
+                <div style="max-height: 580px; overflow-y: auto; -webkit-overflow-scrolling: touch; padding-right: 2px;">
                     <?php if ($tokens_query && $tokens_query->num_rows > 0): ?>
-                        <?php while ($tk = $tokens_query->fetch_assoc()): ?>
-                            <div class="token-card-item">
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; gap: 8px; flex-wrap: wrap;">
-                                    <strong style="color: #0f172a; font-size: 0.85rem;"><i class="fab fa-android" style="color: #22c55e;"></i> <?php echo htmlspecialchars(ucfirst($tk['device_type'])); ?> App</strong>
-                                    <small style="color: #64748b; font-weight: 700;">v<?php echo htmlspecialchars($tk['app_version']); ?></small>
+                        <?php while ($tk = $tokens_query->fetch_assoc()): 
+                            $isLinked = !empty($tk['student_name']) || !empty($tk['parent_name']);
+                            $cardStatus = $isLinked ? 'linked' : 'unlinked';
+                        ?>
+                            <div class="token-card-item dev-token-card" data-status="<?php echo $cardStatus; ?>" style="background: <?php echo $isLinked ? '#ffffff' : '#fffbeb'; ?>; border: 1px solid <?php echo $isLinked ? '#e2e8f0' : '#fde68a'; ?>; border-radius: 14px; padding: 14px; margin-bottom: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.02);">
+                                
+                                <!-- Card Header: Badge & App Version -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; gap: 8px; flex-wrap: wrap;">
+                                    <div>
+                                        <?php if ($isLinked): ?>
+                                            <span style="background: #dcfce7; color: #15803d; padding: 3px 8px; border-radius: 50px; font-size: 0.72rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px;">
+                                                <i class="fas fa-check-circle"></i> Linked Student
+                                            </span>
+                                        <?php else: ?>
+                                            <span style="background: #fef3c7; color: #b45309; padding: 3px 8px; border-radius: 50px; font-size: 0.72rem; font-weight: 800; display: inline-flex; align-items: center; gap: 4px;">
+                                                <i class="fas fa-exclamation-triangle"></i> Unlinked Device
+                                            </span>
+                                        <?php endif; ?>
+                                    </div>
+                                    <small style="color: #64748b; font-weight: 700; font-size: 0.75rem;"><i class="fab fa-android" style="color: #22c55e;"></i> v<?php echo htmlspecialchars($tk['app_version']); ?></small>
                                 </div>
-                                <div style="font-family: monospace; font-size: 0.75rem; color: #64748b; word-break: break-all; overflow-wrap: anywhere;">
-                                    <?php echo htmlspecialchars(substr($tk['token'], 0, 35)) . '...'; ?>
+
+                                <!-- Student & Parent Details -->
+                                <?php if (!empty($tk['student_name'])): ?>
+                                    <div style="margin-bottom: 8px;">
+                                        <div style="font-weight: 900; color: #0f172a; font-size: 0.95rem; display: flex; align-items: center; gap: 6px;">
+                                            <i class="fas fa-user-graduate" style="color: #2563eb;"></i>
+                                            <?php echo htmlspecialchars($tk['student_name']); ?>
+                                        </div>
+                                        <div style="font-size: 0.76rem; color: #475569; margin-top: 4px; display: flex; gap: 6px; flex-wrap: wrap; font-weight: 700;">
+                                            <span style="background: #eff6ff; color: #1d4ed8; padding: 2px 7px; border-radius: 6px;">Reg: <?php echo htmlspecialchars($tk['reg_no'] ?: 'N/A'); ?></span>
+                                            <span style="background: #f1f5f9; color: #334155; padding: 2px 7px; border-radius: 6px;"><?php echo htmlspecialchars($tk['class_admitted'] ?: 'Class N/A'); ?></span>
+                                        </div>
+                                        <div style="font-size: 0.76rem; color: #64748b; margin-top: 5px;">
+                                            <i class="fas fa-user-friends" style="color: #94a3b8;"></i> Parent: <strong><?php echo htmlspecialchars($tk['parent_name'] ?: 'N/A'); ?></strong>
+                                            <?php if (!empty($tk['parent_phone'])): ?>
+                                                • <a href="tel:<?php echo htmlspecialchars($tk['parent_phone']); ?>" style="color: #2563eb; text-decoration: none; font-weight: 700;"><?php echo htmlspecialchars($tk['parent_phone']); ?></a>
+                                            <?php endif; ?>
+                                        </div>
+                                    </div>
+                                <?php elseif (!empty($tk['parent_name'])): ?>
+                                    <div style="margin-bottom: 8px;">
+                                        <div style="font-weight: 800; color: #0f172a; font-size: 0.88rem;">
+                                            <i class="fas fa-user-friends" style="color: #2563eb;"></i> Parent: <?php echo htmlspecialchars($tk['parent_name']); ?>
+                                        </div>
+                                        <?php if (!empty($tk['parent_phone'])): ?>
+                                            <small style="color: #64748b; font-weight: 600;"><?php echo htmlspecialchars($tk['parent_phone']); ?></small>
+                                        <?php endif; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <div style="font-size: 0.78rem; color: #b45309; margin-bottom: 8px; font-weight: 600;">
+                                        Not linked to any student yet. Assign below or wait for parent to log in.
+                                    </div>
+                                <?php endif; ?>
+
+                                <!-- Token Preview -->
+                                <div style="font-family: monospace; font-size: 0.7rem; color: #64748b; word-break: break-all; overflow-wrap: anywhere; background: #f8fafc; padding: 5px 8px; border-radius: 6px; border: 1px dashed #cbd5e1; margin-bottom: 8px;">
+                                    <?php echo htmlspecialchars(substr($tk['token'], 0, 32)) . '...'; ?>
                                 </div>
-                                <small style="display: block; color: #94a3b8; font-size: 0.7rem; margin-top: 4px; font-weight: 600;">Active: <?php echo date('d M Y, h:i A', strtotime($tk['updated_at'])); ?></small>
+
+                                <!-- Card Footer: Last Active & Assign/Change Action -->
+                                <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                    <small style="color: #94a3b8; font-size: 0.68rem; font-weight: 600;">
+                                        Active: <?php echo date('d M, h:i A', strtotime($tk['updated_at'])); ?>
+                                    </small>
+                                    <button type="button" onclick="openAssignModal(<?php echo (int)$tk['id']; ?>, <?php echo (int)($tk['student_id'] ?? 0); ?>, '<?php echo htmlspecialchars(addslashes($tk['student_name'] ?? '')); ?>')" style="background: #f1f5f9; color: #1e293b; border: 1px solid #cbd5e1; padding: 4px 10px; border-radius: 8px; font-size: 0.75rem; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; gap: 4px;">
+                                        <i class="fas fa-edit" style="color: #2563eb;"></i> <?php echo !empty($tk['student_name']) ? 'Change' : 'Assign Student'; ?>
+                                    </button>
+                                </div>
                             </div>
                         <?php endwhile; ?>
                     <?php else: ?>
@@ -526,5 +661,122 @@ $tokens_query = $conn->query("SELECT * FROM fcm_tokens ORDER BY updated_at DESC 
         </div>
 
     </main>
+
+    <!-- ASSIGN STUDENT MODAL -->
+    <div id="assignStudentModal" style="display: none; position: fixed; inset: 0; background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; padding: 20px;">
+        <div style="background: #ffffff; width: 100%; max-width: 500px; border-radius: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); border: 1px solid #e2e8f0; overflow: hidden; animation: popIn 0.2s ease-out;">
+            <div style="background: #f8fafc; padding: 18px 24px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+                <h3 style="margin: 0; font-size: 1.1rem; font-weight: 800; color: #0f172a; display: flex; align-items: center; gap: 8px;">
+                    <i class="fas fa-link" style="color: #2563eb;"></i> Link Device to Student
+                </h3>
+                <button type="button" onclick="closeAssignModal()" style="background: none; border: none; font-size: 1.2rem; color: #94a3b8; cursor: pointer; padding: 4px;">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
+            <form method="POST" style="padding: 24px;">
+                <input type="hidden" name="assign_token_student" value="1">
+                <input type="hidden" name="token_id" id="modalTokenId" value="">
+                
+                <div style="background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 12px; padding: 12px 16px; margin-bottom: 20px;">
+                    <span style="font-size: 0.76rem; font-weight: 800; color: #1e40af; text-transform: uppercase; letter-spacing: 0.04em;">Selected Device</span>
+                    <div style="font-weight: 800; color: #1e3a8a; font-size: 0.95rem; margin-top: 2px;">
+                        Token ID: <span id="modalTokenDisplay" style="font-family: monospace;">#0</span>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 15px;">
+                    <label style="display: block; font-size: 0.82rem; font-weight: 800; color: #334155; margin-bottom: 6px;">
+                        Quick Search Student / Parent
+                    </label>
+                    <div style="position: relative;">
+                        <input type="text" id="studentSearchInput" oninput="filterStudentOptions()" placeholder="Type student name, reg no, or mobile..." style="width: 100%; padding: 10px 14px 10px 36px; border: 2px solid #cbd5e1; border-radius: 10px; font-size: 0.88rem; box-sizing: border-box; outline: none;">
+                        <i class="fas fa-search" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8;"></i>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 24px;">
+                    <label style="display: block; font-size: 0.82rem; font-weight: 800; color: #334155; margin-bottom: 6px;">
+                        Select Student &amp; Parent Profile <span style="color: #ef4444;">*</span>
+                    </label>
+                    <select name="student_id" id="modalStudentSelect" required style="width: 100%; padding: 12px 14px; border: 2px solid #cbd5e1; border-radius: 12px; font-size: 0.88rem; box-sizing: border-box; outline: none;">
+                        <option value="0">-- Unlink / Remove Assignment --</option>
+                        <?php foreach ($all_students as $st): ?>
+                            <option value="<?php echo (int)$st['id']; ?>">
+                                [<?php echo htmlspecialchars($st['class_admitted'] ?: 'Class N/A'); ?>] <?php echo htmlspecialchars($st['name']); ?> (Reg: <?php echo htmlspecialchars($st['reg_no'] ?: 'N/A'); ?>) — Parent: <?php echo htmlspecialchars($st['parent_name'] ?: 'N/A'); ?> (<?php echo htmlspecialchars($st['parent_phone'] ?: 'N/A'); ?>)
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <small style="display: block; color: #64748b; font-size: 0.74rem; margin-top: 5px;">
+                        Linking a student will also automatically associate their registered parent.
+                    </small>
+                </div>
+
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" onclick="closeAssignModal()" style="padding: 10px 18px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; color: #475569; font-weight: 700; font-size: 0.88rem; cursor: pointer;">
+                        Cancel
+                    </button>
+                    <button type="submit" style="padding: 10px 20px; border-radius: 10px; border: none; background: #2563eb; color: #ffffff; font-weight: 800; font-size: 0.88rem; cursor: pointer; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
+                        <i class="fas fa-save"></i> Save Link
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function openAssignModal(tokenId, currentStudentId, studentName) {
+            document.getElementById('modalTokenId').value = tokenId;
+            document.getElementById('modalTokenDisplay').textContent = '#' + tokenId;
+            document.getElementById('modalStudentSelect').value = currentStudentId || '0';
+            document.getElementById('studentSearchInput').value = '';
+            filterStudentOptions();
+            
+            const modal = document.getElementById('assignStudentModal');
+            modal.style.display = 'flex';
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeAssignModal() {
+            const modal = document.getElementById('assignStudentModal');
+            modal.style.display = 'none';
+            document.body.style.overflow = '';
+        }
+
+        function filterDeviceCards(status, btn) {
+            document.querySelectorAll('.btn-token-filter').forEach(function(b) {
+                b.style.background = '#f8fafc';
+                b.style.color = '#475569';
+            });
+            btn.style.background = '#2563eb';
+            btn.style.color = '#ffffff';
+
+            document.querySelectorAll('.dev-token-card').forEach(function(card) {
+                if (status === 'all' || card.getAttribute('data-status') === status) {
+                    card.style.display = 'block';
+                } else {
+                    card.style.display = 'none';
+                }
+            });
+        }
+
+        function filterStudentOptions() {
+            const query = (document.getElementById('studentSearchInput').value || '').toLowerCase().trim();
+            const select = document.getElementById('modalStudentSelect');
+            for (let i = 0; i < select.options.length; i++) {
+                const opt = select.options[i];
+                if (opt.value === '0') continue;
+                const text = opt.textContent.toLowerCase();
+                opt.style.display = text.includes(query) ? '' : 'none';
+            }
+        }
+
+        // Close on escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && document.getElementById('assignStudentModal').style.display === 'flex') {
+                closeAssignModal();
+            }
+        });
+    </script>
 </body>
 </html>
