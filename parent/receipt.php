@@ -28,38 +28,40 @@ $school_phone = $settings['phone'] ?? '+91 9523012888';
 $school_email = $settings['email'] ?? 'abssimamganj@gmail.com';
 
 // Function to convert amount to words
-function amountToWords($number) {
-    $decimal = round($number - ($no = floor($number)), 2) * 100;
-    $hundred = null;
-    $digits_length = strlen($no);
-    $i = 0;
-    $str = array();
-    $words = array(
-        0 => '', 1 => 'One', 2 => 'Two',
-        3 => 'Three', 4 => 'Four', 5 => 'Five', 6 => 'Six',
-        7 => 'Seven', 8 => 'Eight', 9 => 'Nine',
-        10 => 'Ten', 11 => 'Eleven', 12 => 'Twelve',
-        13 => 'Thirteen', 14 => 'Fourteen', 15 => 'Fifteen',
-        16 => 'Sixteen', 17 => 'Seventeen', 18 => 'Eighteen',
-        19 => 'Nineteen', 20 => 'Twenty', 30 => 'Thirty',
-        40 => 'Forty', 50 => 'Fifty', 60 => 'Sixty',
-        70 => 'Seventy', 80 => 'Eighty', 90 => 'Ninety'
-    );
-    $digits = array('', 'Hundred','Thousand','Lakh', 'Crore');
-    while( $i < $digits_length ) {
-        $divider = ($i == 2) ? 10 : 100;
-        $number = floor($no % $divider);
-        $no = floor($no / $divider);
-        $i += $divider == 10 ? 1 : 2;
-        if ($number) {
-            $plural = (($counter = count($str)) && $number > 9) ? 's' : null;
-            $hundred = ($counter == 1 && $str[0]) ? ' and ' : null;
-            $str [] = ($number < 21) ? $words[$number].' '. $digits[$counter].$plural.' '.$hundred:$words[floor($number / 10) * 10].' '.$words[$number % 10].' '.$digits[$counter].$plural.' '.$hundred;
-        } else $str[] = null;
+if (!function_exists('amountToWords')) {
+    function amountToWords($number) {
+        $decimal = round($number - ($no = floor($number)), 2) * 100;
+        $hundred = null;
+        $digits_length = strlen($no);
+        $i = 0;
+        $str = array();
+        $words = array(
+            0 => '', 1 => 'One', 2 => 'Two',
+            3 => 'Three', 4 => 'Four', 5 => 'Five', 6 => 'Six',
+            7 => 'Seven', 8 => 'Eight', 9 => 'Nine',
+            10 => 'Ten', 11 => 'Eleven', 12 => 'Twelve',
+            13 => 'Thirteen', 14 => 'Fourteen', 15 => 'Fifteen',
+            16 => 'Sixteen', 17 => 'Seventeen', 18 => 'Eighteen',
+            19 => 'Nineteen', 20 => 'Twenty', 30 => 'Thirty',
+            40 => 'Forty', 50 => 'Fifty', 60 => 'Sixty',
+            70 => 'Seventy', 80 => 'Eighty', 90 => 'Ninety'
+        );
+        $digits = array('', 'Hundred','Thousand','Lakh', 'Crore');
+        while( $i < $digits_length ) {
+            $divider = ($i == 2) ? 10 : 100;
+            $number = floor($no % $divider);
+            $no = floor($no / $divider);
+            $i += $divider == 10 ? 1 : 2;
+            if ($number) {
+                $plural = (($counter = count($str)) && $number > 9) ? 's' : null;
+                $hundred = ($counter == 1 && $str[0]) ? ' and ' : null;
+                $str [] = ($number < 21) ? $words[$number].' '. $digits[$counter].$plural.' '.$hundred:$words[floor($number / 10) * 10].' '.$words[$number % 10].' '.$digits[$counter].$plural.' '.$hundred;
+            } else $str[] = null;
+        }
+        $Rupees = implode('', array_reverse($str));
+        $paise = ($decimal > 0) ? "." . ($words[$decimal / 10] . " " . $words[$decimal % 10]) . ' Paise' : '';
+        return ($Rupees ? $Rupees . 'Rupees ' : '') . ($paise ? 'and ' . $paise : '') . 'Only';
     }
-    $Rupees = implode('', array_reverse($str));
-    $paise = ($decimal > 0) ? "." . ($words[$decimal / 10] . " " . $words[$decimal % 10]) . ' Paise' : '';
-    return ($Rupees ? $Rupees . 'Rupees ' : '') . ($paise ? 'and ' . $paise : '') . 'Only';
 }
 
 $amount_in_words = amountToWords($pay['amount']);
@@ -305,26 +307,92 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
             }
         }
 
-        // Intelligently match items if bill total exceeds paid receipt amount (prevents item vs payment mismatch)
+        // Intelligently match items to ensure receipt table always precisely matches paid amount
         $items_total = 0;
         foreach ($itemized_list as $it) {
             if ($it['amount'] !== null) $items_total += (float)$it['amount'];
         }
 
-        if ($items_total > $paid_amount && !empty($pay['month_for'])) {
-            $clean_pay_month = trim(explode('(', $pay['month_for'])[0]);
-            $month_matched_items = [];
-            $month_matched_total = 0;
+        // If items exist and total does not equal paid_amount (exceeds or partial payment)
+        if (!empty($itemized_list) && abs($items_total - $paid_amount) >= 1) {
+            $matched = false;
+            $clean_pay_month = !empty($pay['month_for']) ? trim(explode('(', $pay['month_for'])[0]) : '';
 
+            // Step 1: Check if any SINGLE item exactly equals paid_amount
+            $exact_single_items = [];
             foreach ($itemized_list as $it) {
-                if (stripos($it['raw'], $clean_pay_month) !== false || stripos($it['title'], $clean_pay_month) !== false) {
-                    $month_matched_items[] = $it;
-                    if ($it['amount'] !== null) $month_matched_total += (float)$it['amount'];
+                if ($it['amount'] !== null && abs((float)$it['amount'] - $paid_amount) < 1) {
+                    $exact_single_items[] = $it;
+                }
+            }
+            if (!empty($exact_single_items)) {
+                $chosen = $exact_single_items[0];
+                if (!empty($clean_pay_month)) {
+                    foreach ($exact_single_items as $esi) {
+                        if (stripos($esi['raw'], $clean_pay_month) !== false || stripos($esi['title'], $clean_pay_month) !== false) {
+                            $chosen = $esi;
+                            break;
+                        }
+                    }
+                }
+                $itemized_list = [$chosen];
+                $matched = true;
+            }
+
+            // Step 2: Check month-specific items if multiple items match payment month
+            if (!$matched && !empty($clean_pay_month)) {
+                $month_matched_items = [];
+                $month_matched_total = 0;
+                foreach ($itemized_list as $it) {
+                    if (stripos($it['raw'], $clean_pay_month) !== false || stripos($it['title'], $clean_pay_month) !== false) {
+                        $month_matched_items[] = $it;
+                        if ($it['amount'] !== null) $month_matched_total += (float)$it['amount'];
+                    }
+                }
+                if (!empty($month_matched_items) && abs($month_matched_total - $paid_amount) < 1) {
+                    $itemized_list = $month_matched_items;
+                    $matched = true;
                 }
             }
 
-            if (!empty($month_matched_items) && (abs($month_matched_total - $paid_amount) < 1 || $month_matched_total <= $paid_amount)) {
-                $itemized_list = $month_matched_items;
+            // Step 3: Check any combination / subset of 2 items that equals paid_amount
+            if (!$matched && count($itemized_list) > 1) {
+                $count = count($itemized_list);
+                for ($i = 0; $i < $count; $i++) {
+                    for ($j = $i + 1; $j < $count; $j++) {
+                        $sub_total = (float)$itemized_list[$i]['amount'] + (float)$itemized_list[$j]['amount'];
+                        if (abs($sub_total - $paid_amount) < 1) {
+                            $itemized_list = [$itemized_list[$i], $itemized_list[$j]];
+                            $matched = true;
+                            break 2;
+                        }
+                    }
+                }
+            }
+
+            // Step 4: If this is a partial payment / installment towards a larger bill
+            // Render a clean "Part Payment Towards: [Item]" with rate equal to paid_amount
+            if (!$matched) {
+                $primary_target = '';
+                foreach ($itemized_list as $it) {
+                    if ($it['amount'] !== null && (float)$it['amount'] >= $paid_amount) {
+                        $primary_target = $it['title'];
+                        break;
+                    }
+                }
+                if (empty($primary_target) && !empty($itemized_list[0]['title'])) {
+                    $primary_target = $itemized_list[0]['title'];
+                }
+
+                $cycle_str = !empty($bill_row['month_for']) ? $bill_row['month_for'] : (!empty($pay['month_for']) ? $pay['month_for'] : date('F Y'));
+                $item_desc = !empty($primary_target) ? ("Part Payment Towards: " . $primary_target) : ("Fee Payment / Installment (" . $cycle_str . ")");
+
+                $itemized_list = [[
+                    'title' => $item_desc,
+                    'badge' => '<span style="background:#e0e7ff; color:#3730a3; font-size:0.7rem; font-weight:800; padding:2px 7px; border-radius:4px; margin-left:6px; text-transform:uppercase;">Fee Installment</span>',
+                    'amount' => $paid_amount,
+                    'raw' => $item_desc
+                ]];
             }
         }
 

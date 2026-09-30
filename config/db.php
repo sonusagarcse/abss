@@ -894,6 +894,7 @@ function reconcile_student_fee_ledger($student_id, $conn = null) {
                 $append_tag = " | Payment received via $mode_short on $p_date (-₹" . number_format($p_amt, 2) . ") (Rcpt #$pid)";
                 $new_rem = trim($target_bill['remark']) . $append_tag;
 
+                $new_st = ($new_bal <= 0) ? 'paid' : 'unpaid';
                 $up_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = ?, remark = ? WHERE id = ?");
                 $up_stmt->bind_param("dssi", $new_bal, $new_st, $new_rem, $tb_id);
                 $up_stmt->execute();
