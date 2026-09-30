@@ -728,35 +728,55 @@ function runAutoMigrator($conn) {
             }
         }
 
-        // 17. One-Time Production Dues Reconciler & Inactive Student Sync
-        $chkDuesClean = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'dues_cleanup_20260930_final'");
+        // 17. One-Time Production Dues Reconciler & Inactive Student Sync (v3 Restored)
+        $chkDuesClean = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'dues_cleanup_20260930_v3'");
         if (!$chkDuesClean || $chkDuesClean->num_rows == 0) {
             // Set inactive students
             $inactive_ids = [7, 8, 18, 19, 24, 32, 37, 41];
             $conn->query("UPDATE students SET status = 'inactive' WHERE id IN (" . implode(',', $inactive_ids) . ")");
 
-            // Mark fully paid bills where payments already cover charges
-            $fully_paid_bills = [79, 72, 68, 53, 44, 45, 58, 38, 101, 100, 98, 67, 95];
-            $conn->query("UPDATE fees_generated SET amount = 0.00, status = 'paid' WHERE id IN (" . implode(',', $fully_paid_bills) . ")");
+            // Restore exact dump balance for all active bills (net of previous payments)
+            $active_bill_balances = [
+                31  => 15410.00, // Sudrashan Kumar
+                42  => 8370.00,  // Yuvraj Kumar
+                105 => 7500.00,  // RUPALI KUMARI
+                104 => 7300.00,  // RADHIKA KUMARI
+                40  => 6024.00,  // Neha Kumari
+                41  => 6000.00,  // Anshu Kumar
+                83  => 4775.00,  // Suraj Kumar
+                79  => 4662.00,  // Satyam Kumar (verified balance)
+                90  => 4530.00,  // Khushi Priya
+                47  => 4105.00,  // Raushani Kumari
+                72  => 4036.00,  // SASHIKANT KUMAR
+                68  => 3122.00,  // HARSH KUMAR
+                53  => 2710.00,  // Ayush Raj
+                48  => 2100.00,  // Saloni Kumari
+                106 => 1250.00,  // VIRAJ KUMAR
+                44  => 1148.00,  // Kunal Kumar
+                45  => 1100.00,  // HIMANSHU KUMAR
+                58  => 1012.00,  // Pari Kumari
+                38  => 620.00,   // Newton Raj
+                101 => 250.00,   // Sashi Kumar
+                67  => 46.00,    // Haipi Kumar
+                98  => 20.00,    // Aditya Chandan
+                99  => 20.00,    // SAGAR KUMAR
+                100 => 20.00     // Rishi Kumar
+            ];
 
-            // Update Kishu Raj Bill #103 with gateway and cash deductions
+            foreach ($active_bill_balances as $b_id => $b_amt) {
+                $conn->query("UPDATE fees_generated SET amount = $b_amt, status = 'unpaid' WHERE id = $b_id");
+            }
+
+            // Update Kishu Raj Bill #103 with gateway (₹4,100) and cash (₹4,000) deductions
             $kishu_rem = "Manual Bill. Tution Fee [October 2026]: ₹3,000.00 | Reg. Fees [October 2026]: ₹1,100.00 | Security/Caution Money [September 2026]: ₹5,000.00 | Payment received via Online (Razorpay: pay_Th1TtqbEZsZeaz) on 2026-09-27 (-₹4,100.00) (Rcpt #95) | Payment received via Cash on 2026-09-30 (-₹2,000.00) (Rcpt #98) | Payment received via Cash on 2026-09-30 (-₹1,000.00) (Rcpt #99) | Payment received via Cash on 2026-09-30 (-₹1,000.00) (Rcpt #100)";
             $conn->query("UPDATE fees_generated SET amount = 1000.00, status = 'unpaid', remark = '" . $conn->real_escape_string($kishu_rem) . "' WHERE id = 103");
-            $conn->query("UPDATE fees_generated SET amount = 0.00, status = 'paid' WHERE id = 107");
-
-            // Update specific active bills to exact verified net balances
-            $conn->query("UPDATE fees_generated SET amount = 4024.00, status = 'unpaid' WHERE id = 40");
-            $conn->query("UPDATE fees_generated SET amount = 4000.00, status = 'unpaid' WHERE id = 41");
-            $conn->query("UPDATE fees_generated SET amount = 2605.00, status = 'unpaid' WHERE id = 47");
-            $conn->query("UPDATE fees_generated SET amount = 2530.00, status = 'unpaid' WHERE id = 90");
-            $conn->query("UPDATE fees_generated SET amount = 1675.00, status = 'unpaid' WHERE id = 83");
-            $conn->query("UPDATE fees_generated SET amount = 600.00, status = 'unpaid' WHERE id = 48");
+            $conn->query("UPDATE fees_generated SET amount = 0.00, status = 'paid' WHERE id IN (95, 107)");
 
             // Clean any 0-balance unpaid bills
             $conn->query("UPDATE fees_generated SET status = 'paid' WHERE amount <= 0 AND status = 'unpaid'");
 
             // Record migration done
-            $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('dues_cleanup_20260930_final', '1') ON DUPLICATE KEY UPDATE setting_value = '1'");
+            $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('dues_cleanup_20260930_v3', '1') ON DUPLICATE KEY UPDATE setting_value = '1'");
         }
 
         // Restore MySQLi reporting mode
