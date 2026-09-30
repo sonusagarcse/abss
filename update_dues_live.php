@@ -65,6 +65,22 @@ try {
         $conn->query("UPDATE fees_generated SET amount = $b_amt, status = 'unpaid' WHERE id = $b_id");
     }
 
+    // Restore clean original remarks without duplicates
+    $clean_remarks = [
+        79 => "Manual Bill. Tution Fee [May 2026]: ₹1,750.00 | Tution Fee [June 2026]: ₹3,500.00 | Tution Fee [July 2026]: ₹3,500.00 | Tution Fee [August 2026]: ₹3,500.00 | Medicine (Expense): ₹292.00 | Payment received on 2026-08-25 (-₹4,900.00) (Rcpt #49) | Hostler Fee: ₹3,500.00 (September 2026) | Payment received on 2026-08-30 (-₹3,250.00) (Rcpt #56) | Medicine (Expense): ₹20.00 | Hindusthan Olympiad-2026 (Expense): ₹250.00 | Payment received on 2026-09-21 (-₹3,500.00) (Rcpt #89)",
+        41 => "Manual Bill. Tution Fee [July 2026]: ₹2,100.00 | Tution Fee [August 2026]: ₹3,000.00 | Payment received on 2026-08-06 (-₹2,000.00) | Hostler Fee: ₹3,000.00 (September 2026) | Fee rebate/waiver on 2026-07-25 (-₹100.00) (Rebate #6)",
+        44 => "Manual Bill. Tution Fee [July 2026]: ₹1,100.00 | Tution Fee [August 2026]: ₹3,500.00 | Payment received on 2026-08-08 (-₹3,500.00) | Medicine (Expense): ₹48.00 | Hostler Fee: ₹3,500.00 (September 2026) | Partial payment of ₹3,500.00 on 2026-09-09 (Rcpt #72)",
+        45 => "Manual Bill. Tution Fee [July 2026]: ₹1,100.00 | Tution Fee [August 2026]: ₹3,000.00 | Payment received on 2026-08-08 (-₹3,000.00) | Hostler Fee: ₹3,000.00 (September 2026) | Partial payment of ₹3,000.00 on 2026-09-07 (Rcpt #73)",
+        53 => "Manual Bill. Tution Fee [July 2026]: ₹1,665.00 | Tution Fee [August 2026]: ₹3,500.00 | Payment received on 2026-08-15 (-₹3,100.00) | Medicine + Pen + Copy (Expense): ₹210.00 | Hostler Fee: ₹3,500.00 (September 2026) | Partial payment of ₹3,000.00 on 2026-09-08 (Rcpt #75) | Medicine (Expense): ₹20.00 | Fee rebate/waiver on 2026-09-21 (-₹85.00) (Rebate #4)",
+        70 => "Manual Bill. Tution Fee [August 2026]: ₹1,000.00 | Registration Fee [August 2026]: ₹500.00",
+        83 => "Manual Bill. Tution Fee [July 2026]: ₹1,350.00 | Tution Fee [August 2026]: ₹3,200.00 | Hostler Fee: ₹3,200.00 (September 2026) | Medicine+pen (Expense): ₹225.00 | | Payment received on 2026-09-05 (-₹3,100.00) | Payment received on 2026-09-05 (-₹100.00) (Rcpt #88)",
+        87 => "Daily Expense. Internet + Medicine + Pen (Expense): ₹270.00 | Hostler Fee: ₹3,000.00 (September 2026) | Payment received on 2026-09-02 (-₹270.00)",
+        88 => "Daily Expense. Medicine (Expense): ₹50.00 | Hostler Fee: ₹3,000.00 (September 2026) | Payment received on 2026-09-02 (-₹50.00)"
+    ];
+    foreach ($clean_remarks as $cbid => $cbrem) {
+        $conn->query("UPDATE fees_generated SET remark = '" . $conn->real_escape_string($cbrem) . "' WHERE id = $cbid");
+    }
+
     // 3. Update Kishu Raj Bill #103 with gateway and cash deductions
     $kishu_rem = "Manual Bill. Tution Fee [October 2026]: ₹3,000.00 | Reg. Fees [October 2026]: ₹1,100.00 | Security/Caution Money [September 2026]: ₹5,000.00 | Payment received via Online (Razorpay: pay_Th1TtqbEZsZeaz) on 2026-09-27 (-₹4,100.00) (Rcpt #95) | Payment received via Cash on 2026-09-30 (-₹2,000.00) (Rcpt #98) | Payment received via Cash on 2026-09-30 (-₹1,000.00) (Rcpt #99) | Payment received via Cash on 2026-09-30 (-₹1,000.00) (Rcpt #100)";
     $conn->query("UPDATE fees_generated SET amount = 1000.00, status = 'unpaid', remark = '" . $conn->real_escape_string($kishu_rem) . "' WHERE id = 103");
@@ -74,7 +90,7 @@ try {
     $conn->query("UPDATE fees_generated SET status = 'paid' WHERE amount <= 0 AND status = 'unpaid'");
 
     // 5. Record flag in settings
-    $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('dues_cleanup_20260930_v3', '1') ON DUPLICATE KEY UPDATE setting_value = '1'");
+    $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('dues_cleanup_20260930_v4', '1') ON DUPLICATE KEY UPDATE setting_value = '1'");
 
     echo "<div class='success'>✓ All updates applied successfully! Inactive students excluded, Satyam Kumar and all active dues accurately restored.</div>";
 
