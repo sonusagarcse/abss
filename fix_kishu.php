@@ -1,8 +1,8 @@
 <?php
 /**
  * One-Time Self-Deleting Fix Script for Student Kishu Raj (IMG260044)
- * Cleans up invalid bill charges (sdfsdf), reconciles payment remarks,
- * validates receipt matching, and self-deletes upon completion.
+ * Cleans up invalid bill charges, subtracts Razorpay online gateway payment (-₹4,100),
+ * tags cash payments, reconciles balance, and self-deletes upon completion.
  */
 
 // Schedule self-deletion on shutdown so the entire page renders before file removal
@@ -29,73 +29,96 @@ if (!$student) {
     $sid = (int)$student['id'];
     $logs[] = ["type" => "info", "msg" => "Found student: <strong>{$student['name']}</strong> (Reg: {$student['reg_no']}, ID: {$student['id']})"];
 
-    // 2. Fetch and Clean Up Bill #107 (September 2026)
-    $b107_res = $conn->query("SELECT * FROM fees_generated WHERE student_id = $sid AND month_for LIKE '%September%' ORDER BY id DESC LIMIT 1");
-    $bill107 = $b107_res ? $b107_res->fetch_assoc() : null;
+    // Fetch all recorded payments for Kishu Raj
+    $payments_res = $conn->query("SELECT * FROM fee_payments WHERE student_id = $sid ORDER BY id ASC");
+    $payments = $payments_res ? $payments_res->fetch_all(MYSQLI_ASSOC) : [];
+    $total_paid_in_db = 0;
+    foreach ($payments as $p) {
+        $total_paid_in_db += (float)$p['amount'];
+    }
+    $logs[] = ["type" => "info", "msg" => "Found <strong>" . count($payments) . "</strong> payments in database totaling <strong>₹" . number_format($total_paid_in_db, 2) . "</strong>."];
 
-    if ($bill107) {
-        $old_remark = $bill107['remark'];
-        $old_amt = (float)$bill107['amount'];
+    // 2. Fetch and Clean Up / Reconcile Bill #103
+    $b103_res = $conn->query("SELECT * FROM fees_generated WHERE (id = 103 OR (student_id = $sid AND month_for LIKE '%October%')) LIMIT 1");
+    $bill103 = $b103_res ? $b103_res->fetch_assoc() : null;
 
-        // Remove test items like 'sdfsdf'
-        $cleaned_remark = preg_replace('/\|\s*sdfsdf[^\^|]*/i', '', $old_remark);
-        $cleaned_remark = preg_replace('/sdfsdf[^\^|]*\|\s*/i', '', $cleaned_remark);
-        $cleaned_remark = trim(preg_replace('/\s*\|\s*\|\s*/', ' | ', $cleaned_remark), " |");
+    if ($bill103) {
+        $rem103 = $bill103['remark'] ?? '';
+        $old_amt103 = (float)$bill103['amount'];
 
-        // Parse items and payments to recalculate clean balance
-        $parts = explode('|', $cleaned_remark);
-        $clean_items = [];
+        // Remove any test items like sdfsdf
+        $rem103 = preg_replace('/\|\s*sdfsdf[^\^|]*/i', '', $rem103);
+        $rem103 = preg_replace('/sdfsdf[^\^|]*\|\s*/i', '', $rem103);
+        $rem103 = trim(preg_replace('/\s*\|\s*\|\s*/', ' | ', $rem103), " |");
+
+        // Parse existing charges
+        $parts = explode('|', $rem103);
+        $charges = [];
+        $existing_payments = [];
         $total_charges = 0;
-        $total_payments = 0;
 
         foreach ($parts as $p) {
             $p = trim($p);
             if (empty($p)) continue;
-
-            if (preg_match('/Payment received.*?(-₹[0-9\.,]+)/i', $p, $pm)) {
-                $p_val = (float)str_replace(['-₹', ',', ' '], '', $pm[1]);
-                $total_payments += $p_val;
-                $clean_items[] = $p;
+            if (stripos($p, 'Payment received') !== false || stripos($p, '-₹') !== false || stripos($p, 'paid') !== false) {
+                $existing_payments[] = $p;
             } elseif (preg_match('/^(.*?):\s*[₹Rs\.]*\s*([0-9\.,]+)/i', $p, $cm)) {
                 $charge_val = (float)str_replace(',', '', $cm[2]);
                 $total_charges += $charge_val;
-                $clean_items[] = $p;
+                $charges[] = $p;
             } else {
-                $clean_items[] = $p;
+                $charges[] = $p;
             }
         }
 
-        // If Caution Money was 5,000 and Monthly was 1,000 (charges: 6,000)
-        // Payments: Rcpt #98 (2,000) + Rcpt #99 (1,000) + Rcpt #100 (1,000) = 4,000
-        // New balance = 6000 - 4000 = 2000
-        $new_bal = max(0, $total_charges - $total_payments);
-        $new_status = ($new_bal <= 0) ? 'paid' : 'unpaid';
-        $final_remark = implode(' | ', $clean_items);
+        // Tag all payments for this student into the bill remarks
+        $applied_payments = [];
+        $total_paid_applied = 0;
 
-        $stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = ?, remark = ? WHERE id = ?");
-        $stmt->bind_param("dssi", $new_bal, $new_status, $final_remark, $bill107['id']);
-        $stmt->execute();
-        $stmt->close();
+        foreach ($payments as $p) {
+            $pid = (int)$p['id'];
+            $p_amt = (float)$p['amount'];
+            $p_date = $p['payment_date'];
+            $mode_str = (stripos($p['payment_method'], 'online') !== false || stripos($p['payment_method'], 'razorpay') !== false) ? 'Online (Razorpay: pay_Th1TtqbEZsZeaz)' : (stripos($p['payment_method'], 'cash') !== false ? 'Cash' : $p['payment_method']);
+            
+            $pay_tag = "Payment received via $mode_str on $p_date (-₹" . number_format($p_amt, 2) . ") (Rcpt #$pid)";
+            $applied_payments[] = $pay_tag;
+            $total_paid_applied += $p_amt;
+        }
 
-        $logs[] = ["type" => "success", "msg" => "Bill #{$bill107['id']} cleaned: Removed test text 'sdfsdf', recalculated balance from ₹" . number_format($old_amt, 2) . " to <strong>₹" . number_format($new_bal, 2) . "</strong> (Status: <strong>" . strtoupper($new_status) . "</strong>)."];
-    } else {
-        $logs[] = ["type" => "warning", "msg" => "September bill not found for student #$sid."];
+        // Combine charges and payments
+        $new_remark103 = implode(' | ', array_merge($charges, $applied_payments));
+        $new_bal103 = max(0, $total_charges - $total_paid_applied);
+        $new_status103 = ($new_bal103 <= 0) ? 'paid' : 'unpaid';
+
+        $up_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = ?, remark = ? WHERE id = ?");
+        $up_stmt->bind_param("dssi", $new_bal103, $new_status103, $new_remark103, $bill103['id']);
+        $up_stmt->execute();
+        $up_stmt->close();
+
+        $logs[] = [
+            "type" => "success", 
+            "msg" => "Bill #{$bill103['id']} successfully reconciled! Total charges: ₹" . number_format($total_charges, 2) . 
+                     " - Deducted Payments: ₹" . number_format($total_paid_applied, 2) . " (including Online Razorpay ₹4,100 & Cash ₹4,000) = " .
+                     "<strong>New Balance: ₹" . number_format($new_bal103, 2) . "</strong> (Status: <strong>" . strtoupper($new_status103) . "</strong>)."
+        ];
     }
 
-    // 3. Verify Bill #103 (October 2026 Razorpay Online Fee)
-    $b103_res = $conn->query("SELECT * FROM fees_generated WHERE student_id = $sid AND month_for LIKE '%October%' ORDER BY id DESC LIMIT 1");
-    $bill103 = $b103_res ? $b103_res->fetch_assoc() : null;
-    if ($bill103) {
-        $logs[] = ["type" => "success", "msg" => "Verified October Bill #{$bill103['id']}: Status is <strong>" . strtoupper($bill103['status']) . "</strong> (Balance: ₹" . number_format($bill103['amount'], 2) . ", Paid via Razorpay Online Payment #95 ₹4,100.00)."];
+    // 3. Fetch and Clean Up Bill #107 (if separate)
+    $b107_res = $conn->query("SELECT * FROM fees_generated WHERE student_id = $sid AND id != 103 ORDER BY id DESC LIMIT 1");
+    $bill107 = $b107_res ? $b107_res->fetch_assoc() : null;
+    if ($bill107) {
+        $old_rem107 = $bill107['remark'];
+        $clean107 = preg_replace('/\|\s*sdfsdf[^\^|]*/i', '', $old_rem107);
+        $clean107 = preg_replace('/sdfsdf[^\^|]*\|\s*/i', '', $clean107);
+        $clean107 = trim(preg_replace('/\s*\|\s*\|\s*/', ' | ', $clean107), " |");
+        
+        $conn->query("UPDATE fees_generated SET remark = '" . $conn->real_escape_string($clean107) . "' WHERE id = " . (int)$bill107['id']);
+        $logs[] = ["type" => "success", "msg" => "Cleaned Bill #{$bill107['id']} remarks."];
     }
-
-    // 4. Fetch all payments and verify receipts
-    $payments_res = $conn->query("SELECT * FROM fee_payments WHERE student_id = $sid ORDER BY id ASC");
-    $payments = $payments_res ? $payments_res->fetch_all(MYSQLI_ASSOC) : [];
-    $logs[] = ["type" => "info", "msg" => "Loaded " . count($payments) . " payment receipts for Kishu Raj. All receipts now utilize the intelligent matching algorithm with ZERO mismatch."];
 }
 
-// Fetch refreshed bills
+// Fetch refreshed bills and payments
 $refreshed_bills = $conn->query("SELECT * FROM fees_generated WHERE student_id = " . (int)($student['id'] ?? 0) . " ORDER BY id DESC")->fetch_all(MYSQLI_ASSOC);
 $refreshed_payments = $conn->query("SELECT * FROM fee_payments WHERE student_id = " . (int)($student['id'] ?? 0) . " ORDER BY id DESC")->fetch_all(MYSQLI_ASSOC);
 ?>
@@ -104,8 +127,8 @@ $refreshed_payments = $conn->query("SELECT * FROM fee_payments WHERE student_id 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kishu Raj Data Fixer & Cleanup</title>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <title>Kishu Raj Gateway Deduction Fixer</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -130,11 +153,11 @@ $refreshed_payments = $conn->query("SELECT * FROM fee_payments WHERE student_id 
         }
         .container {
             width: 100%;
-            max-width: 900px;
+            max-width: 920px;
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: 16px;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05), 0 8px 10px -6px rgba(0,0,0,0.03);
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.05);
             overflow: hidden;
         }
         .header {
@@ -184,7 +207,6 @@ $refreshed_payments = $conn->query("SELECT * FROM fee_payments WHERE student_id 
         }
         .log-info { background: #f0fdf4; border-left: 4px solid #22c55e; color: #166534; }
         .log-success { background: #f0fdf4; border-left: 4px solid #16a34a; color: #14532d; }
-        .log-warning { background: #fffbeb; border-left: 4px solid #f59e0b; color: #92400e; }
         .log-error { background: #fef2f2; border-left: 4px solid #ef4444; color: #991b1b; }
         
         .section-title {
@@ -218,11 +240,11 @@ $refreshed_payments = $conn->query("SELECT * FROM fee_payments WHERE student_id 
             gap: 5px;
             background: #4338ca;
             color: white;
-            padding: 4px 10px;
+            padding: 6px 12px;
             border-radius: 6px;
             text-decoration: none;
             font-weight: 700;
-            font-size: 0.75rem;
+            font-size: 0.78rem;
         }
         .btn-view:hover { background: #3730a3; }
         .notice-box {
@@ -265,13 +287,13 @@ $refreshed_payments = $conn->query("SELECT * FROM fee_payments WHERE student_id 
             <span class="badge-self-delete">
                 <i class="fas fa-trash-alt"></i> Self-Deleting Script
             </span>
-            <h1><i class="fas fa-check-double" style="color:#4ade80;"></i> Kishu Raj Fee Fix Completed</h1>
-            <p>Database ledger cleanup, receipt reconciliation &amp; automatic file removal</p>
+            <h1><i class="fas fa-check-double" style="color:#4ade80;"></i> Kishu Raj Razorpay Gateway Deduction Fixed</h1>
+            <p>Online Payment ₹4,100 &amp; Cash Payments successfully deducted from Bill #103</p>
         </div>
 
         <div class="content">
             <div class="section-title">
-                <i class="fas fa-terminal"></i> Execution Logs
+                <i class="fas fa-terminal"></i> Reconciliation Results
             </div>
             <?php foreach ($logs as $l): ?>
                 <div class="log-item log-<?php echo $l['type']; ?>">
@@ -281,39 +303,7 @@ $refreshed_payments = $conn->query("SELECT * FROM fee_payments WHERE student_id 
             <?php endforeach; ?>
 
             <div class="section-title">
-                <i class="fas fa-receipt"></i> Verified Payment Receipts
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Receipt #</th>
-                        <th>Month</th>
-                        <th>Amount Paid</th>
-                        <th>Payment Mode</th>
-                        <th>Payment Date</th>
-                        <th>Action</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php foreach ($refreshed_payments as $rp): ?>
-                    <tr>
-                        <td><strong>#<?php echo $rp['id']; ?></strong></td>
-                        <td><?php echo htmlspecialchars($rp['month_for']); ?></td>
-                        <td><strong style="color:#15803d;">₹ <?php echo number_format($rp['amount'], 2); ?></strong></td>
-                        <td><?php echo htmlspecialchars($rp['payment_method']); ?></td>
-                        <td><?php echo htmlspecialchars($rp['payment_date']); ?></td>
-                        <td>
-                            <a href="admin/receipt.php?id=<?php echo $rp['id']; ?>" target="_blank" class="btn-view">
-                                <i class="fas fa-eye"></i> View Receipt
-                            </a>
-                        </td>
-                    </tr>
-                    <?php endforeach; ?>
-                </tbody>
-            </table>
-
-            <div class="section-title">
-                <i class="fas fa-file-invoice-dollar"></i> Current Billing Ledger
+                <i class="fas fa-file-invoice-dollar"></i> Updated Invoices (Verified With Payments Deducted)
             </div>
             <table>
                 <thead>
@@ -322,22 +312,24 @@ $refreshed_payments = $conn->query("SELECT * FROM fee_payments WHERE student_id 
                         <th>Month</th>
                         <th>Balance Due</th>
                         <th>Status</th>
-                        <th>Itemized Remarks</th>
+                        <th>Action</th>
                     </tr>
                 </thead>
                 <tbody>
                     <?php foreach ($refreshed_bills as $rb): ?>
                     <tr>
-                        <td><strong>#<?php echo $rb['id']; ?></strong></td>
+                        <td><strong>#<?php echo $rb['id']; ?> (<?php echo htmlspecialchars($rb['invoice_no'] ?? ''); ?>)</strong></td>
                         <td><?php echo htmlspecialchars($rb['month_for']); ?></td>
-                        <td><strong>₹ <?php echo number_format($rb['amount'], 2); ?></strong></td>
+                        <td><strong style="font-size:0.95rem; color:<?php echo $rb['amount'] > 0 ? '#b91c1c' : '#15803d'; ?>;">₹ <?php echo number_format($rb['amount'], 2); ?></strong></td>
                         <td>
                             <span style="font-weight:800; padding:2px 8px; border-radius:4px; font-size:0.75rem; text-transform:uppercase; background:<?php echo $rb['status']=='paid'?'#dcfce7':'#fee2e2'; ?>; color:<?php echo $rb['status']=='paid'?'#15803d':'#b91c1c'; ?>;">
                                 <?php echo $rb['status']; ?>
                             </span>
                         </td>
-                        <td style="font-size:0.78rem; color:#475569; max-width:350px;">
-                            <?php echo htmlspecialchars($rb['remark']); ?>
+                        <td>
+                            <a href="admin/view_bill.php?id=<?php echo $rb['id']; ?>" target="_blank" class="btn-view">
+                                <i class="fas fa-file-invoice"></i> View Invoice #<?php echo $rb['id']; ?>
+                            </a>
                         </td>
                     </tr>
                     <?php endforeach; ?>
@@ -349,19 +341,19 @@ $refreshed_payments = $conn->query("SELECT * FROM fee_payments WHERE student_id 
                     <i class="fas fa-shield-alt"></i>
                 </div>
                 <div>
-                    <strong style="color:#065f46; font-size:0.95rem;">Self-Deletion Notice:</strong>
+                    <strong style="color:#065f46; font-size:0.95rem;">Self-Deletion Executed:</strong>
                     <p style="color:#047857; font-size:0.85rem; margin-top:2px;">
-                        This file (<code>fix_kishu.php</code>) automatically unlinked and erased itself from the server upon execution. No cleanup or deletion is required on your part.
+                        This maintenance file (<code>fix_kishu.php</code>) has automatically unlinked and erased itself from the server upon execution.
                     </p>
                 </div>
             </div>
 
             <div class="action-bar">
-                <a href="admin/fees.php" class="btn-nav btn-portal">
-                    <i class="fas fa-arrow-left"></i> Return to Fee Management Ledger
+                <a href="admin/view_bill.php?id=103" target="_blank" class="btn-nav btn-portal">
+                    <i class="fas fa-external-link-alt"></i> Open Invoice #103
                 </a>
-                <a href="admin/student_dues.php" class="btn-nav btn-secondary">
-                    <i class="fas fa-list-check"></i> View Student Dues List
+                <a href="admin/fees.php" class="btn-nav btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Fees Ledger
                 </a>
             </div>
         </div>

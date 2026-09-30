@@ -37,6 +37,54 @@ if (!$bill) {
     die("<div style='font-family:sans-serif; text-align:center; padding:50px;'><h2>Access Denied</h2><p>Invoice not found or unauthorized access.</p><a href='fees.php'>Back to Fees Ledger</a></div>");
 }
 
+// Auto-reconcile untagged payments from fee_payments into this bill
+if (!empty($bill['student_id'])) {
+    $sid = (int)$bill['student_id'];
+    $pq = $conn->query("SELECT * FROM fee_payments WHERE student_id = $sid ORDER BY id ASC");
+    if ($pq && $pq->num_rows > 0) {
+        $bill_rem = $bill['remark'] ?? '';
+        $bill_updated = false;
+        
+        while ($p = $pq->fetch_assoc()) {
+            $pid = (int)$p['id'];
+            $p_amt = (float)$p['amount'];
+            $p_date = $p['payment_date'];
+            $p_month = trim(explode('(', $p['month_for'])[0]);
+            
+            $rcpt_tag = "Rcpt #" . $pid;
+            $already_in_this_bill = (stripos($bill_rem, $rcpt_tag) !== false);
+            
+            // Check if tagged in ANY OTHER bill for this student
+            $tagged_in_other = false;
+            $other_check = $conn->query("SELECT id FROM fees_generated WHERE student_id = $sid AND id != {$bill['id']} AND remark LIKE '%$rcpt_tag%' LIMIT 1");
+            if ($other_check && $other_check->num_rows > 0) {
+                $tagged_in_other = true;
+            }
+            
+            if (!$already_in_this_bill && !$tagged_in_other) {
+                $month_matches = (!empty($p_month) && (stripos($bill['month_for'], $p_month) !== false || stripos($bill_rem, $p_month) !== false));
+                
+                if ($month_matches || $bill['status'] === 'unpaid') {
+                    $mode_short = (stripos($p['payment_method'], 'online') !== false || stripos($p['payment_method'], 'razorpay') !== false || stripos($p['payment_method'], 'upi') !== false) ? 'Online (Razorpay)' : (stripos($p['payment_method'], 'cash') !== false ? 'Cash' : $p['payment_method']);
+                    $append_tag = " | Payment received via $mode_short on $p_date (-₹" . number_format($p_amt, 2) . ") (Rcpt #$pid)";
+                    $bill_rem = trim($bill_rem) . $append_tag;
+                    $bill['amount'] = max(0, (float)$bill['amount'] - $p_amt);
+                    $bill['status'] = ($bill['amount'] <= 0) ? 'paid' : 'unpaid';
+                    $bill_updated = true;
+                }
+            }
+        }
+        
+        if ($bill_updated) {
+            $bill['remark'] = $bill_rem;
+            $up_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = ?, remark = ? WHERE id = ?");
+            $up_stmt->bind_param("dssi", $bill['amount'], $bill['status'], $bill['remark'], $bill['id']);
+            $up_stmt->execute();
+            $up_stmt->close();
+        }
+    }
+}
+
 $settings = getAllSettings();
 $school_name = $settings['school_name'] ?? 'Awasiya Bal Shikshan Sansthan';
 $school_address = $settings['address'] ?? 'Lok Kala Bhavan, Gewalganj, Imamganj, Gaya, Bihar 824206';
@@ -48,7 +96,8 @@ $razorpay_key = $settings['razorpay_key_id'] ?? '';
 $razorpay_secret = $settings['razorpay_key_secret'] ?? '';
 
 // Function to convert amount to words
-function amountToWords($number) {
+if (!function_exists('amountToWords')) {
+    function amountToWords($number) {
     $decimal = round($number - ($no = floor($number)), 2) * 100;
     $hundred = null;
     $digits_length = strlen($no);
@@ -80,6 +129,7 @@ function amountToWords($number) {
     $Rupees = implode('', array_reverse($str));
     $paise = ($decimal > 0) ? "." . ($words[(int)floor($decimal / 10)] . " " . $words[$decimal % 10]) . ' Paise' : '';
     return ($Rupees ? $Rupees . 'Rupees ' : '') . ($paise ? 'and ' . $paise : '') . 'Only';
+    }
 }
 
 // Fetch all recorded payments for this student for instant O(1) receipt & payment mode lookup
@@ -291,10 +341,15 @@ foreach ($remarks as $rem) {
 // Compute accurate totals: original billed, total paid, and net balance due
 if ($total_paid_so_far > 0) {
     $total_billed_amount = ($total_charges_sum > 0) ? $total_charges_sum : ((float)$bill['amount'] + $total_paid_so_far);
+    $calculated_balance = max(0, $total_billed_amount - $total_paid_so_far);
+    $remaining_balance = min((float)$bill['amount'], $calculated_balance) + (float)$fine_amount;
+    if ($remaining_balance <= 0) {
+        $bill['status'] = 'paid';
+    }
 } else {
     $total_billed_amount = ($total_charges_sum > 0) ? $total_charges_sum : (float)$bill['amount'];
+    $remaining_balance = (float)$bill['amount'] + (float)$fine_amount;
 }
-$remaining_balance = (float)$bill['amount'] + (float)$fine_amount;
 $total_payable_amount = $remaining_balance;
 
 $amount_in_words = amountToWords($remaining_balance > 0 ? $remaining_balance : $total_billed_amount);
