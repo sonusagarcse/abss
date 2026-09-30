@@ -728,25 +728,6 @@ function runAutoMigrator($conn) {
             }
         }
 
-        // Auto-reconcile untagged payments into bills for active students
-        $untagged_students = $conn->query("
-            SELECT DISTINCT p.student_id 
-            FROM fee_payments p 
-            WHERE NOT EXISTS (
-                SELECT 1 FROM fees_generated fg 
-                WHERE fg.student_id = p.student_id 
-                AND fg.remark LIKE CONCAT('%Rcpt #', p.id, '%')
-            )
-            LIMIT 10
-        ");
-        if ($untagged_students && $untagged_students->num_rows > 0) {
-            while ($usr = $untagged_students->fetch_assoc()) {
-                if (function_exists('reconcile_student_fee_ledger')) {
-                    reconcile_student_fee_ledger((int)$usr['student_id'], $conn);
-                }
-            }
-        }
-
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
         
