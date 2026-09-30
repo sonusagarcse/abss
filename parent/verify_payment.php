@@ -83,11 +83,15 @@ if ($http_status === 200) {
                 $pay_stmt = $conn->prepare("INSERT INTO fee_payments (student_id, amount, payment_date, month_for, payment_method) VALUES (?, ?, ?, ?, ?)");
                 $pay_stmt->bind_param("idsss", $sid, $paid_amount, $payment_date, $month, $method);
                 $pay_stmt->execute();
+                $new_pay_id = $conn->insert_id;
                 
-                // Update Bill to paid & append payment remark
-                $new_remark = $bill['remark'] . " | Payment received on $payment_date (-₹" . number_format($paid_amount, 2) . ")";
-                $update_bill = $conn->prepare("UPDATE fees_generated SET amount = 0, status = 'paid', remark = ? WHERE id = ?");
-                $update_bill->bind_param("si", $new_remark, $bill_id);
+                // Update Bill with exact receipt reference, payment method tag, and updated balance
+                $new_remark = $bill['remark'] . " | Payment received via Online (Razorpay) on $payment_date (-₹" . number_format($paid_amount, 2) . ") (Rcpt #$new_pay_id)";
+                $new_balance = max(0, (float)$bill['amount'] - $paid_amount);
+                $new_status = ($new_balance <= 0) ? 'paid' : 'unpaid';
+
+                $update_bill = $conn->prepare("UPDATE fees_generated SET amount = ?, status = ?, remark = ? WHERE id = ?");
+                $update_bill->bind_param("dssi", $new_balance, $new_status, $new_remark, $bill_id);
                 $update_bill->execute();
                 
                 $conn->commit();

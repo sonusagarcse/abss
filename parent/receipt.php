@@ -305,6 +305,29 @@ $receipt_no = "ABSS-REC-" . date('Y') . "-" . str_pad($pay['id'], 5, '0', STR_PA
             }
         }
 
+        // Intelligently match items if bill total exceeds paid receipt amount (prevents item vs payment mismatch)
+        $items_total = 0;
+        foreach ($itemized_list as $it) {
+            if ($it['amount'] !== null) $items_total += (float)$it['amount'];
+        }
+
+        if ($items_total > $paid_amount && !empty($pay['month_for'])) {
+            $clean_pay_month = trim(explode('(', $pay['month_for'])[0]);
+            $month_matched_items = [];
+            $month_matched_total = 0;
+
+            foreach ($itemized_list as $it) {
+                if (stripos($it['raw'], $clean_pay_month) !== false || stripos($it['title'], $clean_pay_month) !== false) {
+                    $month_matched_items[] = $it;
+                    if ($it['amount'] !== null) $month_matched_total += (float)$it['amount'];
+                }
+            }
+
+            if (!empty($month_matched_items) && (abs($month_matched_total - $paid_amount) < 1 || $month_matched_total <= $paid_amount)) {
+                $itemized_list = $month_matched_items;
+            }
+        }
+
         if (empty($itemized_list)) {
             $itemized_list[] = [
                 'title' => !empty($pay['month_for']) ? ("Fee / Dues (" . $pay['month_for'] . ")") : "Fee Payment",

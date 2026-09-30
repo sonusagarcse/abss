@@ -429,7 +429,24 @@ if (!empty($settings['tuition_modes'])) {
                                                 <?php echo htmlspecialchars($bill['month_for']); ?>
                                                 <div style="font-size:0.75rem; color:var(--portal-blue); font-weight:700;"><?php echo htmlspecialchars($inv_display); ?></div>
                                             </td>
-                                            <td><span class="amount-tag" style="background:#f1f5f9; color:#334155;">₹ <?php echo number_format($bill['amount'], 2); ?></span></td>
+                                            <td>
+                                                <span class="amount-tag" style="background:#f1f5f9; color:#334155;">₹ <?php echo number_format($bill['amount'], 2); ?></span>
+                                                <?php
+                                                $has_pay = (stripos($bill['remark'] ?? '', 'payment received') !== false || stripos($bill['remark'] ?? '', 'partial payment') !== false || strpos($bill['remark'] ?? '', '-₹') !== false);
+                                                $b_paid = 0;
+                                                if ($has_pay && preg_match_all('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $bill['remark'], $pmatch)) {
+                                                    foreach ($pmatch[1] as $pm) {
+                                                        $b_paid += (float)str_replace(',', '', $pm);
+                                                    }
+                                                }
+                                                $b_mode = (stripos($bill['remark'] ?? '', 'online') !== false || stripos($bill['remark'] ?? '', 'razorpay') !== false || stripos($bill['remark'] ?? '', 'upi') !== false) ? 'ONLINE' : 'CASH';
+                                                ?>
+                                                <?php if ($b_paid > 0): ?>
+                                                    <div style="font-size:0.68rem; font-weight:800; color:#15803d; margin-top:3px;">
+                                                        Paid: ₹<?php echo number_format($b_paid, 2); ?> <span class="badge" style="background:<?php echo $b_mode === 'ONLINE' ? '#e0f2fe; color:#0369a1;' : '#f1f5f9; color:#475569;'; ?> font-size:0.62rem; padding:1px 4px; border-radius:3px; font-weight:800;"><?php echo $b_mode; ?></span>
+                                                    </div>
+                                                <?php endif; ?>
+                                            </td>
                                             <td>
                                                 <?php if ($bill['fine_amount'] > 0): ?>
                                                     <span class="amount-tag" style="background:#ffedd5; color:#ea580c; font-weight:800;">
@@ -463,14 +480,26 @@ if (!empty($settings['tuition_modes'])) {
                                 <i class="fas fa-check-circle"></i> No pending dues! All invoices settled.
                             </div>
                         <?php else: ?>
-                            <?php foreach ($unpaid_bills as $bill): ?>
+                            <?php foreach ($unpaid_bills as $bill): 
+                                $has_pay = (stripos($bill['remark'] ?? '', 'payment received') !== false || stripos($bill['remark'] ?? '', 'partial payment') !== false || strpos($bill['remark'] ?? '', '-₹') !== false);
+                                $b_paid = 0;
+                                if ($has_pay && preg_match_all('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $bill['remark'], $pmatch)) {
+                                    foreach ($pmatch[1] as $pm) {
+                                        $b_paid += (float)str_replace(',', '', $pm);
+                                    }
+                                }
+                                $b_mode = (stripos($bill['remark'] ?? '', 'online') !== false || stripos($bill['remark'] ?? '', 'razorpay') !== false || stripos($bill['remark'] ?? '', 'upi') !== false) ? 'ONLINE' : 'CASH';
+                            ?>
                                 <div class="mobile-invoice-card" style="border-left:4px solid #dc2626;">
                                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                                         <strong style="font-size:1rem; color:var(--portal-dark);"><?php echo htmlspecialchars($bill['month_for']); ?></strong>
                                         <span class="amount-tag" style="background:#fee2e2; color:#dc2626; font-weight:800;">₹ <?php echo number_format($bill['total_payable'], 2); ?></span>
                                     </div>
                                     <div style="font-size:0.8rem; color:#64748b; margin-bottom:8px;">
-                                        Base Fee: ₹<?php echo number_format($bill['amount'], 2); ?>
+                                        Balance Due: ₹<?php echo number_format($bill['amount'], 2); ?>
+                                        <?php if ($b_paid > 0): ?>
+                                            • <span style="color:#15803d; font-weight:700;">Paid: ₹<?php echo number_format($b_paid, 2); ?> [<?php echo $b_mode; ?>]</span>
+                                        <?php endif; ?>
                                         <?php if ($bill['fine_amount'] > 0): ?>
                                             • <span style="color:#ea580c; font-weight:700;">+₹<?php echo number_format($bill['fine_amount'], 2); ?> Fine (<?php echo $bill['overdue_days']; ?> days)</span>
                                         <?php endif; ?>

@@ -377,9 +377,183 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
     // Calculate dynamic late fine
     $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0, 'rate_per_day' => 5.00];
     $fine_amount = ($bill['status'] === 'unpaid') ? (float)$fine_calc['fine_amount'] : 0.00;
-    $total_payable_amount = (float)$bill['amount'] + $fine_amount;
 
-    $amount_in_words = abss_amount_to_words_pdf($total_payable_amount);
+    // Fetch payments for receipt lookup
+    $student_payments = [];
+    if (!empty($bill['student_id']) && function_exists('getDB')) {
+        $db = getDB();
+        if ($db) {
+            $pq = $db->query("SELECT id, amount, payment_date, payment_method FROM fee_payments WHERE student_id = " . (int)$bill['student_id']);
+            if ($pq) {
+                while ($pr = $pq->fetch_assoc()) {
+                    $student_payments[$pr['id']] = $pr;
+                }
+            }
+        }
+    }
+
+    // Pre-parse items from remarks
+    $remarks = explode('|', $bill['remark'] ? $bill['remark'] : 'Tuition Fee');
+    $parsed_items = [];
+    $total_charges_sum = 0.0;
+    $total_paid_so_far = 0.0;
+    $payment_records = [];
+
+    foreach ($remarks as $rem) {
+        $rem = trim($rem);
+        if (strpos($rem, 'Auto-generated Bill.') !== false) {
+            $rem = trim(str_replace('Auto-generated Bill.', '', $rem));
+        }
+        if (empty($rem)) continue;
+
+        $is_payment_row = (
+            stripos($rem, 'payment received') !== false || 
+            stripos($rem, 'partial payment') !== false || 
+            stripos($rem, 'payment of') !== false || 
+            stripos($rem, 'paid') !== false || 
+            strpos($rem, '-₹') !== false
+        );
+
+        if ($is_payment_row) {
+            $paid_num = 0.0;
+            if (preg_match('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $rem, $amt_match)) {
+                $paid_num = (float)str_replace(',', '', $amt_match[1]);
+            } elseif (preg_match('/[₹Rs\.]\s*([0-9\.,]+)/i', $rem, $amt_match)) {
+                $paid_num = (float)str_replace(',', '', $amt_match[1]);
+            }
+            $total_paid_so_far += $paid_num;
+
+            $pay_date_formatted = $bill['month_for'];
+            if (preg_match('/[0-9]{4}-[0-9]{2}-[0-9]{2}/', $rem, $d_match)) {
+                $pay_date_formatted = date('d M Y', strtotime($d_match[0]));
+            }
+
+            $rcpt_id = 0;
+            if (preg_match('/Rcpt\s*#?([0-9]+)/i', $rem, $rm)) {
+                $rcpt_id = (int)$rm[1];
+            }
+
+            // If no rcpt_id in remark, attempt to match via payment_date and amount in student_payments
+            if ($rcpt_id == 0 && !empty($student_payments)) {
+                $rem_date = '';
+                if (preg_match('/\b(20\d{2}-\d{2}-\d{2})\b/', $rem, $dm)) {
+                    $rem_date = $dm[1];
+                }
+                if ($rem_date && $paid_num > 0) {
+                    foreach ($student_payments as $pid => $sp) {
+                        if ($sp['payment_date'] === $rem_date && abs((float)$sp['amount'] - (float)$paid_num) < 0.01) {
+                            $rcpt_id = (int)$pid;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            $raw_method = '';
+            if ($rcpt_id > 0 && isset($student_payments[$rcpt_id])) {
+                $raw_method = $student_payments[$rcpt_id]['payment_method'];
+            } elseif (preg_match('/via\s+([A-Za-z0-9_\-\s\(\):]+?)\s+on/i', $rem, $vm)) {
+                $raw_method = trim($vm[1]);
+            } elseif (stripos($rem, 'online') !== false || stripos($rem, 'razorpay') !== false || stripos($rem, 'upi') !== false || stripos($rem, 'phonepe') !== false || stripos($rem, 'gpay') !== false || stripos($rem, 'paytm') !== false) {
+                $raw_method = 'Online';
+            } elseif (stripos($rem, 'cash') !== false) {
+                $raw_method = 'Cash';
+            } elseif (stripos($rem, 'bank') !== false || stripos($rem, 'cheque') !== false || stripos($rem, 'neft') !== false) {
+                $raw_method = 'Bank Transfer';
+            } else {
+                $raw_method = 'Cash';
+            }
+
+            $mode_label = 'Cash';
+            if (stripos($raw_method, 'razorpay') !== false) {
+                $mode_label = 'Online (Razorpay)';
+            } elseif (stripos($raw_method, 'phonepe') !== false) {
+                $mode_label = 'Online (PhonePe)';
+            } elseif (stripos($raw_method, 'gpay') !== false || stripos($raw_method, 'google pay') !== false) {
+                $mode_label = 'Online (GPay)';
+            } elseif (stripos($raw_method, 'paytm') !== false) {
+                $mode_label = 'Online (Paytm)';
+            } elseif (stripos($raw_method, 'upi') !== false || stripos($raw_method, 'qr') !== false) {
+                $mode_label = 'Online (UPI)';
+            } elseif (stripos($raw_method, 'online') !== false || stripos($raw_method, 'netbanking') !== false || stripos($raw_method, 'card') !== false) {
+                $mode_label = 'Online';
+            } elseif (stripos($raw_method, 'cash') !== false) {
+                $mode_label = 'Cash';
+            } elseif (stripos($raw_method, 'bank') !== false || stripos($raw_method, 'neft') !== false || stripos($raw_method, 'rtgs') !== false || stripos($raw_method, 'imps') !== false) {
+                $mode_label = 'Bank Transfer';
+            } elseif (stripos($raw_method, 'cheque') !== false || stripos($raw_method, 'dd') !== false) {
+                $mode_label = 'Cheque / DD';
+            } else {
+                $mode_label = $raw_method;
+            }
+
+            $payment_records[] = [
+                'amount' => $paid_num,
+                'date' => $pay_date_formatted,
+                'rcpt_id' => $rcpt_id,
+                'mode_label' => $mode_label
+            ];
+
+            $desc_label = "Payment Received [" . strtoupper($mode_label) . "]" . ($rcpt_id > 0 ? " (Rcpt #$rcpt_id)" : "");
+
+            $parsed_items[] = [
+                'is_payment' => true,
+                'desc' => $desc_label,
+                'month' => $pay_date_formatted,
+                'amount_formatted' => '-Rs. ' . number_format($paid_num, 2),
+                'amount_num' => $paid_num
+            ];
+        } else {
+            $item_month = $bill['month_for'];
+            if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
+                $item_month = trim($m_match[1]);
+                $rem = trim(str_replace($m_match[0], '', $rem));
+            } elseif (preg_match('/\[(.*?)\]/', $rem, $m_match)) {
+                $item_month = trim($m_match[1]);
+                $rem = trim(str_replace($m_match[0], '', $rem));
+            }
+
+            $item_desc = '';
+            $charge_num = 0.0;
+            if (strpos($rem, ': ₹') !== false) {
+                $parts = explode(': ₹', $rem);
+                $item_desc = trim($parts[0]);
+                $charge_num = (float)str_replace(',', '', trim($parts[1]));
+            } elseif (strpos($rem, ':') !== false) {
+                $parts = explode(':', $rem);
+                $item_desc = trim($parts[0]);
+                $charge_num = (float)str_replace(',', '', trim($parts[1]));
+            } else {
+                $item_desc = trim($rem);
+                $charge_num = (float)$bill['amount'];
+            }
+
+            if (preg_match('/₹\s*[0-9\.,]+/', $item_desc, $amt_match)) {
+                $item_desc = trim(str_replace($amt_match[0], '', $item_desc));
+            }
+            if (empty($item_desc)) $item_desc = "Tuition Fee";
+
+            $total_charges_sum += $charge_num;
+
+            $parsed_items[] = [
+                'is_payment' => false,
+                'desc' => $item_desc,
+                'month' => $item_month,
+                'amount_formatted' => 'Rs. ' . number_format($charge_num, 2),
+                'amount_num' => $charge_num
+            ];
+        }
+    }
+
+    if ($total_paid_so_far > 0) {
+        $total_billed_amount = ($total_charges_sum > 0) ? $total_charges_sum : ((float)$bill['amount'] + $total_paid_so_far);
+    } else {
+        $total_billed_amount = ($total_charges_sum > 0) ? $total_charges_sum : (float)$bill['amount'];
+    }
+    $remaining_balance = (float)$bill['amount'] + (float)$fine_amount;
+    $total_payable_amount = $remaining_balance;
+
+    $amount_in_words = abss_amount_to_words_pdf($remaining_balance > 0 ? $remaining_balance : $total_billed_amount);
     $invoice_no = get_invoice_no($bill);
     $billed_on_date = date('d M, Y', strtotime($bill['billing_date']));
 
@@ -388,8 +562,14 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
     $pdf->SetMargins(12, 12, 12);
     $pdf->AddPage();
 
-    // 1. Watermark: UNPAID INVOICE
-    $status_watermark = strtoupper($bill['status']) . ' INVOICE';
+    // 1. Watermark: PARTIAL PAID / PAID / UNPAID INVOICE
+    if ($remaining_balance > 0 && $total_paid_so_far > 0) {
+        $status_watermark = 'PARTIALLY PAID INVOICE';
+    } elseif ($remaining_balance <= 0) {
+        $status_watermark = 'PAID INVOICE';
+    } else {
+        $status_watermark = 'UNPAID INVOICE';
+    }
     $pdf->Watermark($status_watermark);
 
     // 2. Receipt Header (School Branding on Left, Invoice Meta on Right)
@@ -504,66 +684,17 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
     $pdf->Cell(40, 7, "BILL MONTH", 'TB', 0, 'L', true);
     $pdf->Cell(36, 7, "AMOUNT DUE", 'TB', 1, 'R', true);
 
-    $remarks = explode('|', $bill['remark'] ? $bill['remark'] : 'Tuition Fee');
     $sno = 1;
     $curr_y = $table_y + 7;
 
     $pdf->SetDrawColor(226, 232, 240); // #e2e8f0
     $pdf->SetLineWidth(0.3);
 
-    foreach ($remarks as $rem) {
-        $rem = trim($rem);
-        if (strpos($rem, 'Auto-generated Bill.') !== false) {
-            $rem = trim(str_replace('Auto-generated Bill.', '', $rem));
-        }
-        if (empty($rem)) continue;
-
-        $is_payment_row = (strpos(strtolower($rem), 'payment received') !== false || strpos($rem, '-₹') !== false);
-        $item_desc = $rem;
-        $item_month = $bill['month_for'];
-        $item_amt = '';
-
-        if ($is_payment_row) {
-            if (preg_match('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $rem, $amt_match)) {
-                $item_amt = '-Rs. ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
-            } elseif (preg_match('/-?\s*[₹Rs\.]\s*([0-9\.,]+)/i', $rem, $amt_match)) {
-                $item_amt = '-Rs. ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
-            } else {
-                $item_amt = '-Rs. 0.00';
-            }
-            if (preg_match('/[0-9]{4}-[0-9]{2}-[0-9]{2}/', $rem, $d_match)) {
-                $item_month = date('d M Y', strtotime($d_match[0]));
-                $item_desc = "Payment received on " . date('d M Y', strtotime($d_match[0]));
-            } else {
-                $item_desc = "Payment received";
-            }
-        } else {
-            if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
-                $item_month = trim($m_match[1]);
-                $rem = trim(str_replace($m_match[0], '', $rem));
-            } elseif (preg_match('/\[(.*?)\]/', $rem, $m_match)) {
-                $item_month = trim($m_match[1]);
-                $rem = trim(str_replace($m_match[0], '', $rem));
-            }
-
-            if (strpos($rem, ': ₹') !== false) {
-                $parts = explode(': ₹', $rem);
-                $item_desc = trim($parts[0]);
-                $item_amt = 'Rs. ' . trim($parts[1]);
-            } elseif (strpos($rem, ':') !== false) {
-                $parts = explode(':', $rem);
-                $item_desc = trim($parts[0]);
-                $item_amt = 'Rs. ' . trim($parts[1]);
-            } else {
-                $item_desc = trim($rem);
-                $item_amt = 'Rs. ' . number_format($bill['amount'], 2);
-            }
-
-            if (preg_match('/₹\s*[0-9\.,]+/', $item_desc, $amt_match)) {
-                $item_desc = trim(str_replace($amt_match[0], '', $item_desc));
-            }
-            if (empty($item_desc)) $item_desc = "Tuition Fee";
-        }
+    foreach ($parsed_items as $item) {
+        $is_payment_row = $item['is_payment'];
+        $item_desc = $item['desc'];
+        $item_month = $item['month'];
+        $item_amt = $item['amount_formatted'];
 
         $pdf->SetXY(12, $curr_y);
         $pdf->SetFont('Helvetica', '', 8.5);
@@ -613,26 +744,65 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
         $curr_y += 7;
     }
 
-    $total_payable = (float)$bill['amount'] + (float)$fine_amount;
-    $amount_in_words = abss_amount_to_words_pdf($total_payable);
-
-    // 5. Total Amount Due Strip
+    // 5. Total Amount Due / Multi-Row Summary Strip
     $strip_y = $curr_y + 3;
-    $pdf->SetXY(12, $strip_y);
-    $pdf->SetFillColor(254, 238, 242);
-    $pdf->SetDrawColor(255, 205, 210);
-    $pdf->Rect(12, $strip_y, 186, 9, 'DF');
 
-    $pdf->SetXY(16, $strip_y + 0.5);
-    $pdf->SetFont('Helvetica', 'B', 9.5);
-    $pdf->SetTextColor(183, 28, 28);
-    $pdf->Cell(110, 8, "Total Amount Due", 0, 0, 'L');
+    if ($total_paid_so_far > 0) {
+        $pdf->SetXY(12, $strip_y);
+        $pdf->SetFillColor(248, 250, 252);
+        $pdf->SetDrawColor(203, 213, 225);
+        $pdf->Rect(12, $strip_y, 186, 20, 'DF');
 
-    $pdf->SetFont('Helvetica', 'B', 11.5);
-    $pdf->Cell(68, 8, "Rs. " . number_format($total_payable, 2), 0, 1, 'R');
+        // Line 1: Total Billed Charges
+        $pdf->SetXY(16, $strip_y + 1.5);
+        $pdf->SetFont('Helvetica', '', 8);
+        $pdf->SetTextColor(71, 85, 105);
+        $pdf->Cell(110, 5, "Total Billed Charges:", 0, 0, 'L');
+        $pdf->SetFont('Helvetica', 'B', 8.5);
+        $pdf->SetTextColor(15, 23, 42);
+        $pdf->Cell(68, 5, "Rs. " . number_format($total_billed_amount, 2), 0, 1, 'R');
+
+        // Line 2: Less Paid Amount
+        $pdf->SetX(16);
+        $pdf->SetFont('Helvetica', '', 8);
+        $pdf->SetTextColor(21, 128, 61);
+        $tag_texts = [];
+        foreach ($payment_records as $pr) {
+            $tag_texts[] = $pr['mode_label'] . ($pr['rcpt_id'] ? " (Rcpt #{$pr['rcpt_id']})" : "");
+        }
+        $pay_tag_summary = implode(', ', $tag_texts);
+        $pdf->Cell(110, 5, "Less Paid Amount [" . $pay_tag_summary . "]:", 0, 0, 'L');
+        $pdf->SetFont('Helvetica', 'B', 8.5);
+        $pdf->Cell(68, 5, "-Rs. " . number_format($total_paid_so_far, 2), 0, 1, 'R');
+
+        // Line 3: Remaining Balance Due
+        $pdf->SetX(16);
+        $pdf->SetFont('Helvetica', 'B', 9);
+        $is_due = ($remaining_balance > 0);
+        $pdf->SetTextColor($is_due ? 183 : 21, $is_due ? 28 : 128, $is_due ? 28 : 61);
+        $pdf->Cell(110, 6, ($is_due ? "REMAINING BALANCE DUE:" : "NET BALANCE DUE (PAID IN FULL):"), 0, 0, 'L');
+        $pdf->SetFont('Helvetica', 'B', 11);
+        $pdf->Cell(68, 6, "Rs. " . number_format(max(0, $remaining_balance), 2), 0, 1, 'R');
+
+        $words_y = $strip_y + 24;
+    } else {
+        $pdf->SetXY(12, $strip_y);
+        $pdf->SetFillColor(254, 238, 242);
+        $pdf->SetDrawColor(255, 205, 210);
+        $pdf->Rect(12, $strip_y, 186, 9, 'DF');
+
+        $pdf->SetXY(16, $strip_y + 0.5);
+        $pdf->SetFont('Helvetica', 'B', 9.5);
+        $pdf->SetTextColor(183, 28, 28);
+        $pdf->Cell(110, 8, "Total Amount Due", 0, 0, 'L');
+
+        $pdf->SetFont('Helvetica', 'B', 11.5);
+        $pdf->Cell(68, 8, "Rs. " . number_format($total_payable_amount, 2), 0, 1, 'R');
+
+        $words_y = $strip_y + 12;
+    }
 
     // 6. Amount in Words Block
-    $words_y = $strip_y + 12;
     $pdf->SetDrawColor(211, 47, 47);
     $pdf->SetLineWidth(0.8);
     $pdf->Line(12, $words_y, 12, $words_y + 6);
@@ -640,11 +810,12 @@ function render_fee_ledger_invoice_pdf($bill, $settings = null, $output_mode = '
     $pdf->SetXY(15, $words_y + 0.5);
     $pdf->SetFont('Helvetica', 'I', 8.5);
     $pdf->SetTextColor(85, 85, 85);
-    $pdf->Cell(45, 5, "Amount due in words: ", 0, 0, 'L');
+    $words_label = ($remaining_balance > 0) ? "Remaining balance due in words: " : "Invoice payment status: ";
+    $pdf->Cell(52, 5, $words_label, 0, 0, 'L');
 
     $pdf->SetFont('Helvetica', 'B', 8.5);
     $pdf->SetTextColor(211, 47, 47);
-    $pdf->Cell(135, 5, $amount_in_words, 0, 1, 'L');
+    $pdf->Cell(128, 5, $amount_in_words, 0, 1, 'L');
 
     $filename = "Invoice_" . $invoice_no . "_" . preg_replace('/[^a-zA-Z0-9]+/', '_', $student_name) . ".pdf";
     return $pdf->Output($output_mode, $filename);

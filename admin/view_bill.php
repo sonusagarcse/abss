@@ -99,12 +99,222 @@ if (!function_exists('amountToWords')) {
     }
 }
 
+// Fetch all recorded payments for this student for instant O(1) receipt & payment mode lookup
+$student_payments = [];
+if (!empty($bill['student_id'])) {
+    $pay_res = $conn->query("SELECT id, amount, payment_date, payment_method FROM fee_payments WHERE student_id = " . (int)$bill['student_id']);
+    if ($pay_res) {
+        while ($p_row = $pay_res->fetch_assoc()) {
+            $student_payments[$p_row['id']] = $p_row;
+        }
+    }
+}
+
+// Helper to classify payment method and return badge metadata
+if (!function_exists('classify_payment_info')) {
+    function classify_payment_info($rem, $student_payments = [], $paid_num = 0.0) {
+        $rcpt_id = 0;
+        if (preg_match('/Rcpt\s*#?([0-9]+)/i', $rem, $rm)) {
+            $rcpt_id = (int)$rm[1];
+        }
+
+        // If no rcpt_id in remark, attempt to match via payment_date and amount in student_payments
+        if ($rcpt_id == 0 && !empty($student_payments)) {
+            $rem_date = '';
+            if (preg_match('/\b(20\d{2}-\d{2}-\d{2})\b/', $rem, $dm)) {
+                $rem_date = $dm[1];
+            }
+            if ($rem_date && $paid_num > 0) {
+                foreach ($student_payments as $pid => $sp) {
+                    if ($sp['payment_date'] === $rem_date && abs((float)$sp['amount'] - (float)$paid_num) < 0.01) {
+                        $rcpt_id = (int)$pid;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        $raw_method = '';
+        if ($rcpt_id > 0 && isset($student_payments[$rcpt_id])) {
+            $raw_method = $student_payments[$rcpt_id]['payment_method'];
+        } elseif (preg_match('/via\s+([A-Za-z0-9_\-\s\(\):]+?)\s+on/i', $rem, $vm)) {
+            $raw_method = trim($vm[1]);
+        } elseif (stripos($rem, 'online') !== false || stripos($rem, 'razorpay') !== false || stripos($rem, 'upi') !== false || stripos($rem, 'phonepe') !== false || stripos($rem, 'gpay') !== false || stripos($rem, 'paytm') !== false) {
+            $raw_method = 'Online';
+        } elseif (stripos($rem, 'cash') !== false) {
+            $raw_method = 'Cash';
+        } elseif (stripos($rem, 'bank') !== false || stripos($rem, 'cheque') !== false || stripos($rem, 'neft') !== false) {
+            $raw_method = 'Bank Transfer';
+        } else {
+            $raw_method = 'Cash';
+        }
+
+        $mode_type = 'cash';
+        $mode_label = 'Cash';
+        $txn_id = '';
+
+        if (stripos($raw_method, 'razorpay') !== false) {
+            $mode_type = 'online';
+            $mode_label = 'Online (Razorpay)';
+            if (preg_match('/pay_[a-zA-Z0-9]+/', $raw_method, $txnm)) {
+                $txn_id = $txnm[0];
+            }
+        } elseif (stripos($raw_method, 'phonepe') !== false) {
+            $mode_type = 'online';
+            $mode_label = 'Online (PhonePe)';
+        } elseif (stripos($raw_method, 'gpay') !== false || stripos($raw_method, 'google pay') !== false) {
+            $mode_type = 'online';
+            $mode_label = 'Online (GPay)';
+        } elseif (stripos($raw_method, 'paytm') !== false) {
+            $mode_type = 'online';
+            $mode_label = 'Online (Paytm)';
+        } elseif (stripos($raw_method, 'upi') !== false || stripos($raw_method, 'qr') !== false) {
+            $mode_type = 'online';
+            $mode_label = 'Online (UPI)';
+        } elseif (stripos($raw_method, 'online') !== false || stripos($raw_method, 'netbanking') !== false || stripos($raw_method, 'card') !== false) {
+            $mode_type = 'online';
+            $mode_label = 'Online';
+        } elseif (stripos($raw_method, 'cash') !== false) {
+            $mode_type = 'cash';
+            $mode_label = 'Cash';
+        } elseif (stripos($raw_method, 'bank') !== false || stripos($raw_method, 'neft') !== false || stripos($raw_method, 'rtgs') !== false || stripos($raw_method, 'imps') !== false) {
+            $mode_type = 'bank';
+            $mode_label = 'Bank Transfer';
+        } elseif (stripos($raw_method, 'cheque') !== false || stripos($raw_method, 'dd') !== false) {
+            $mode_type = 'cheque';
+            $mode_label = 'Cheque / DD';
+        } else {
+            $mode_type = 'other';
+            $mode_label = $raw_method;
+        }
+
+        return [
+            'rcpt_id' => $rcpt_id,
+            'raw_method' => $raw_method,
+            'mode_type' => $mode_type,
+            'mode_label' => $mode_label,
+            'txn_id' => $txn_id
+        ];
+    }
+}
+
 // Calculate dynamic late fine (if enabled in settings)
 $fine_calc = function_exists('calculate_bill_fine') ? calculate_bill_fine($bill, $settings) : ['fine_amount' => 0.00, 'overdue_days' => 0, 'rate_per_day' => 5.00];
 $fine_amount = ($bill['status'] === 'unpaid') ? $fine_calc['fine_amount'] : 0.00;
-$total_payable_amount = (float)$bill['amount'] + $fine_amount;
 
-$amount_in_words = amountToWords($total_payable_amount);
+// Pre-parse all items and payment deductions from remark string
+$remarks = explode('|', $bill['remark'] ? $bill['remark'] : 'Tuition Fee');
+$parsed_items = [];
+$total_charges_sum = 0.0;
+$total_paid_so_far = 0.0;
+$payment_records = [];
+
+foreach ($remarks as $rem) {
+    $rem = trim($rem);
+    if (strpos($rem, 'Auto-generated Bill.') !== false) {
+        $rem = trim(str_replace('Auto-generated Bill.', '', $rem));
+    }
+    if (empty($rem)) continue;
+
+    $is_payment_row = (
+        stripos($rem, 'payment received') !== false || 
+        stripos($rem, 'partial payment') !== false || 
+        stripos($rem, 'payment of') !== false || 
+        stripos($rem, 'paid') !== false || 
+        strpos($rem, '-₹') !== false
+    );
+
+    if ($is_payment_row) {
+        // Extract paid amount
+        $paid_num = 0.0;
+        if (preg_match('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $rem, $amt_match)) {
+            $paid_num = (float)str_replace(',', '', $amt_match[1]);
+        } elseif (preg_match('/[₹Rs\.]\s*([0-9\.,]+)/i', $rem, $amt_match)) {
+            $paid_num = (float)str_replace(',', '', $amt_match[1]);
+        }
+        $total_paid_so_far += $paid_num;
+
+        // Extract payment date
+        $pay_date_formatted = $bill['month_for'];
+        if (preg_match('/[0-9]{4}-[0-9]{2}-[0-9]{2}/', $rem, $d_match)) {
+            $pay_date_formatted = date('d M, Y', strtotime($d_match[0]));
+        }
+
+        // Classify payment method and get tagging
+        $pay_info = classify_payment_info($rem, $student_payments, $paid_num);
+        
+        $payment_records[] = [
+            'amount' => $paid_num,
+            'date' => $pay_date_formatted,
+            'rcpt_id' => $pay_info['rcpt_id'],
+            'mode_type' => $pay_info['mode_type'],
+            'mode_label' => $pay_info['mode_label'],
+            'txn_id' => $pay_info['txn_id'],
+            'raw_method' => $pay_info['raw_method']
+        ];
+
+        $parsed_items[] = [
+            'is_payment' => true,
+            'desc' => 'Payment Received',
+            'month' => $pay_date_formatted,
+            'amount_formatted' => '-₹ ' . number_format($paid_num, 2),
+            'amount_num' => $paid_num,
+            'pay_info' => $pay_info
+        ];
+    } else {
+        // Charge row
+        $item_month = $bill['month_for'];
+        if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
+            $item_month = trim($m_match[1]);
+            $rem = trim(str_replace($m_match[0], '', $rem));
+        } elseif (preg_match('/\[(.*?)\]/', $rem, $m_match)) {
+            $item_month = trim($m_match[1]);
+            $rem = trim(str_replace($m_match[0], '', $rem));
+        }
+
+        $item_desc = '';
+        $charge_num = 0.0;
+        if (strpos($rem, ': ₹') !== false) {
+            $parts = explode(': ₹', $rem);
+            $item_desc = trim($parts[0]);
+            $charge_num = (float)str_replace(',', '', trim($parts[1]));
+        } elseif (strpos($rem, ':') !== false) {
+            $parts = explode(':', $rem);
+            $item_desc = trim($parts[0]);
+            $charge_num = (float)str_replace(',', '', trim($parts[1]));
+        } else {
+            $item_desc = trim($rem);
+            $charge_num = (float)$bill['amount'];
+        }
+
+        if (preg_match('/₹\s*[0-9\.,]+/', $item_desc, $amt_match)) {
+            $item_desc = trim(str_replace($amt_match[0], '', $item_desc));
+        }
+        if (empty($item_desc)) $item_desc = "Tuition Fee";
+
+        $total_charges_sum += $charge_num;
+
+        $parsed_items[] = [
+            'is_payment' => false,
+            'desc' => $item_desc,
+            'month' => $item_month,
+            'amount_formatted' => '₹ ' . number_format($charge_num, 2),
+            'amount_num' => $charge_num,
+            'pay_info' => null
+        ];
+    }
+}
+
+// Compute accurate totals: original billed, total paid, and net balance due
+if ($total_paid_so_far > 0) {
+    $total_billed_amount = ($total_charges_sum > 0) ? $total_charges_sum : ((float)$bill['amount'] + $total_paid_so_far);
+} else {
+    $total_billed_amount = ($total_charges_sum > 0) ? $total_charges_sum : (float)$bill['amount'];
+}
+$remaining_balance = (float)$bill['amount'] + (float)$fine_amount;
+$total_payable_amount = $remaining_balance;
+
+$amount_in_words = amountToWords($remaining_balance > 0 ? $remaining_balance : $total_billed_amount);
 $invoice_no = get_invoice_no($bill);
 $is_embed = isset($_GET['embed']) && $_GET['embed'] == 1;
 ?>
@@ -237,6 +447,63 @@ $logo_src = file_exists($logo_path) ? 'data:image/png;base64,' . base64_encode(f
         .text-right { text-align: right; }
         .text-center { text-align: center; }
 
+        /* Payment mode and receipt tagging */
+        .pay-mode-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            padding: 2.5px 8px;
+            border-radius: 6px;
+            letter-spacing: 0.3px;
+            vertical-align: middle;
+            line-height: 1.3;
+        }
+        .pay-mode-online {
+            background: #e0f2fe;
+            color: #0369a1;
+            border: 1px solid #bae6fd;
+        }
+        .pay-mode-cash {
+            background: #f1f5f9;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+        }
+        .pay-mode-bank {
+            background: #fef3c7;
+            color: #92400e;
+            border: 1px solid #fde68a;
+        }
+        .pay-mode-other {
+            background: #f3e8ff;
+            color: #6b21a8;
+            border: 1px solid #e9d5ff;
+        }
+        .rcpt-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.72rem;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 5px;
+            background: #dcfce7;
+            color: #15803d;
+            border: 1px solid #bbf7d0;
+            line-height: 1.3;
+        }
+        .txn-ref-badge {
+            font-family: monospace;
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #0284c7;
+            background: #f0f9ff;
+            border: 1px dashed #7dd3fc;
+            padding: 1px 6px;
+            border-radius: 4px;
+        }
+
         .total-strip { background: #fef2f2; padding: 14px 22px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; position: relative; z-index: 2; border: 1px solid #fecaca; flex-wrap: wrap; gap: 10px; }
         .total-label { font-size: 1.05rem; font-weight: 800; color: #991b1b; }
         .total-value { font-size: 1.35rem; font-weight: 900; color: #991b1b; }
@@ -355,7 +622,15 @@ $logo_src = file_exists($logo_path) ? 'data:image/png;base64,' . base64_encode(f
         
         <!-- Watermark -->
         <div class="watermark">
-            <?php echo strtoupper($bill['status']); ?><br>INVOICE
+            <?php 
+            if ($remaining_balance > 0 && $total_paid_so_far > 0) {
+                echo 'PARTIAL PAID<br>INVOICE';
+            } elseif ($remaining_balance <= 0) {
+                echo 'PAID<br>INVOICE';
+            } else {
+                echo 'UNPAID<br>INVOICE';
+            }
+            ?>
         </div>
         
         <!-- Header -->
@@ -372,6 +647,21 @@ $logo_src = file_exists($logo_path) ? 'data:image/png;base64,' . base64_encode(f
                 <div class="receipt-title">FEE INVOICE</div>
                 <div class="receipt-no"><?php echo $invoice_no; ?></div>
                 <div class="receipt-date">Billed On: <strong><?php echo date('d M, Y', strtotime($bill['billing_date'])); ?></strong></div>
+                <div style="margin-top: 6px;">
+                    <?php if ($remaining_balance > 0 && $total_paid_so_far > 0): ?>
+                        <span class="pay-mode-badge" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; font-size:0.75rem; padding:3px 9px;">
+                            <i class="fas fa-clock"></i> PARTIALLY PAID (₹<?php echo number_format($remaining_balance, 2); ?> Due)
+                        </span>
+                    <?php elseif ($remaining_balance <= 0): ?>
+                        <span class="pay-mode-badge" style="background:#dcfce7; color:#15803d; border:1px solid #bbf7d0; font-size:0.75rem; padding:3px 9px;">
+                            <i class="fas fa-check-circle"></i> FULLY PAID
+                        </span>
+                    <?php else: ?>
+                        <span class="pay-mode-badge" style="background:#fff1f2; color:#e11d48; border:1px solid #ffe4e6; font-size:0.75rem; padding:3px 9px;">
+                            <i class="fas fa-exclamation-circle"></i> UNPAID BILL
+                        </span>
+                    <?php endif; ?>
+                </div>
             </div>
         </div>
 
@@ -421,99 +711,64 @@ $logo_src = file_exists($logo_path) ? 'data:image/png;base64,' . base64_encode(f
             </thead>
             <tbody>
                 <?php 
-                $remarks = explode('|', $bill['remark'] ? $bill['remark'] : 'Tuition Fee');
                 $sno = 1;
-
-                foreach ($remarks as $rem) {
-                    $rem = trim($rem);
-                    if (strpos($rem, 'Auto-generated Bill.') !== false) {
-                        $rem = trim(str_replace('Auto-generated Bill.', '', $rem));
-                    }
-                    if (empty($rem)) continue;
-
-                    $is_payment_row = (
-                        stripos($rem, 'payment received') !== false || 
-                        stripos($rem, 'partial payment') !== false || 
-                        stripos($rem, 'payment of') !== false || 
-                        stripos($rem, 'paid') !== false || 
-                        strpos($rem, '-₹') !== false
-                    );
-                    $item_desc = $rem;
-                    $item_month = $bill['month_for'];
-                    $item_amt = '';
-
-                    if ($is_payment_row) {
-                        // Extract paid amount
-                        if (preg_match('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $rem, $amt_match)) {
-                            $item_amt = '-₹ ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
-                        } elseif (preg_match('/[₹Rs\.]\s*([0-9\.,]+)/i', $rem, $amt_match)) {
-                            $item_amt = '-₹ ' . number_format((float)str_replace(',', '', $amt_match[1]), 2);
-                        } else {
-                            $item_amt = '-₹ 0.00';
-                        }
-
-                        // Extract receipt number if available
-                        $rcpt_tag = '';
-                        if (preg_match('/(Rcpt\s*#?[0-9]+)/i', $rem, $r_match)) {
-                            $rcpt_tag = ' (' . $r_match[1] . ')';
-                        }
-
-                        // Extract payment date
-                        if (preg_match('/[0-9]{4}-[0-9]{2}-[0-9]{2}/', $rem, $d_match)) {
-                            $formatted_pay_date = date('d M, Y', strtotime($d_match[0]));
-                            $item_month = $formatted_pay_date;
-                            $item_desc = "Payment received on " . $formatted_pay_date . $rcpt_tag;
-                        } else {
-                            $item_month = $bill['month_for'];
-                            $item_desc = "Payment received" . $rcpt_tag;
-                        }
-                    } else {
-                        // Extract month string from () or [] if present in item remark
-                        if (preg_match('/\((.*?)\)/', $rem, $m_match)) {
-                            $item_month = trim($m_match[1]);
-                            $rem = trim(str_replace($m_match[0], '', $rem));
-                        } elseif (preg_match('/\[(.*?)\]/', $rem, $m_match)) {
-                            $item_month = trim($m_match[1]);
-                            $rem = trim(str_replace($m_match[0], '', $rem));
-                        }
-
-                        // Extract amount from : ₹ or :
-                        if (strpos($rem, ': ₹') !== false) {
-                            $parts = explode(': ₹', $rem);
-                            $item_desc = trim($parts[0]);
-                            $item_amt = '₹ ' . trim($parts[1]);
-                        } elseif (strpos($rem, ':') !== false) {
-                            $parts = explode(':', $rem);
-                            $item_desc = trim($parts[0]);
-                            $item_amt = '₹ ' . trim($parts[1]);
-                        } else {
-                            $item_desc = trim($rem);
-                            $item_amt = '₹ ' . number_format($bill['amount'], 2);
-                        }
-
-                        // Clean up description if any residual amounts were left in description string
-                        if (preg_match('/₹\s*[0-9\.,]+/', $item_desc, $amt_match)) {
-                            $item_desc = trim(str_replace($amt_match[0], '', $item_desc));
-                        }
-
-                        if (empty($item_desc)) $item_desc = "Tuition Fee";
-                    }
-                    ?>
-                    <tr style="<?php echo $is_payment_row ? 'background: #f0fdf4; border-bottom: 1px solid #bbf7d0;' : ''; ?>">
-                        <td class="text-center" style="<?php echo $is_payment_row ? 'color: #15803d; font-weight: 800;' : ''; ?>"><?php echo $sno++; ?></td>
-                        <td style="font-weight: 700; color: <?php echo $is_payment_row ? '#15803d' : '#1a237e'; ?>;">
-                            <?php if ($is_payment_row): ?><i class="fas fa-check-circle" style="margin-right: 6px; color: #16a34a;"></i><?php endif; ?>
-                            <?php echo htmlspecialchars($item_desc); ?>
+                foreach ($parsed_items as $item):
+                    if ($item['is_payment']):
+                        $pinfo = $item['pay_info'];
+                        $mtype = $pinfo['mode_type'];
+                        $mlabel = $pinfo['mode_label'];
+                        $txid = $pinfo['txn_id'];
+                ?>
+                    <tr style="background: #f0fdf4; border-bottom: 1px solid #bbf7d0;">
+                        <td class="text-center" style="color: #15803d; font-weight: 800; vertical-align: middle;"><?php echo $sno++; ?></td>
+                        <td style="font-weight: 700; color: #15803d; vertical-align: middle;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <i class="fas fa-check-circle" style="color: #16a34a; font-size: 0.95rem;"></i>
+                                    <span>Payment Received</span>
+                                    <?php if (!empty($pinfo['rcpt_id'])): ?>
+                                        <span class="rcpt-badge"><i class="fas fa-receipt"></i> Rcpt #<?php echo $pinfo['rcpt_id']; ?></span>
+                                    <?php endif; ?>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                                    <span class="pay-mode-badge <?php echo ($mtype === 'online' ? 'pay-mode-online' : ($mtype === 'cash' ? 'pay-mode-cash' : ($mtype === 'bank' ? 'pay-mode-bank' : 'pay-mode-other'))); ?>">
+                                        <?php if ($mtype === 'online'): ?>
+                                            <i class="fas fa-bolt"></i> <?php echo htmlspecialchars($mlabel); ?>
+                                        <?php elseif ($mtype === 'cash'): ?>
+                                            <i class="fas fa-money-bill-wave"></i> <?php echo htmlspecialchars($mlabel); ?>
+                                        <?php else: ?>
+                                            <i class="fas fa-university"></i> <?php echo htmlspecialchars($mlabel); ?>
+                                        <?php endif; ?>
+                                    </span>
+                                    <?php if (!empty($txid)): ?>
+                                        <span class="txn-ref-badge" title="Razorpay Payment ID"><?php echo htmlspecialchars($txid); ?></span>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
                         </td>
-                        <td style="font-weight: 700; color: <?php echo $is_payment_row ? '#166534' : '#2563eb'; ?>;">
-                            <?php echo htmlspecialchars($item_month); ?>
+                        <td style="font-weight: 700; color: #166534; vertical-align: middle;">
+                            <?php echo htmlspecialchars($item['month']); ?>
                         </td>
-                        <td class="text-right" style="font-weight: 800; color: <?php echo $is_payment_row ? '#15803d' : '#b71c1c'; ?>;">
-                            <?php echo htmlspecialchars($item_amt); ?>
+                        <td class="text-right" style="font-weight: 800; color: #15803d; font-size: 0.95rem; vertical-align: middle;">
+                            <?php echo htmlspecialchars($item['amount_formatted']); ?>
                         </td>
                     </tr>
-                    <?php
-                }
+                <?php else: ?>
+                    <tr>
+                        <td class="text-center" style="vertical-align: middle;"><?php echo $sno++; ?></td>
+                        <td style="font-weight: 700; color: #1a237e; vertical-align: middle;">
+                            <?php echo htmlspecialchars($item['desc']); ?>
+                        </td>
+                        <td style="font-weight: 700; color: #2563eb; vertical-align: middle;">
+                            <?php echo htmlspecialchars($item['month']); ?>
+                        </td>
+                        <td class="text-right" style="font-weight: 800; color: #b71c1c; vertical-align: middle;">
+                            <?php echo htmlspecialchars($item['amount_formatted']); ?>
+                        </td>
+                    </tr>
+                <?php 
+                    endif;
+                endforeach; 
                 ?>
                 <?php if ($fine_amount > 0): ?>
                     <tr style="background: #fff7ed;">
@@ -539,20 +794,43 @@ $logo_src = file_exists($logo_path) ? 'data:image/png;base64,' . base64_encode(f
             </tbody>
         </table>
 
-        <?php
-        $total_payable = (float)$bill['amount'] + (float)$fine_amount;
-        $words_payable = amountToWords($total_payable);
-        ?>
-
-        <!-- Total Amount Strip -->
-        <div class="total-strip">
-            <div class="total-label">Total Amount Due</div>
-            <div class="total-value">₹ <?php echo number_format($total_payable, 2); ?></div>
+        <!-- Total Strip -->
+        <div class="total-strip <?php echo ($remaining_balance <= 0 ? 'is-paid' : ''); ?>" style="margin-top: 20px; <?php echo ($remaining_balance <= 0 ? 'background: #f0fdf4; border-color: #bbf7d0;' : ''); ?>">
+            <div>
+                <span class="total-label" style="<?php echo ($remaining_balance <= 0 ? 'color: #166534;' : ''); ?>">
+                    <?php if ($remaining_balance <= 0): ?>
+                        <i class="fas fa-check-circle" style="color:#16a34a; margin-right:6px;"></i> Paid in Full (कुल भुगतान):
+                    <?php elseif ($total_paid_so_far > 0): ?>
+                        <i class="fas fa-exclamation-circle" style="color:#dc2626; margin-right:6px;"></i> Remaining Balance Due (शेष बकाया राशि):
+                    <?php else: ?>
+                        <i class="fas fa-receipt" style="color:#dc2626; margin-right:6px;"></i> Total Amount Due (कुल बकाया राशि):
+                    <?php endif; ?>
+                </span>
+                <?php if ($total_paid_so_far > 0): ?>
+                    <div style="font-size: 0.8rem; font-weight: 600; color: #475569; margin-top: 4px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+                        <span>Billed: ₹<?php echo number_format($total_billed_amount, 2); ?></span>
+                        <span>•</span>
+                        <span style="color: #15803d; font-weight: 700;">Paid: -₹<?php echo number_format($total_paid_so_far, 2); ?></span>
+                        <?php foreach ($payment_records as $prec): ?>
+                            <span class="pay-mode-badge <?php echo ($prec['mode_type'] === 'online' ? 'pay-mode-online' : 'pay-mode-cash'); ?>" style="font-size: 0.65rem; padding: 1px 6px;">
+                                <?php echo htmlspecialchars($prec['mode_label']); ?>
+                            </span>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+            <div class="total-value" style="color: <?php echo ($remaining_balance > 0 ? '#dc2626' : '#15803d'); ?>;">
+                ₹ <?php echo number_format(max(0, $remaining_balance), 2); ?>
+            </div>
         </div>
 
         <!-- Amount in Words -->
         <div class="words-block">
-            Amount due in words: <strong><?php echo $words_payable; ?></strong>
+            <?php if ($remaining_balance > 0): ?>
+                Remaining balance due in words: <strong><?php echo amountToWords($remaining_balance); ?></strong>
+            <?php else: ?>
+                Invoice payment status: <strong>Paid in Full (Zero balance due)</strong>
+            <?php endif; ?>
         </div>
 
     </div> <!-- Close #receiptContainer -->

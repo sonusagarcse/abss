@@ -40,12 +40,43 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['edit_bill'])) {
     $remark = trim($_POST['remark']);
     $status = trim($_POST['status']);
 
+    // Fetch existing bill to protect against wiping out recorded payments or paid status
+    $curr_bill_stmt = $conn->prepare("SELECT * FROM fees_generated WHERE id = ?");
+    $curr_bill_stmt->bind_param("i", $bill_id);
+    $curr_bill_stmt->execute();
+    $curr_bill = $curr_bill_stmt->get_result()->fetch_assoc();
+
+    if ($curr_bill) {
+        // If current bill already has payments recorded in remark, preserve them if missing in edit
+        if (preg_match_all('/(Payment received on [^\(]+\(-₹[0-9\.,]+\)\s*(?:\(Rcpt\s*#?[0-9]+\))?)/i', $curr_bill['remark'], $pay_matches)) {
+            foreach ($pay_matches[0] as $pm) {
+                if (stripos($remark, $pm) === false) {
+                    $remark .= " | " . $pm;
+                }
+            }
+        }
+        // Preserve rebate tags if missing
+        if (preg_match_all('/(Fee rebate\/waiver on [^\(]+\(-₹[0-9\.,]+\)\s*(?:\(Rebate\s*#?[0-9]+\))?)/i', $curr_bill['remark'], $reb_matches)) {
+            foreach ($reb_matches[0] as $rm) {
+                if (stripos($remark, $rm) === false) {
+                    $remark .= " | " . $rm;
+                }
+            }
+        }
+        
+        // If amount was edited to 0, mark as paid
+        if ($amount <= 0) {
+            $status = 'paid';
+            $amount = 0.00;
+        }
+    }
+
     $stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, month_for = ?, remark = ?, status = ? WHERE id = ?");
     $stmt->bind_param("dsssi", $amount, $month_for, $remark, $status, $bill_id);
     if ($stmt->execute()) {
         $msg = "Invoice #$bill_id updated successfully.";
         if (function_exists('log_activity')) {
-            log_activity('bill_edited', "Edited invoice #$bill_id: amount ₹$amount, month: $month_for");
+            log_activity('bill_edited', "Edited invoice #$bill_id: amount ₹$amount, month: $month_for, status: $status");
         }
     } else {
         $err = "Failed to update invoice #$bill_id.";
@@ -166,9 +197,10 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
                     $bill_amt = (float)$bill['amount'];
                     $existing_rem = trim($bill['remark'] ?? '');
 
+                    $mode_short = (stripos($method, 'online') !== false || stripos($method, 'razorpay') !== false || stripos($method, 'upi') !== false) ? 'Online' : (stripos($method, 'cash') !== false ? 'Cash' : $method);
                     if ($rem_pay >= $bill_amt) {
                         // Fully cleared this bill
-                        $payment_tag = "Payment received on $date (-₹" . number_format($bill_amt, 2) . ") (Rcpt #$pay_id)";
+                        $payment_tag = "Payment received via $mode_short on $date (-₹" . number_format($bill_amt, 2) . ") (Rcpt #$pay_id)";
                         $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $payment_tag) : $payment_tag;
                         
                         $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = 0, status = 'paid', remark = ? WHERE id = ?");
@@ -179,7 +211,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
                     } else {
                         // Partial payment towards this bill
                         $new_bill_amt = round($bill_amt - $rem_pay, 2);
-                        $payment_tag = "Payment received on $date (-₹" . number_format($rem_pay, 2) . ") (Rcpt #$pay_id)";
+                        $payment_tag = "Payment received via $mode_short on $date (-₹" . number_format($rem_pay, 2) . ") (Rcpt #$pay_id)";
                         $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $payment_tag) : $payment_tag;
                         
                         $u_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = 'unpaid', remark = ? WHERE id = ?");
@@ -280,9 +312,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
             $existing_q = $conn->query("SELECT id, amount, remark, month_for FROM fees_generated WHERE student_id = $sid AND status = 'unpaid' ORDER BY id DESC LIMIT 1");
             $existing = $existing_q->fetch_assoc();
 
+            $charge_label = (empty($remark) ? $fee_type : $remark) . " [" . $month_for_full . "]: ₹" . number_format($amount, 2);
+
             if ($existing) {
-                $new_amount = $existing['amount'] + $amount;
-                $new_remark = $existing['remark'] . (empty($remark) ? "" : " | " . $remark . " [" . $month_for_full . "]: ₹" . number_format($amount, 2));
+                // If student ALREADY has an unpaid bill, ALWAYS work on the same invoice!
+                $new_amount = (float)$existing['amount'] + (float)$amount;
+                $existing_rem = trim($existing['remark'] ?? '');
+                $new_remark = !empty($existing_rem) ? ($existing_rem . " | " . $charge_label) : ("Manual Bill. " . $charge_label);
+                
                 $new_month = $existing['month_for'];
                 if (strpos($new_month, $month_for_full) === false) {
                     $new_month .= ", " . $month_for_full;
@@ -294,7 +331,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['generate_manual_fee'])
                 $invoice_id = $existing['id'];
                 $msg = "Successfully added ₹" . number_format($amount, 2) . " to $st_name's existing unpaid invoice.";
             } else {
-                $final_remark = "Manual Bill. " . $remark . " [" . $month_for_full . "]: ₹" . number_format($amount, 2);
+                // If completely paid (no unpaid bill), create a new invoice
+                $final_remark = "Manual Bill. " . $charge_label;
                 $insert_stmt = $conn->prepare("INSERT INTO fees_generated (student_id, amount, month_for, billing_date, remark, status) VALUES (?, ?, ?, ?, ?, 'unpaid')");
                 $insert_stmt->bind_param("idsss", $sid, $amount, $month_for_full, $billing_date, $final_remark);
                 $insert_stmt->execute();
@@ -426,7 +464,7 @@ if (isset($_GET['collect_offline'])) {
             $stmt->bind_param("idsss", $sid, $total_amount, $date, $month, $method);
             $stmt->execute();
             $pay_id = $conn->insert_id;
-            $payment_tag = "Payment received on $date (-₹" . number_format($total_amount, 2) . ") (Rcpt #$pay_id)";
+            $payment_tag = "Payment received via Cash on $date (-₹" . number_format($total_amount, 2) . ") (Rcpt #$pay_id)";
             $new_remark = !empty($bill['remark']) ? ($bill['remark'] . " | " . $payment_tag) : $payment_tag;
             $conn->query("UPDATE fees_generated SET amount = 0, status = 'paid', remark = '" . $conn->real_escape_string($new_remark) . "' WHERE id = $bill_id");
             $conn->commit();
@@ -481,18 +519,13 @@ while($s = $students_res->fetch_assoc()) {
     $students_list[] = $s;
 }
 
-// Fetch payments log (All non-Razorpay payment logs: Cash, Offline, Admin entries)
+// Fetch payments log (All payment methods: Cash, Online Razorpay, Offline entries)
 $payments = $conn->query("
-    SELECT f.*, s.name, s.parent_name 
+    SELECT f.*, s.name, s.parent_name, s.reg_no 
     FROM fee_payments f 
     JOIN students s ON f.student_id = s.id 
     WHERE (s.status = 'active' OR s.status IS NULL)
-      AND NOT (
-          f.payment_method LIKE '%Razorpay%' 
-          OR f.payment_method LIKE '%pay_%' 
-          OR f.payment_method LIKE '%rzp_%'
-      )
-    ORDER BY f.created_at DESC, f.id DESC LIMIT 10
+    ORDER BY f.created_at DESC, f.id DESC LIMIT 25
 ");
 
 // Fetch Razorpay Online payments with comprehensive student details
@@ -1456,11 +1489,32 @@ if (!empty($settings['tuition_modes'])) {
                                                             (Base: ₹<?php echo number_format($b['amount'], 2); ?> + Fine: ₹<?php echo number_format($fine_amount, 2); ?>)
                                                         </div>
                                                     <?php endif; ?>
+                                                    <?php
+                                                    // Check if partial payments exist in remark
+                                                    $has_payment_in_rem = (stripos($b['remark'] ?? '', 'payment received') !== false || stripos($b['remark'] ?? '', 'partial payment') !== false || strpos($b['remark'] ?? '', '-₹') !== false);
+                                                    $b_paid_amt = 0;
+                                                    if ($has_payment_in_rem && preg_match_all('/\(-?\s*[₹Rs\.]*\s*([0-9\.,]+)\)/i', $b['remark'], $p_matches)) {
+                                                        foreach ($p_matches[1] as $pm) {
+                                                            $b_paid_amt += (float)str_replace(',', '', $pm);
+                                                        }
+                                                    }
+                                                    $b_mode_tag = (stripos($b['remark'] ?? '', 'online') !== false || stripos($b['remark'] ?? '', 'razorpay') !== false || stripos($b['remark'] ?? '', 'upi') !== false) ? 'ONLINE' : 'CASH';
+                                                    ?>
+                                                    <?php if ($b_paid_amt > 0): ?>
+                                                        <div style="font-size:0.7rem; font-weight:800; color:#15803d; margin-top:2px;">
+                                                            <i class="fas fa-check-circle"></i> Paid: ₹<?php echo number_format($b_paid_amt, 2); ?>
+                                                            <span class="badge" style="background:<?php echo $b_mode_tag === 'ONLINE' ? '#e0f2fe; color:#0369a1;' : '#f1f5f9; color:#475569;'; ?> font-size:0.62rem; padding:1px 5px; border-radius:3px; margin-left:2px; font-weight:800;"><?php echo $b_mode_tag; ?></span>
+                                                        </div>
+                                                    <?php endif; ?>
                                                     <small class="bill-month-for" style="color:var(--portal-blue); font-weight:700;"><?php echo htmlspecialchars($b['month_for']); ?></small>
                                                 </td>
                                                 <td>
                                                     <div class="bill-action-group" style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                                                        <span class="status-badge status-<?php echo $b['status']; ?>"><?php echo $b['status']; ?></span>
+                                                        <?php if ($b['status'] === 'unpaid' && $b_paid_amt > 0): ?>
+                                                            <span class="status-badge" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; font-weight:800; font-size:0.7rem;">PARTIALLY PAID</span>
+                                                        <?php else: ?>
+                                                            <span class="status-badge status-<?php echo $b['status']; ?>"><?php echo $b['status']; ?></span>
+                                                        <?php endif; ?>
                                                         
                                                         <a href="view_bill.php?id=<?php echo $b['id']; ?>" class="btn-quick-collect" title="View Bill">
                                                             <i class="fas fa-eye"></i> View
@@ -1687,9 +1741,17 @@ if (!empty($settings['tuition_modes'])) {
                                                         <?php endif; ?>
                                                     </div>
                                                     <div style="display:flex; align-items:center; justify-content:space-between; gap:6px; margin-top:2px;">
-                                                        <small style="color:#64748b;"><i class="fas fa-wallet"></i> <?php echo htmlspecialchars($p['payment_method']); ?></small>
+                                                        <small style="color:#64748b;">
+                                                            <?php if (stripos($p['payment_method'], 'Razorpay') !== false || stripos($p['payment_method'], 'Online') !== false || stripos($p['payment_method'], 'pay_') !== false): ?>
+                                                                <span style="background:#e0f2fe; color:#0369a1; padding:2px 7px; border-radius:5px; font-weight:800; font-size:0.72rem; display:inline-flex; align-items:center; gap:4px;">
+                                                                    <i class="fas fa-bolt" style="color:#0284c7;"></i> Online (Razorpay)
+                                                                </span>
+                                                            <?php else: ?>
+                                                                <i class="fas fa-wallet" style="color:#64748b;"></i> <?php echo htmlspecialchars($p['payment_method']); ?>
+                                                            <?php endif; ?>
+                                                        </small>
                                                         <a href="receipt.php?id=<?php echo $p['id']; ?>" target="_blank" class="btn-quick-collect" style="padding:2px 7px; font-size:0.72rem; min-height:24px;" title="Print Receipt">
-                                                            <i class="fas fa-receipt"></i>
+                                                            <i class="fas fa-receipt"></i> Receipt
                                                         </a>
                                                     </div>
                                                 </td>

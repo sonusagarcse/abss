@@ -834,4 +834,77 @@ function get_invoice_no($bill) {
     $id = isset($bill['id']) ? (int)$bill['id'] : 1;
     return 'INV' . $ym . str_pad($id, 4, '0', STR_PAD_LEFT);
 }
+
+/**
+ * Auto-reconcile student fees and payments to ensure zero mismatch between fee_payments and fees_generated.
+ * Guarantees every payment is correctly allocated and tagged in fees_generated with exact receipt ID.
+ */
+function reconcile_student_fee_ledger($student_id, $conn = null) {
+    if (!$conn) {
+        $conn = getDB();
+    }
+    $sid = (int)$student_id;
+    if ($sid <= 0) return false;
+
+    // Fetch all payments for this student
+    $pq = $conn->prepare("SELECT id, amount, payment_date, payment_method, month_for FROM fee_payments WHERE student_id = ? ORDER BY id ASC");
+    $pq->bind_param("i", $sid);
+    $pq->execute();
+    $payments = $pq->get_result();
+
+    while ($p = $payments->fetch_assoc()) {
+        $pid = (int)$p['id'];
+        $p_amt = (float)$p['amount'];
+        $p_date = $p['payment_date'];
+        $rcpt_tag = "%Rcpt #" . $pid . "%";
+
+        // Check if this payment is already tagged on any bill
+        $check_q = $conn->prepare("SELECT id FROM fees_generated WHERE student_id = ? AND remark LIKE ?");
+        $check_q->bind_param("is", $sid, $rcpt_tag);
+        $check_q->execute();
+        $is_tagged = ($check_q->get_result()->num_rows > 0);
+        $check_q->close();
+
+        if (!$is_tagged) {
+            // Find the most appropriate unpaid bill (matching month_for first, or oldest unpaid bill)
+            $clean_month = trim(explode('(', $p['month_for'])[0]);
+            $clean_month_like = "%" . $clean_month . "%";
+            
+            $target_bill = null;
+            $tb_q = $conn->prepare("SELECT id, amount, remark, status FROM fees_generated WHERE student_id = ? AND month_for LIKE ? AND status = 'unpaid' ORDER BY id ASC LIMIT 1");
+            $tb_q->bind_param("is", $sid, $clean_month_like);
+            $tb_q->execute();
+            $target_bill = $tb_q->get_result()->fetch_assoc();
+            $tb_q->close();
+
+            if (!$target_bill) {
+                // Fallback to oldest unpaid bill
+                $tb_q2 = $conn->prepare("SELECT id, amount, remark, status FROM fees_generated WHERE student_id = ? AND status = 'unpaid' ORDER BY billing_date ASC, id ASC LIMIT 1");
+                $tb_q2->bind_param("i", $sid);
+                $tb_q2->execute();
+                $target_bill = $tb_q2->get_result()->fetch_assoc();
+                $tb_q2->close();
+            }
+
+            if ($target_bill) {
+                $tb_id = (int)$target_bill['id'];
+                $curr_amt = (float)$target_bill['amount'];
+                $new_bal = max(0, $curr_amt - $p_amt);
+                $mode_short = (stripos($p['payment_method'], 'online') !== false || stripos($p['payment_method'], 'razorpay') !== false || stripos($p['payment_method'], 'upi') !== false) ? 'Online' : (stripos($p['payment_method'], 'cash') !== false ? 'Cash' : $p['payment_method']);
+                $append_tag = " | Payment received via $mode_short on $p_date (-₹" . number_format($p_amt, 2) . ") (Rcpt #$pid)";
+                $new_rem = trim($target_bill['remark']) . $append_tag;
+
+                $up_stmt = $conn->prepare("UPDATE fees_generated SET amount = ?, status = ?, remark = ? WHERE id = ?");
+                $up_stmt->bind_param("dssi", $new_bal, $new_st, $new_rem, $tb_id);
+                $up_stmt->execute();
+                $up_stmt->close();
+            }
+        }
+    }
+
+    // Safety cleanup: Any bills with amount <= 0 should be marked paid
+    $conn->query("UPDATE fees_generated SET status = 'paid', amount = 0.00 WHERE student_id = $sid AND amount <= 0 AND status = 'unpaid'");
+
+    return true;
+}
 ?>
