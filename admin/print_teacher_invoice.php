@@ -44,6 +44,41 @@ if ($pay_stmt) {
     }
 }
 
+// Fetch Attendance Details for Billing Month
+$month_for = !empty($invoice['month_for']) ? $invoice['month_for'] : date('Y-m', strtotime($invoice['issue_date']));
+$m_start = $month_for . '-01';
+$m_end = date('Y-m-t', strtotime($m_start));
+$days_in_month = (int)date('t', strtotime($m_start));
+$teacher_salary = (float)$invoice['salary'];
+$per_day_rate = $days_in_month > 0 ? round($teacher_salary / $days_in_month, 2) : 0;
+
+$t_id = (int)$invoice['teacher_id'];
+$att_res = $conn->query("
+    SELECT status, date, remarks 
+    FROM teacher_attendance 
+    WHERE teacher_id = $t_id AND date BETWEEN '$m_start' AND '$m_end'
+    ORDER BY date ASC
+");
+
+$absent_records = [];
+$half_day_records = [];
+$leave_records = [];
+$present_count = 0;
+
+if ($att_res) {
+    while ($ar = $att_res->fetch_assoc()) {
+        if ($ar['status'] === 'absent') $absent_records[] = $ar;
+        elseif ($ar['status'] === 'half_day') $half_day_records[] = $ar;
+        elseif ($ar['status'] === 'on_leave') $leave_records[] = $ar;
+        elseif ($ar['status'] === 'present') $present_count++;
+    }
+}
+
+$absent_days = count($absent_records);
+$half_days = count($half_day_records);
+$leave_days = count($leave_records);
+$att_deduction = round(($absent_days * $per_day_rate) + ($half_days * ($per_day_rate / 2)), 2);
+
 require_once __DIR__ . '/../config/db.php';
 $settings = getAllSettings();
 $school_name = $settings['school_name'] ?? 'Awasiya Bal Shikshan Sansthan';
@@ -248,9 +283,42 @@ $invoice_no = $invoice['invoice_number'];
                 <tr>
                     <td colspan="4" style="background:#fef2f2; color:#b91c1c; font-weight:800; font-size:0.85rem; text-transform:uppercase; border-top: 2px solid #e2e8f0;">Deductions & Advances (Reduces from Base)</td>
                 </tr>
+
                 <?php 
                 $sno = 2;
                 $total_deducted = 0;
+
+                // Attendance Deduction Row (if absent or half days recorded)
+                if ($att_deduction > 0 || $absent_days > 0 || $half_days > 0): 
+                    $total_deducted += $att_deduction;
+                    $att_desc_parts = [];
+                    if ($absent_days > 0) $att_desc_parts[] = $absent_days . ' Absent ' . ($absent_days > 1 ? 'Days' : 'Day');
+                    if ($half_days > 0) $att_desc_parts[] = $half_days . ' Half ' . ($half_days > 1 ? 'Days' : 'Day');
+                    if ($leave_days > 0) $att_desc_parts[] = $leave_days . ' On Leave';
+
+                    // Collect specific absent dates for clear transparency
+                    $abs_dates_str = '';
+                    if (!empty($absent_records)) {
+                        $formatted_abs_dates = array_map(function($r) { 
+                            return date('d M', strtotime($r['date'])) . (!empty($r['remarks']) ? ' (' . $r['remarks'] . ')' : ''); 
+                        }, $absent_records);
+                        $abs_dates_str = 'Off Dates: ' . implode(', ', $formatted_abs_dates);
+                    }
+                ?>
+                <tr>
+                    <td class="text-center"><?php echo $sno++; ?></td>
+                    <td style="font-weight: 700; color: #b91c1c;">
+                        <i class="fas fa-user-times"></i> Attendance Deduction (<?php echo implode(', ', $att_desc_parts); ?>)
+                        <?php if ($abs_dates_str): ?>
+                            <br><small style="color: #ef4444; font-weight: 600;"><?php echo htmlspecialchars($abs_dates_str); ?></small>
+                        <?php endif; ?>
+                        <br><small style="color: #64748b; font-weight: normal;">(Rate: ₹<?php echo number_format($per_day_rate, 2); ?>/day based on <?php echo $days_in_month; ?> days in month)</small>
+                    </td>
+                    <td><?php echo !empty($invoice['month_for']) ? date('F Y', strtotime($invoice['month_for'].'-01')) : '-'; ?></td>
+                    <td class="text-right" style="font-weight: 700; color:#b91c1c;">-₹ <?php echo number_format($att_deduction, 2); ?></td>
+                </tr>
+                <?php endif; ?>
+                <?php 
                 if(!empty($expenses)): 
                     foreach($expenses as $e): 
                         $total_deducted += $e['amount'];
@@ -264,9 +332,9 @@ $invoice_no = $invoice['invoice_number'];
                     <td><?php echo date('d M Y', strtotime($e['expense_date'])); ?></td>
                     <td class="text-right" style="font-weight: 700; color:#b91c1c;">-₹ <?php echo number_format($e['amount'], 2); ?></td>
                 </tr>
-                <?php endforeach; else: ?>
+                <?php endforeach; elseif ($total_deducted == 0): ?>
                 <tr>
-                    <td colspan="4" style="text-align: center; color: #666; font-style: italic;">No deductions or advances recorded for this payout.</td>
+                    <td colspan="4" style="text-align: center; color: #666; font-style: italic;">No deductions, absentees, or advances recorded for this payout.</td>
                 </tr>
                 <?php endif; ?>
             </tbody>

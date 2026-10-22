@@ -106,6 +106,21 @@ function runAutoMigrator($conn) {
             $conn->query("ALTER TABLE teachers ADD COLUMN department VARCHAR(100) DEFAULT NULL AFTER password");
         }
 
+        // Ensure teacher attendance table exists
+        $conn->query("CREATE TABLE IF NOT EXISTS teacher_attendance (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            teacher_id INT NOT NULL,
+            date DATE NOT NULL,
+            status ENUM('present', 'absent', 'half_day', 'on_leave') NOT NULL DEFAULT 'present',
+            remarks VARCHAR(255) DEFAULT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY uq_teacher_date (teacher_id, date),
+            INDEX idx_teacher (teacher_id),
+            INDEX idx_date (date)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+
         // 1. Check and upgrade Parent and Billing ledgers
         $check = $conn->query("SHOW COLUMNS FROM students LIKE 'parent_id'");
         if ($check && $check->num_rows == 0) {

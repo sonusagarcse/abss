@@ -2,6 +2,10 @@
 // admin/export_students_excel.php - Export Complete Student Directory to Excel (CSV with UTF-8 BOM)
 require_once 'includes/auth.php';
 
+// Turn off display_errors so notices/deprecations never corrupt CSV output
+@ini_set('display_errors', '0');
+error_reporting(0);
+
 // Check filters if passed
 $status_filter = isset($_GET['status']) ? trim($_GET['status']) : '';
 $mode_filter = isset($_GET['mode']) ? trim($_GET['mode']) : '';
@@ -41,6 +45,11 @@ $result = $conn->query($query);
 
 $filename = "ABSS_Students_Complete_Details_" . date('Y-m-d_His') . ".csv";
 
+// Clean output buffer to ensure no preceding whitespace or errors are sent
+if (ob_get_level()) {
+    ob_end_clean();
+}
+
 header('Content-Type: text/csv; charset=UTF-8');
 header('Content-Disposition: attachment; filename="' . $filename . '"');
 header('Pragma: no-cache');
@@ -51,7 +60,7 @@ $output = fopen('php://output', 'w');
 // Output UTF-8 BOM for Microsoft Excel compatibility
 fprintf($output, chr(0xEF).chr(0xBB).chr(0xBF));
 
-// CSV Header with Complete Details
+// CSV Header with Complete Details (explicit separator, enclosure, and escape for PHP 8.4+ compatibility)
 fputcsv($output, [
     'S.No.',
     'Registration No',
@@ -85,7 +94,7 @@ fputcsv($output, [
     'Medical Condition',
     'Status',
     'Registration Timestamp'
-]);
+], ",", '"', "\\");
 
 $sno = 1;
 if ($result && $result->num_rows > 0) {
@@ -127,7 +136,7 @@ if ($result && $result->num_rows > 0) {
             $row['has_medical_condition'] ? ($row['medical_condition_detail'] ?: 'Yes') : 'None',
             strtoupper($row['status'] ?? 'active'),
             $row['created_at'] ?: '—'
-        ]);
+        ], ",", '"', "\\");
     }
 }
 

@@ -4,6 +4,75 @@ require_once 'includes/auth.php';
 $msg = '';
 $err = '';
 
+// AJAX: Fetch Teacher Attendance & Salary Details for Invoice Creation
+if (isset($_GET['ajax_teacher_details']) && isset($_GET['teacher_id'])) {
+    header('Content-Type: application/json');
+    $t_id = (int)$_GET['teacher_id'];
+    $month = isset($_GET['month']) && preg_match('/^\d{4}-\d{2}$/', $_GET['month']) ? $_GET['month'] : date('Y-m');
+
+    $t_res = $conn->query("SELECT id, name, salary, designation, department FROM teachers WHERE id = $t_id");
+    if (!$t_res || $t_res->num_rows === 0) {
+        echo json_encode(['success' => false, 'message' => 'Teacher not found']);
+        exit();
+    }
+    $teacher = $t_res->fetch_assoc();
+    $base_salary = (float)$teacher['salary'];
+
+    // Month dates
+    $month_start = $month . '-01';
+    $month_end = date('Y-m-t', strtotime($month_start));
+    $days_in_month = (int)date('t', strtotime($month_start));
+
+    // Attendance breakdown for the selected month
+    $att_q = $conn->query("
+        SELECT status, COUNT(*) as count 
+        FROM teacher_attendance 
+        WHERE teacher_id = $t_id AND date BETWEEN '$month_start' AND '$month_end'
+        GROUP BY status
+    ");
+    $absent_days = 0;
+    $half_days = 0;
+    $leave_days = 0;
+    $present_days = 0;
+
+    if ($att_q) {
+        while ($ar = $att_q->fetch_assoc()) {
+            if ($ar['status'] === 'absent') $absent_days = (int)$ar['count'];
+            elseif ($ar['status'] === 'half_day') $half_days = (int)$ar['count'];
+            elseif ($ar['status'] === 'on_leave') $leave_days = (int)$ar['count'];
+            elseif ($ar['status'] === 'present') $present_days = (int)$ar['count'];
+        }
+    }
+
+    // Daily rate for deduction calculation
+    $per_day_rate = $days_in_month > 0 ? round($base_salary / $days_in_month, 2) : 0;
+    // Absent = 1 full day deduction, Half Day = 0.5 day deduction
+    $attendance_deduction = round(($absent_days * $per_day_rate) + ($half_days * ($per_day_rate / 2)), 2);
+
+    // Pending approved expenses
+    $exp_res = $conn->query("SELECT SUM(amount) as total_exp FROM teacher_expenses WHERE teacher_id = $t_id AND status = 'approved' AND invoice_id IS NULL");
+    $exp_total = (float)($exp_res ? $exp_res->fetch_assoc()['total_exp'] ?? 0 : 0);
+
+    $suggested_amount = max(0, round($base_salary - $attendance_deduction - $exp_total, 2));
+
+    echo json_encode([
+        'success' => true,
+        'teacher_id' => $t_id,
+        'month' => $month,
+        'days_in_month' => $days_in_month,
+        'base_salary' => $base_salary,
+        'per_day_rate' => $per_day_rate,
+        'absent_days' => $absent_days,
+        'half_days' => $half_days,
+        'leave_days' => $leave_days,
+        'present_days' => $present_days,
+        'attendance_deduction' => $attendance_deduction,
+        'expenses_total' => $exp_total,
+        'suggested_amount' => $suggested_amount
+    ]);
+    exit();
+}
+
 // Handle Delete Individual Payment Installment
 if (isset($_GET['delete_payment']) && isset($_GET['invoice_id'])) {
     $pay_id = (int)$_GET['delete_payment'];
@@ -110,14 +179,30 @@ if (($_SERVER["REQUEST_METHOD"] ?? '') == "POST" && isset($_POST['save_invoice']
             $invoice_number = $prefix . '0001';
         }
         
-        // Auto-calculate the amount based on salary and pending expenses
-        $t_res = $conn->query("SELECT salary FROM teachers WHERE id = $teacher_id");
-        if($t_res && $t_res->num_rows > 0) {
-            $t_sal = $t_res->fetch_assoc()['salary'];
-            $exp_res = $conn->query("SELECT SUM(amount) as total_exp FROM teacher_expenses WHERE teacher_id = $teacher_id AND status = 'approved' AND invoice_id IS NULL");
-            $exp_total = $exp_res->fetch_assoc()['total_exp'] ?? 0;
-            $amount = $t_sal - $exp_total;
-            if ($amount < 0) $amount = 0;
+        // If amount was manually entered, respect it; otherwise auto-calculate
+        if (isset($_POST['amount']) && $_POST['amount'] !== '' && is_numeric($_POST['amount'])) {
+            $amount = (float)$_POST['amount'];
+        } else {
+            $amount = 0.00;
+            $t_res = $conn->query("SELECT salary FROM teachers WHERE id = $teacher_id");
+            if($t_res && $t_res->num_rows > 0) {
+                $t_sal = (float)$t_res->fetch_assoc()['salary'];
+
+                // Calculate attendance deduction for the billing month
+                $m_start = $month_for . '-01';
+                $m_end = date('Y-m-t', strtotime($m_start));
+                $days_in_month = (int)date('t', strtotime($m_start));
+                $per_day = $days_in_month > 0 ? round($t_sal / $days_in_month, 2) : 0;
+
+                $att_absent_cnt = (int)($conn->query("SELECT COUNT(*) as c FROM teacher_attendance WHERE teacher_id = $teacher_id AND status = 'absent' AND date BETWEEN '$m_start' AND '$m_end'")->fetch_assoc()['c'] ?? 0);
+                $att_half_cnt = (int)($conn->query("SELECT COUNT(*) as c FROM teacher_attendance WHERE teacher_id = $teacher_id AND status = 'half_day' AND date BETWEEN '$m_start' AND '$m_end'")->fetch_assoc()['c'] ?? 0);
+                $att_deduction = round(($att_absent_cnt * $per_day) + ($att_half_cnt * ($per_day / 2)), 2);
+
+                $exp_res = $conn->query("SELECT SUM(amount) as total_exp FROM teacher_expenses WHERE teacher_id = $teacher_id AND status = 'approved' AND invoice_id IS NULL");
+                $exp_total = (float)($exp_res ? $exp_res->fetch_assoc()['total_exp'] ?? 0 : 0);
+
+                $amount = max(0, round($t_sal - $att_deduction - $exp_total, 2));
+            }
         }
 
         $stmt = $conn->prepare("INSERT INTO teacher_invoices (teacher_id, invoice_number, amount, paid_amount, paid_date, month_for, issue_date, due_date, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -279,9 +364,14 @@ if($teachers){
                 <h1>Invoice Generation</h1>
                 <p>Generate and manage invoices for teachers and staff payouts.</p>
             </div>
-            <button class="btn-portal" onclick="showModal()">
-                <i class="fas fa-plus"></i> Create Invoice
-            </button>
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <a href="teacher_attendance.php" class="btn-portal" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); text-decoration:none; display:inline-flex; align-items:center; gap:8px;">
+                    <i class="fas fa-calendar-check"></i> Staff Attendance
+                </a>
+                <button class="btn-portal" onclick="showModal()">
+                    <i class="fas fa-plus"></i> Create Invoice
+                </button>
+            </div>
         </div>
 
         <?php if($msg): ?>
@@ -401,11 +491,56 @@ if($teachers){
                         </div>
                     </div>
 
+                    <!-- Live Attendance & Kitna Hona Chahiye Preview Card -->
+                    <div id="attendancePreviewCard" style="display:none; background:#f8fafc; border:1.5px solid #e2e8f0; border-radius:14px; padding:14px 18px; margin-bottom:18px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <span style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.05em; font-weight:800; color:#64748b;">
+                                <i class="fas fa-calendar-check" style="color:var(--portal-blue); margin-right:4px;"></i> Attendance Summary (<span id="previewMonthDisplay"></span>)
+                            </span>
+                            <span id="previewDaysCount" style="font-size:0.75rem; color:#94a3b8; font-weight:600;"></span>
+                        </div>
+
+                        <!-- Attendance Stats: Only Present & Absent -->
+                        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-bottom:12px;">
+                            <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:10px;">
+                                <div style="width:36px; height:36px; border-radius:8px; background:#dcfce7; color:#15803d; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">
+                                    <i class="fas fa-user-check"></i>
+                                </div>
+                                <div>
+                                    <div style="font-size:0.75rem; color:#166534; font-weight:700; text-transform:uppercase;">Present</div>
+                                    <div style="font-size:1.2rem; font-weight:800; color:#15803d;" id="previewPresentDays">0 Days</div>
+                                </div>
+                            </div>
+                            <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:10px;">
+                                <div style="width:36px; height:36px; border-radius:8px; background:#fee2e2; color:#b91c1c; display:flex; align-items:center; justify-content:center; font-size:1.1rem;">
+                                    <i class="fas fa-user-times"></i>
+                                </div>
+                                <div>
+                                    <div style="font-size:0.75rem; color:#991b1b; font-weight:700; text-transform:uppercase;">Absent</div>
+                                    <div style="font-size:1.2rem; font-weight:800; color:#b91c1c;" id="previewAbsentDays">0 Days</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Kitna Hona Chahiye (Suggested Net Amount) -->
+                        <div style="background:#eff6ff; border:1.5px solid #bfdbfe; border-radius:10px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
+                            <div>
+                                <div style="font-size:0.78rem; font-weight:700; color:#1e40af; text-transform:uppercase; letter-spacing:0.03em;">
+                                    <i class="fas fa-calculator" style="margin-right:4px;"></i> Kitna hona chahiye:
+                                </div>
+                                <div id="previewKitnaHonaChahiye" style="font-size:1.35rem; font-weight:900; color:#1d4ed8; line-height:1.2; margin-top:2px;">₹0.00</div>
+                            </div>
+                            <button type="button" class="btn btn-sm" onclick="applyCalculatedAmount()" style="background:#2563eb; color:#fff; border:none; padding:8px 14px; border-radius:8px; font-weight:700; font-size:0.8rem; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                                <i class="fas fa-magic"></i> Auto Fill Amount
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="portal-form-row">
                         <div class="portal-input-group">
-                            <label>Amount (₹)</label>
-                            <input type="number" name="amount" id="amount" step="0.01" placeholder="Auto-calculated" readonly style="background-color: #f8f9fa; border-color: #eef2ff; color: #9aa5ce;">
-                            <small style="color: #666; font-size: 0.8rem;">Calculated automatically as (Salary - Expenses) on Save</small>
+                            <label>Amount (₹) <span style="color:red">*</span></label>
+                            <input type="number" name="amount" id="amount" step="0.01" placeholder="Enter amount or use calculated" required style="font-weight:800; font-size:1.05rem; color:#1e293b;">
+                            <small style="color: #64748b; font-size: 0.78rem;">Manual enter allowed. Click "Auto Fill Amount" above to use calculated amount.</small>
                         </div>
                         <div class="portal-input-group">
                             <label>Paid Amount (₹)</label>
@@ -548,6 +683,14 @@ if($teachers){
     </main>
 
     <script>
+        let currentKitnaHonaChahiye = 0;
+
+        function applyCalculatedAmount() {
+            const amtInput = document.getElementById('amount');
+            amtInput.value = Number(currentKitnaHonaChahiye).toFixed(2);
+            amtInput.focus();
+        }
+
         function showModal() {
             document.getElementById('invoiceModal').style.display = 'flex';
             document.getElementById('invoice_id').value = '';
@@ -558,6 +701,9 @@ if($teachers){
             document.getElementById('paid_date').value = '';
             document.getElementById('month_for').value = '<?php echo date('Y-m'); ?>';
             document.getElementById('status').value = 'unpaid';
+            document.getElementById('amount').value = '';
+            document.getElementById('attendancePreviewCard').style.display = 'none';
+            currentKitnaHonaChahiye = 0;
         }
 
         function hideModal() {
@@ -576,7 +722,68 @@ if($teachers){
             document.getElementById('issue_date').value = data.issue_date;
             document.getElementById('due_date').value = data.due_date || '';
             document.getElementById('status').value = data.status;
+
+            // Trigger preview for this teacher and month
+            fetchTeacherDetails();
         }
+
+        // Live Fetch Attendance & Kitna Hona Chahiye
+        function fetchTeacherDetails() {
+            const teacherId = document.getElementById('teacher_id').value;
+            const month = document.getElementById('month_for').value;
+            const card = document.getElementById('attendancePreviewCard');
+            const amountInput = document.getElementById('amount');
+            const isEdit = !!document.getElementById('invoice_id').value;
+
+            if (!teacherId) {
+                card.style.display = 'none';
+                return;
+            }
+
+            fetch(`teacher_invoices.php?ajax_teacher_details=1&teacher_id=${teacherId}&month=${encodeURIComponent(month)}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.success) {
+                        card.style.display = 'block';
+                        currentKitnaHonaChahiye = Number(data.suggested_amount) || 0;
+
+                        const monthDisplay = document.getElementById('previewMonthDisplay');
+                        if (monthDisplay) monthDisplay.textContent = month;
+
+                        const daysDisplay = document.getElementById('previewDaysCount');
+                        if (daysDisplay) daysDisplay.textContent = `${data.days_in_month} Days in Month`;
+
+                        document.getElementById('previewPresentDays').textContent = `${data.present_days} Days`;
+
+                        let absentStr = `${data.absent_days} Days`;
+                        if (data.half_days > 0) {
+                            absentStr += ` (+${data.half_days} half)`;
+                        }
+                        document.getElementById('previewAbsentDays').textContent = absentStr;
+                        document.getElementById('previewKitnaHonaChahiye').textContent = '₹' + currentKitnaHonaChahiye.toFixed(2);
+
+                        // If creating new invoice, auto-fill amount if not already filled or 0
+                        if (!isEdit && (!amountInput.value || amountInput.value == '0' || amountInput.value == '0.00')) {
+                            amountInput.value = currentKitnaHonaChahiye.toFixed(2);
+                        }
+                    } else {
+                        card.style.display = 'none';
+                    }
+                })
+                .catch(err => {
+                    console.error('Error fetching teacher details:', err);
+                    card.style.display = 'none';
+                });
+        }
+
+        // Listen for changes on teacher_id and month_for
+        document.addEventListener('DOMContentLoaded', function() {
+            const tSel = document.getElementById('teacher_id');
+            const mInput = document.getElementById('month_for');
+            if (tSel) tSel.addEventListener('change', fetchTeacherDetails);
+            if (mInput) mInput.addEventListener('change', fetchTeacherDetails);
+        });
+
 
         let currentPayBalance = 0;
 

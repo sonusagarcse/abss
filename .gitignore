@@ -7,3 +7,5 @@ uploads/*
 !uploads/.gitkeep
 .agents/*
 AGENTS.md
+/mobile_app
+api/v1

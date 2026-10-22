@@ -74,13 +74,36 @@ $total_students = count($students_list);
         }
         .stat-pill {
             background: #ffffff;
-            border: 1px solid #eef2f6;
+            border: 2px solid #eef2f6;
             border-radius: 18px;
             padding: 14px 16px;
             display: flex;
             align-items: center;
             gap: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.02);
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.25s ease;
+        }
+        .stat-pill:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+            border-color: #cbd5e1;
+        }
+        .stat-pill.pill-selected-present {
+            border-color: #16a34a !important;
+            background: #f0fdf4 !important;
+            box-shadow: 0 4px 16px rgba(22, 163, 74, 0.2) !important;
+        }
+        .stat-pill.pill-selected-absent {
+            border-color: #dc2626 !important;
+            background: #fef2f2 !important;
+            box-shadow: 0 4px 16px rgba(220, 38, 38, 0.2) !important;
+        }
+        .stat-pill.pill-selected-late {
+            border-color: #d97706 !important;
+            background: #fff7ed !important;
+            box-shadow: 0 4px 16px rgba(217, 119, 6, 0.2) !important;
         }
         .stat-pill .icon {
             width: 38px;
@@ -91,6 +114,10 @@ $total_students = count($students_list);
             justify-content: center;
             font-size: 1rem;
             flex-shrink: 0;
+            transition: transform 0.2s;
+        }
+        .stat-pill:hover .icon {
+            transform: scale(1.1);
         }
 
         .action-toolbar {
@@ -298,30 +325,30 @@ $total_students = count($students_list);
             </div>
         <?php endif; ?>
 
-        <!-- Quick Summary Stats Ribbon -->
+        <!-- Quick Summary Stats Ribbon (Click any status pill to filter students) -->
         <div class="stats-ribbon">
-            <div class="stat-pill">
+            <div class="stat-pill" id="pillAll" onclick="toggleStudentStatusFilter(null)" title="Click to view all active students">
                 <div class="icon" style="background: #eef2ff; color: #0d47a1;"><i class="fas fa-user-graduate"></i></div>
                 <div>
                     <strong style="display: block; font-size: 1.1rem; color: #0f172a;"><?= $total_students ?></strong>
                     <span style="font-size: 0.75rem; color: #64748b; font-weight: 700;">Total Active</span>
                 </div>
             </div>
-            <div class="stat-pill">
+            <div class="stat-pill" id="pillPresent" onclick="toggleStudentStatusFilter('present')" title="Click to filter Present students">
                 <div class="icon" style="background: #f0fdf4; color: #16a34a;"><i class="fas fa-user-check"></i></div>
                 <div>
                     <strong style="display: block; font-size: 1.1rem; color: #16a34a;" id="statPresentCount"><?= $present_count ?></strong>
                     <span style="font-size: 0.75rem; color: #64748b; font-weight: 700;">Present</span>
                 </div>
             </div>
-            <div class="stat-pill">
+            <div class="stat-pill" id="pillAbsent" onclick="toggleStudentStatusFilter('absent')" title="Click to filter Absent students">
                 <div class="icon" style="background: #fef2f2; color: #dc2626;"><i class="fas fa-user-times"></i></div>
                 <div>
                     <strong style="display: block; font-size: 1.1rem; color: #dc2626;" id="statAbsentCount"><?= $absent_count ?></strong>
                     <span style="font-size: 0.75rem; color: #64748b; font-weight: 700;">Absent</span>
                 </div>
             </div>
-            <div class="stat-pill">
+            <div class="stat-pill" id="pillLate" onclick="toggleStudentStatusFilter('late')" title="Click to filter Late students">
                 <div class="icon" style="background: #fff7ed; color: #d97706;"><i class="fas fa-user-clock"></i></div>
                 <div>
                     <strong style="display: block; font-size: 1.1rem; color: #d97706;" id="statLateCount"><?= $late_count ?></strong>
@@ -473,20 +500,72 @@ $total_students = count($students_list);
     </main>
 
     <script>
+        let currentStudentStatusFilter = null;
+
+        function toggleStudentStatusFilter(status) {
+            if (currentStudentStatusFilter === status) {
+                currentStudentStatusFilter = null;
+            } else {
+                currentStudentStatusFilter = status;
+            }
+            updateStudentPillStyles();
+            applyAllStudentFilters();
+        }
+
+        function updateStudentPillStyles() {
+            const pills = {
+                'present': { id: 'pillPresent', class: 'pill-selected-present' },
+                'absent': { id: 'pillAbsent', class: 'pill-selected-absent' },
+                'late': { id: 'pillLate', class: 'pill-selected-late' }
+            };
+
+            for (const [st, meta] of Object.entries(pills)) {
+                const el = document.getElementById(meta.id);
+                if (!el) continue;
+                if (currentStudentStatusFilter === st) {
+                    el.classList.add(meta.class);
+                } else {
+                    el.classList.remove(meta.class);
+                }
+            }
+
+            const pillAll = document.getElementById('pillAll');
+            if (pillAll) {
+                if (currentStudentStatusFilter === null) {
+                    pillAll.style.borderColor = '#2563eb';
+                    pillAll.style.background = '#eff6ff';
+                } else {
+                    pillAll.style.borderColor = '#eef2f6';
+                    pillAll.style.background = '#ffffff';
+                }
+            }
+        }
+
         function markAllStatus(statusVal) {
             const radios = document.querySelectorAll(`input[type="radio"][value="${statusVal}"]`);
             radios.forEach(r => r.checked = true);
             updateCounters();
+            applyAllStudentFilters();
         }
 
         function filterStudents() {
-            const input = document.getElementById('studentSearch');
-            const filter = input.value.toLowerCase().trim();
+            applyAllStudentFilters();
+        }
+
+        function applyAllStudentFilters() {
+            const searchInput = document.getElementById('studentSearch');
+            const searchFilter = (searchInput ? searchInput.value : '').toLowerCase().trim();
             const items = document.querySelectorAll('.student-item');
 
             items.forEach(item => {
                 const searchStr = item.getAttribute('data-name') || '';
-                if (searchStr.includes(filter)) {
+                const checkedRadio = item.querySelector('input[type="radio"]:checked');
+                const itemStatus = checkedRadio ? checkedRadio.value : 'present';
+
+                const matchesSearch = !searchFilter || searchStr.includes(searchFilter);
+                const matchesStatus = !currentStudentStatusFilter || itemStatus === currentStudentStatusFilter;
+
+                if (matchesSearch && matchesStatus) {
                     item.style.display = '';
                 } else {
                     item.style.display = 'none';
@@ -523,7 +602,14 @@ $total_students = count($students_list);
             const sameInputs = document.querySelectorAll(`input[name="${name}"][value="${val}"]`);
             sameInputs.forEach(i => i.checked = true);
             updateCounters();
+            applyAllStudentFilters();
         }
+
+        // Initialize counters and pills on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            updateCounters();
+            updateStudentPillStyles();
+        });
     </script>
 </body>
 </html>

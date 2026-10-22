@@ -266,7 +266,10 @@ if ($distinct_depts_res) {
                 </h1>
                 <p style="margin: 4px 0 0; color: #64748b; font-size: 0.95rem;">Manage school teachers, faculty members, and administrative staff profiles.</p>
             </div>
-            <div class="action-bar-right">
+            <div class="action-bar-right" style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <a href="teacher_attendance.php" class="btn-portal" style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); text-decoration:none; display:inline-flex; align-items:center; gap:8px;">
+                    <i class="fas fa-calendar-check"></i> Staff Attendance
+                </a>
                 <button class="btn-portal" onclick="showModal()">
                     <i class="fas fa-user-plus"></i> Add Teacher & Staff
                 </button>
@@ -350,6 +353,9 @@ if ($distinct_depts_res) {
                                         <i class="fas fa-user-check"></i>
                                     </a>
                                 <?php endif; ?>
+                                <a href="teacher_attendance.php?teacher_id=<?php echo $row['id']; ?>" class="btn-action-icon btn-act-edit" style="background:#ecfdf5; color:#059669;" title="View & Mark Attendance">
+                                    <i class="fas fa-calendar-check"></i>
+                                </a>
                                 <button class="btn-action-icon btn-act-edit" onclick='editTeacher(<?php echo json_encode($row); ?>)' title="Edit Profile">
                                     <i class="fas fa-edit"></i>
                                 </button>
