@@ -3,6 +3,9 @@
 
 require_once 'includes/auth.php';
 
+// Asset Exclusion Filter for Analytics & Stream
+$asset_exclude_sql = "page_visited NOT LIKE '%.png%' AND page_visited NOT LIKE '%.jpg%' AND page_visited NOT LIKE '%.jpeg%' AND page_visited NOT LIKE '%.gif%' AND page_visited NOT LIKE '%.webp%' AND page_visited NOT LIKE '%.svg%' AND page_visited NOT LIKE '%.ico%' AND page_visited NOT LIKE '%.css%' AND page_visited NOT LIKE '%.js%' AND page_visited NOT LIKE '%/assets/%' AND page_visited NOT LIKE '%/uploads/%' AND page_visited NOT LIKE '%/images/%' AND page_visited NOT LIKE '%sw.js%'";
+
 // ----------------------------------------------------
 // 1. Overall & Realtime Traffic Aggregates
 // ----------------------------------------------------
@@ -160,6 +163,7 @@ if ($roles_res) {
 $popular_pages = $conn->query("
     SELECT page_visited, COUNT(*) AS hits, COUNT(DISTINCT ip_address) as unique_ips
     FROM site_visitors 
+    WHERE $asset_exclude_sql
     GROUP BY page_visited 
     ORDER BY hits DESC LIMIT 8
 ");
@@ -217,6 +221,7 @@ $audit_logs = $audit_stmt->get_result();
 // Latest visitor stream logs for multi-tab pagination
 $latest_visitors = $conn->query("
     SELECT * FROM site_visitors 
+    WHERE $asset_exclude_sql
     ORDER BY visited_at DESC LIMIT 150
 ");
 ?>

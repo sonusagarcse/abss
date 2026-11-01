@@ -874,6 +874,55 @@ function runAutoMigrator($conn) {
             INDEX idx_caller_id (caller_id)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
 
+
+        // 20. IP Threat Detection & Auto-Blocking Tables
+        $checkIpThreat = $conn->query("SHOW TABLES LIKE 'ip_threat_log'");
+        if ($checkIpThreat && $checkIpThreat->num_rows == 0) {
+            $conn->query("CREATE TABLE IF NOT EXISTS ip_threat_log (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                ip_address VARCHAR(45) NOT NULL,
+                request_uri VARCHAR(500) NOT NULL,
+                user_agent VARCHAR(500) DEFAULT '',
+                request_method VARCHAR(10) DEFAULT 'GET',
+                is_suspicious TINYINT(1) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_ip_time (ip_address, created_at),
+                INDEX idx_suspicious (is_suspicious, created_at)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            $conn->query("CREATE TABLE IF NOT EXISTS ip_blocked (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                ip_address VARCHAR(45) NOT NULL UNIQUE,
+                reason VARCHAR(255) DEFAULT 'Automated: Rapid URL scanning detected',
+                blocked_by ENUM('auto','admin') DEFAULT 'auto',
+                admin_id INT DEFAULT NULL,
+                blocked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                expires_at TIMESTAMP NOT NULL DEFAULT '2026-01-01 00:00:00',
+                unblocked_at TIMESTAMP NULL,
+                is_active TINYINT(1) DEFAULT 1,
+                unique_urls_count INT DEFAULT 0,
+                INDEX idx_ip_active (ip_address, is_active),
+                INDEX idx_expires (expires_at, is_active)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            $conn->query("CREATE TABLE IF NOT EXISTS ip_whitelist (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                ip_address VARCHAR(45) NOT NULL UNIQUE,
+                label VARCHAR(150) DEFAULT 'Trusted IP',
+                added_by INT DEFAULT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_ip (ip_address)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+            $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('ip_firewall_migration_v1', '1') ON DUPLICATE KEY UPDATE setting_value='1'");
+        }
+
+        // 21. Add Admit Card column to students table
+        $checkAdmitCard = $conn->query("SHOW COLUMNS FROM students LIKE 'admit_card'");
+        if ($checkAdmitCard && $checkAdmitCard->num_rows == 0) {
+            $conn->query("ALTER TABLE students ADD COLUMN admit_card VARCHAR(255) NULL AFTER admission_test_paper");
+        }
+
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
         
@@ -949,6 +998,11 @@ require_once __DIR__ . '/../includes/notification_helper.php';
 
 // Auto-load Late Fine Management System
 require_once __DIR__ . '/../includes/fine_helper.php';
+
+// Auto-load IP Security Firewall & Rapid Scanning Blocker
+if (file_exists(__DIR__ . '/../security/firewall.php')) {
+    require_once __DIR__ . '/../security/firewall.php';
+}
 
 /**
  * Generate Next Formatted Invoice Number: INV<YY><MM><XXXX> (e.g. INV26090001)

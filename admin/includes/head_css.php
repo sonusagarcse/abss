@@ -6,14 +6,6 @@ if (defined('IS_COUNSELOR_VIEW')) {
 ?>
 <!-- admin/includes/head_css.php - Glassmorphic Admin Design Engine -->
 <link rel="icon" type="image/png" href="<?php echo (defined('APP_URL') ? rtrim(APP_URL, '/') : '/abss'); ?>/assets/logo.png">
-<link rel="manifest" href="<?php echo (defined('APP_URL') ? rtrim(APP_URL, '/') : '/abss'); ?>/app/manifest.json">
-<script>
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/abss/app/sw.js.php', {scope: '/abss/'});
-    });
-}
-</script>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 <style>

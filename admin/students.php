@@ -31,6 +31,96 @@ if (!is_dir($upload_dir)) {
     mkdir($upload_dir, 0755, true);
 }
 
+/**
+ * Compress and save an uploaded document (Image or PDF).
+ * Images are resized (max $max_dim) and re-encoded at $quality (75%) as JPG.
+ * PDFs are safely validated and saved directly.
+ */
+if (!function_exists('compress_and_save_document')) {
+    function compress_and_save_document($tmp_file, $destination, $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf'], $max_dim = 1600, $quality = 75) {
+        if (!file_exists($tmp_file)) {
+            return false;
+        }
+
+        $dest_dir = dirname($destination);
+        if (!is_dir($dest_dir)) {
+            @mkdir($dest_dir, 0755, true);
+        }
+
+        $ext = strtolower(pathinfo($destination, PATHINFO_EXTENSION));
+        $image_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif'];
+
+        if (in_array($ext, $image_exts) && extension_loaded('gd')) {
+            $img_info = @getimagesize($tmp_file);
+            if ($img_info !== false) {
+                $src = null;
+                switch ($img_info[2]) {
+                    case IMAGETYPE_JPEG:
+                        $src = @imagecreatefromjpeg($tmp_file);
+                        if ($src && function_exists('exif_read_data')) {
+                            $exif = @exif_read_data($tmp_file);
+                            if (!empty($exif['Orientation'])) {
+                                switch ($exif['Orientation']) {
+                                    case 3: $src = imagerotate($src, 180, 0); break;
+                                    case 6: $src = imagerotate($src, -90, 0); break;
+                                    case 8: $src = imagerotate($src, 90, 0); break;
+                                }
+                            }
+                        }
+                        break;
+                    case IMAGETYPE_PNG:
+                        $src = @imagecreatefrompng($tmp_file);
+                        break;
+                    case IMAGETYPE_WEBP:
+                        $src = @imagecreatefromwebp($tmp_file);
+                        break;
+                    case IMAGETYPE_GIF:
+                        $src = @imagecreatefromgif($tmp_file);
+                        break;
+                }
+
+                if ($src) {
+                    $orig_w = imagesx($src);
+                    $orig_h = imagesy($src);
+
+                    if ($orig_w > $max_dim || $orig_h > $max_dim) {
+                        if ($orig_w >= $orig_h) {
+                            $new_w = $max_dim;
+                            $new_h = (int)round(($orig_h / $orig_w) * $max_dim);
+                        } else {
+                            $new_h = $max_dim;
+                            $new_w = (int)round(($orig_w / $orig_h) * $max_dim);
+                        }
+                    } else {
+                        $new_w = $orig_w;
+                        $new_h = $orig_h;
+                    }
+
+                    $canvas = imagecreatetruecolor($new_w, $new_h);
+                    $white = imagecolorallocate($canvas, 255, 255, 255);
+                    imagefilledrectangle($canvas, 0, 0, $new_w, $new_h, $white);
+                    imagecopyresampled($canvas, $src, 0, 0, 0, 0, $new_w, $new_h, $orig_w, $orig_h);
+                    imagedestroy($src);
+
+                    $saved = imagejpeg($canvas, $destination, $quality);
+                    imagedestroy($canvas);
+                    if ($saved) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Fallback or PDF: safe move/copy
+        if (is_uploaded_file($tmp_file)) {
+            return move_uploaded_file($tmp_file, $destination);
+        } else {
+            return copy($tmp_file, $destination);
+        }
+    }
+}
+
+
 // Handle Add/Edit Student
 if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
     $name               = mb_strtoupper(trim($_POST['name'] ?? ''), 'UTF-8');
@@ -143,22 +233,37 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
         }
     }
 
+    // Handle admit card upload (field: admit_card) with auto-compression
+    $admit_card_path = $_POST['existing_admit_card'] ?? '';
+    if (!empty($_FILES['admit_card']['name']) && $_FILES['admit_card']['error'] === UPLOAD_ERR_OK) {
+        $ac_ext = strtolower(pathinfo($_FILES['admit_card']['name'], PATHINFO_EXTENSION));
+        $ac_allowed = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'pdf'];
+        if (in_array($ac_ext, $ac_allowed) && $_FILES['admit_card']['size'] <= 10 * 1024 * 1024) {
+            $is_pdf = ($ac_ext === 'pdf');
+            $target_ext = $is_pdf ? 'pdf' : 'jpg';
+            $ac_tmp = 'admit_' . time() . '_' . rand(1000, 9999) . '.' . $target_ext;
+            if (compress_and_save_document($_FILES['admit_card']['tmp_name'], $upload_dir . $ac_tmp, $ac_allowed)) {
+                $admit_card_path = 'uploads/students/' . $ac_tmp;
+            }
+        }
+    }
+
     if ($id > 0) {
         $stmt = $conn->prepare("UPDATE students SET name=?, dob=?, gender=?, home_address=?, city=?, state=?, zip_code=?, prev_school=?,
             parent_name=?, guardian_relationship=?, phone=?, guardian_email=?, guardian_address=?,
             emergency_contact_name=?, emergency_relationship=?, emergency_phone=?,
             has_allergies=?, allergies_detail=?, has_medical_condition=?, medical_condition_detail=?,
             physician_name=?, physician_phone=?, insurance_provider=?, insurance_policy=?,
-            target_school=?, class_admitted=?, scholar_mode=?, academic_group=?, monthly_discount=?, base_fee=?, security_amount=?, registration_fee=?, admission_fee=?, advance_amount=?, admission_date=?, parent_id=?, photo=?, admission_test_paper=?, student_photo=?
+            target_school=?, class_admitted=?, scholar_mode=?, academic_group=?, monthly_discount=?, base_fee=?, security_amount=?, registration_fee=?, admission_fee=?, advance_amount=?, admission_date=?, parent_id=?, photo=?, admission_test_paper=?, student_photo=?, admit_card=?
             WHERE id=?");
-        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 8) . 'ddddddsisssi';
+        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 8) . 'ddddddsissssi';
         $params = [
             $name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
             $parent_name, $guardian_relationship, $phone, $guardian_email, $guardian_address,
             $emergency_contact_name, $emergency_relationship, $emergency_phone,
             $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
             $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
-            $target_school, $class_admitted, $scholar_mode, $academic_group, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $admission_test_paper_path, $student_photo_path,
+            $target_school, $class_admitted, $scholar_mode, $academic_group, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $admission_test_paper_path, $student_photo_path, $admit_card_path,
             $id
         ];
         $stmt->bind_param($types, ...$params);
@@ -169,16 +274,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
             emergency_contact_name, emergency_relationship, emergency_phone,
             has_allergies, allergies_detail, has_medical_condition, medical_condition_detail,
             physician_name, physician_phone, insurance_provider, insurance_policy,
-            target_school, class_admitted, scholar_mode, academic_group, monthly_discount, base_fee, security_amount, registration_fee, admission_fee, advance_amount, admission_date, parent_id, photo, admission_test_paper, student_photo)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 8) . 'ddddddsisss';
+            target_school, class_admitted, scholar_mode, academic_group, monthly_discount, base_fee, security_amount, registration_fee, admission_fee, advance_amount, admission_date, parent_id, photo, admission_test_paper, student_photo, admit_card)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+        $types = str_repeat('s', 16) . 'isis' . str_repeat('s', 8) . 'ddddddsissss';
         $params = [
             $name, $dob, $gender, $home_address, $city, $state, $zip_code, $prev_school,
             $parent_name, $guardian_relationship, $phone, $guardian_email, $guardian_address,
             $emergency_contact_name, $emergency_relationship, $emergency_phone,
             $has_allergies, $allergies_detail, $has_medical_condition, $medical_condition_detail,
             $physician_name, $physician_phone, $insurance_provider, $insurance_policy,
-            $target_school, $class_admitted, $scholar_mode, $academic_group, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $admission_test_paper_path, $student_photo_path
+            $target_school, $class_admitted, $scholar_mode, $academic_group, $monthly_discount, $base_fee, $security_amount, $registration_fee, $admission_fee, $advance_amount, $admission_date, $parent_id, $photo_path, $admission_test_paper_path, $student_photo_path, $admit_card_path
         ];
         $stmt->bind_param($types, ...$params);
         $stmt->execute();
@@ -219,6 +324,15 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['save_student'])) {
                 rename(__DIR__ . '/../' . $student_photo_path, __DIR__ . '/../' . $new_sp);
             }
             $conn->query("UPDATE students SET student_photo = '" . $conn->real_escape_string($new_sp) . "' WHERE id = $new_id");
+        }
+        // Rename admit card with actual student id
+        if (!empty($admit_card_path)) {
+            $ac_ext2 = pathinfo($admit_card_path, PATHINFO_EXTENSION);
+            $new_ac = 'uploads/students/' . $new_id . '_admitcard.' . $ac_ext2;
+            if (file_exists(__DIR__ . '/../' . $admit_card_path)) {
+                rename(__DIR__ . '/../' . $admit_card_path, __DIR__ . '/../' . $new_ac);
+            }
+            $conn->query("UPDATE students SET admit_card = '" . $conn->real_escape_string($new_ac) . "' WHERE id = $new_id");
         }
 
         // Dispatch Student Registration Email to Parent & Admin
@@ -1032,6 +1146,11 @@ if (!empty($site_settings['tuition_modes'])) {
                                         <i class="fas fa-file-signature"></i>
                                     </a>
                                 <?php endif; ?>
+                                <?php if(!empty($row['admit_card'])): ?>
+                                    <a href="../<?php echo htmlspecialchars($row['admit_card']); ?>" target="_blank" class="action-icon-btn" style="background: #e0f2fe; color: #0284c7;" title="View Student Admit Card">
+                                        <i class="fas fa-id-card"></i>
+                                    </a>
+                                <?php endif; ?>
                                 <a href="student_addons.php?id=<?php echo $row['id']; ?>" class="action-icon-btn btn-addon-act" title="Manage Addons & Expenses">
                                     <i class="fas fa-plus-circle"></i>
                                 </a>
@@ -1163,6 +1282,11 @@ if (!empty($site_settings['tuition_modes'])) {
                                                 <i class="fas fa-file-signature"></i>
                                             </a>
                                         <?php endif; ?>
+                                        <?php if(!empty($row['admit_card'])): ?>
+                                            <a href="../<?php echo htmlspecialchars($row['admit_card']); ?>" target="_blank" class="action-icon-btn" style="background: #e0f2fe; color: #0284c7;" title="View Student Admit Card">
+                                                <i class="fas fa-id-card"></i>
+                                            </a>
+                                        <?php endif; ?>
                                         <a href="student_addons.php?id=<?php echo $row['id']; ?>" class="action-icon-btn btn-addon-act" title="Addons">
                                             <i class="fas fa-plus-circle"></i>
                                         </a>
@@ -1208,6 +1332,7 @@ if (!empty($site_settings['tuition_modes'])) {
                     <input type="hidden" name="existing_photo" id="existing_photo">
                     <input type="hidden" name="existing_admission_test_paper" id="existing_admission_test_paper">
                     <input type="hidden" name="existing_student_photo" id="existing_student_photo">
+                    <input type="hidden" name="existing_admit_card" id="existing_admit_card">
 
                     <!-- SECTION 1: STUDENT INFORMATION -->
                     <span class="form-section-title"><i class="fas fa-user-graduate" style="margin-right: 8px;"></i>1. Student Information</span>
@@ -1394,6 +1519,20 @@ if (!empty($site_settings['tuition_modes'])) {
                         </div>
                     </div>
 
+                    <!-- Upload Admit Card (Compressed Image / PDF) -->
+                    <div class="portal-input-group">
+                        <label><i class="fas fa-id-card" style="color: #0284c7; margin-right: 4px;"></i> Upload Admit Card (Roll / Exam Admit Card — Auto Compressed Image or PDF)</label>
+                        <div class="photo-upload-area" id="uploadAdmitCardArea" style="border-color: #bae6fd; background: #f0f9ff;">
+                            <input type="file" name="admit_card" id="admit_card_input" accept="image/*,.pdf" onchange="previewAdmitCardFile(this)">
+                            <i class="fas fa-id-card" style="font-size: 2rem; color: #0284c7; opacity: 0.7;"></i>
+                            <p id="upload_admit_card_label" style="margin: 8px 0 0; color: #0369a1; font-size: 0.85rem; font-weight: 600;">Click or drag to upload Student Admit Card (JPG, PNG, PDF — Auto-compressed)</p>
+                        </div>
+                        <div id="current_admit_card_display" style="display: none; margin-top: 10px; font-size: 0.85rem; color: #0284c7; font-weight: 700;">
+                            <i class="fas fa-paperclip"></i> <span id="current_admit_card_name"></span>
+                            <a href="#" id="view_admit_card_link" target="_blank" style="margin-left: 10px; color: #0284c7;"><i class="fas fa-external-link-alt"></i> View Admit Card</a>
+                        </div>
+                    </div>
+
                     <!-- SECTION 2: GUARDIAN INFORMATION -->
                     <span class="form-section-title"><i class="fas fa-user-shield" style="margin-right: 8px;"></i>2. Guardian Information</span>
 
@@ -1525,11 +1664,14 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('existing_photo').value = '';
             document.getElementById('existing_admission_test_paper').value = '';
             document.getElementById('existing_student_photo').value = '';
+            document.getElementById('existing_admit_card').value = '';
             document.getElementById('current_photo_display').style.display = 'none';
             document.getElementById('current_test_paper_display').style.display = 'none';
             document.getElementById('current_student_photo_display').style.display = 'none';
+            document.getElementById('current_admit_card_display').style.display = 'none';
             document.getElementById('upload_label').textContent = 'Click or drag to upload admission form scan (JPG, PNG, PDF — max 5MB)';
             document.getElementById('upload_test_paper_label').textContent = 'Click or drag to upload Admission Test Paper (JPG, PNG, PDF — max 5MB)';
+            document.getElementById('upload_admit_card_label').textContent = 'Click or drag to upload Student Admit Card (JPG, PNG, PDF — Auto-compressed)';
             document.getElementById('photoPreviewImg').style.display = 'none';
             document.getElementById('photoPreviewImg').src = '';
             document.getElementById('photoPreviewIcon').style.display = 'flex';
@@ -1573,6 +1715,12 @@ if (!empty($site_settings['tuition_modes'])) {
             }
         }
 
+        function previewAdmitCardFile(input) {
+            if (input.files && input.files[0]) {
+                document.getElementById('upload_admit_card_label').textContent = '✅ ' + input.files[0].name + ' selected';
+            }
+        }
+
         function previewStudentPhoto(input) {
             if (input.files && input.files[0]) {
                 var reader = new FileReader();
@@ -1592,6 +1740,7 @@ if (!empty($site_settings['tuition_modes'])) {
             document.getElementById('student_id').value = data.id;
             document.getElementById('existing_photo').value = data.photo || '';
             document.getElementById('existing_admission_test_paper').value = data.admission_test_paper || '';
+            document.getElementById('existing_admit_card').value = data.admit_card || '';
 
             // Student info
             document.getElementById('name').value = (data.name || '').toUpperCase();
@@ -1671,6 +1820,15 @@ if (!empty($site_settings['tuition_modes'])) {
                 document.getElementById('view_test_paper_link').href = '../' + data.admission_test_paper;
             } else {
                 document.getElementById('current_test_paper_display').style.display = 'none';
+            }
+
+            // Existing student admit card scan
+            if (data.admit_card) {
+                document.getElementById('current_admit_card_display').style.display = 'block';
+                document.getElementById('current_admit_card_name').textContent = data.admit_card.split('/').pop();
+                document.getElementById('view_admit_card_link').href = '../' + data.admit_card;
+            } else {
+                document.getElementById('current_admit_card_display').style.display = 'none';
             }
 
             // Existing student picture in circle

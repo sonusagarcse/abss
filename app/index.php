@@ -28,17 +28,12 @@ include '../includes/header.php';
                     Get real-time push notifications for attendance, fee invoices, entrance marksheet rankings, and official announcements on your Android device.
                 </p>
 
-                <!-- DOWNLOAD & INSTALL BUTTONS -->
+                <!-- DOWNLOAD APK BUTTON -->
                 <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: center; margin-bottom: 25px;">
-                    <button id="install-pwa-btn" class="btn-app-install">
-                        <i class="fas fa-download"></i> Install Web App
-                    </button>
                     <a href="app/ABSS_v1.2.1.APK" class="btn-app-apk" download="ABSS_v1.2.1.apk">
-                        <i class="fab fa-android"></i> Download APK File (v1.2.1)
+                        <i class="fab fa-android"></i> Download Official APK File (v1.2.1)
                     </a>
                 </div>
-
-                <div id="install-status-text" style="font-size: 0.88rem; color: #38bdf8; font-weight: 700; margin-bottom: 25px;"></div>
 
                 <!-- PORTAL QUICK LINKS -->
                 <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 20px;">
@@ -188,8 +183,8 @@ include '../includes/header.php';
             
             <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 30px; position: relative;">
                 <div style="width: 45px; height: 45px; border-radius: 50%; background: #38bdf8; color: #0f172a; font-weight: 900; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; margin-bottom: 18px;">1</div>
-                <h3 style="color: #ffffff; font-size: 1.1rem; font-weight: 800; margin: 0 0 8px 0;">Click Install / Download</h3>
-                <p style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.6; margin: 0;">Tap the "Install Web App" or "Download APK" button at top of this page on your Android smartphone.</p>
+                <h3 style="color: #ffffff; font-size: 1.1rem; font-weight: 800; margin: 0 0 8px 0;">Download APK File</h3>
+                <p style="color: #cbd5e1; font-size: 0.88rem; line-height: 1.6; margin: 0;">Tap the "Download Official APK" button at top of this page on your Android smartphone.</p>
             </div>
 
             <div style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 30px; position: relative;">
@@ -223,30 +218,12 @@ include '../includes/header.php';
         align-items: center;
     }
 
-    .btn-app-install {
-        background: linear-gradient(135deg, #2563eb, #1d4ed8);
-        color: #ffffff;
-        border: none;
-        padding: 14px 28px;
-        border-radius: 50px;
-        font-weight: 900;
-        font-size: 0.95rem;
-        cursor: pointer;
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4);
-        transition: all 0.25s ease;
-    }
-    .btn-app-install:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 14px 30px rgba(37, 99, 235, 0.55);
-    }
+    
 
     .btn-app-apk {
-        background: rgba(255, 255, 255, 0.1);
+        background: linear-gradient(135deg, #10b981, #059669); box-shadow: 0 10px 25px rgba(16, 185, 129, 0.4);
         color: #ffffff;
-        border: 1px solid rgba(255, 255, 255, 0.25);
+        border: none;
         padding: 14px 28px;
         border-radius: 50px;
         font-weight: 800;
@@ -327,14 +304,14 @@ include '../includes/header.php';
             margin-left: auto;
             margin-right: auto;
         }
-        .btn-app-install, .btn-app-apk {
+        .btn-app-apk {
             width: 100%;
             justify-content: center;
         }
     }
 </style>
 
-<!-- DEDICATED MODULAR PWA INSTALLATION SCRIPT -->
-<script src="app/pwa.js"></script>
+
+
 
 <?php include '../includes/footer.php'; ?>

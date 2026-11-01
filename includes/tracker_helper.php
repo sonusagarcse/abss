@@ -95,6 +95,39 @@ function track_visitor_hit() {
     }
     define('TRACKER_HIT_RECORDED', true);
 
+    // 1. Completely ignore static assets, images, styles, scripts, fonts, and sub-resources
+    $uri_raw = $_SERVER['REQUEST_URI'] ?? '';
+    $path_raw = parse_url($uri_raw, PHP_URL_PATH) ?? '';
+    $ext_raw = strtolower(pathinfo($path_raw, PATHINFO_EXTENSION));
+
+    $asset_exts = [
+        'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'ico', 'bmp', 'tiff',
+        'css', 'js', 'map', 'json',
+        'woff', 'woff2', 'ttf', 'eot', 'otf',
+        'mp4', 'webm', 'ogg', 'mp3', 'wav',
+        'pdf', 'apk'
+    ];
+    if (in_array($ext_raw, $asset_exts, true)) {
+        return;
+    }
+
+    // 2. Ignore browser sub-resource requests (images/styles loaded by the page)
+    if (isset($_SERVER['HTTP_SEC_FETCH_DEST']) && in_array(strtolower($_SERVER['HTTP_SEC_FETCH_DEST']), ['image', 'style', 'script', 'font', 'video', 'audio', 'manifest'], true)) {
+        return;
+    }
+
+    // 3. Ignore asset directories and service worker polls
+    if (
+        strpos($path_raw, '/assets/') !== false ||
+        strpos($path_raw, '/uploads/') !== false ||
+        strpos($path_raw, '/images/') !== false ||
+        strpos($path_raw, '/css/') !== false ||
+        strpos($path_raw, '/js/') !== false ||
+        strpos($path_raw, 'sw.js') !== false
+    ) {
+        return;
+    }
+
     try {
         $conn = getDB();
         $ip = get_client_ip();

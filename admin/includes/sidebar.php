@@ -17,7 +17,7 @@ $is_finance_active = in_array($current_page, ['fees', 'student_dues', 'fine_syst
 $is_teacher_active = in_array($current_page, ['teachers', 'teacher_attendance', 'teacher_expenses', 'teacher_invoices', 'print_teacher_invoice', 'counselors']);
 $is_parents_active = in_array($current_page, ['parents', 'documents', 'document_approvals']);
 $is_communication_active = in_array($current_page, ['whatsapp', 'notices', 'inquiries', 'tickets']) || $is_notif_page;
-$is_portal_active = in_array($current_page, ['admissions', 'schools', 'achievers', 'gallery', 'visitors', 'settings']);
+$is_portal_active = in_array($current_page, ['admissions', 'schools', 'achievers', 'gallery', 'visitors', 'settings', 'ip_firewall']);
 ?>
 
 <style>
@@ -427,7 +427,7 @@ $is_portal_active = in_array($current_page, ['admissions', 'schools', 'achievers
                     <span>Portal &amp; System</span>
                 </div>
                 <div class="toggle-meta">
-                    <span class="count-pill">6</span>
+                    <span class="count-pill">7</span>
                     <i class="fas fa-chevron-down submenu-arrow"></i>
                 </div>
             </div>
@@ -460,6 +460,11 @@ $is_portal_active = in_array($current_page, ['admissions', 'schools', 'achievers
                 <li>
                     <a href="<?php echo $admin_url; ?>settings" class="sub-link <?php echo $current_page == 'settings' ? 'active' : ''; ?>">
                         <i class="fas fa-sliders-h"></i> Web Settings
+                    </a>
+                </li>
+                <li>
+                    <a href="<?php echo $admin_url; ?>ip_firewall" class="sub-link <?php echo $current_page == 'ip_firewall' ? 'active' : ''; ?>">
+                        <i class="fas fa-shield-alt" style="color: #dc2626;"></i> IP Firewall Control
                     </a>
                 </li>
             </ul>

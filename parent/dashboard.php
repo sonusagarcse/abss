@@ -433,6 +433,13 @@ $parent_name = $_SESSION['parent_name'] ?? 'Parent Profile';
                                         <i class="fas fa-file-signature"></i> Test Paper
                                     </a>
                                 <?php endif; ?>
+                                <?php if (!empty($c['admit_card'])): 
+                                    $ac_url = (strpos($c['admit_card'], 'http') === 0 || strpos($c['admit_card'], '../') === 0) ? $c['admit_card'] : '../' . ltrim($c['admit_card'], '/');
+                                ?>
+                                    <a href="<?= htmlspecialchars($ac_url) ?>" target="_blank" class="badge" style="background: #f0f9ff; color: #0284c7; border: 1px solid #bae6fd; text-decoration: none;" title="View Student Admit Card">
+                                        <i class="fas fa-id-card"></i> Admit Card
+                                    </a>
+                                <?php endif; ?>
                             </div>
                         </div>
                     </div>

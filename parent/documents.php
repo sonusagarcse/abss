@@ -48,7 +48,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['upload_doc'])) {
 }
 
 // Fetch all active children
-$children_query = $conn->prepare("SELECT id, name, class_admitted, photo, admission_test_paper FROM students WHERE parent_id = ? AND status = 'active' ORDER BY name ASC");
+$children_query = $conn->prepare("SELECT id, name, class_admitted, photo, admission_test_paper, admit_card FROM students WHERE parent_id = ? AND status = 'active' ORDER BY name ASC");
 $children_query->bind_param("i", $pid);
 $children_query->execute();
 $children_res = $children_query->get_result();
@@ -264,6 +264,34 @@ unset($child);
                                 </a>
                             <?php else: ?>
                                 <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 600;">School has not uploaded test paper yet.</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+
+                    <!-- Student Admit Card Row -->
+                    <div class="doc-row" style="background: #f0f9ff; border-color: #bae6fd;">
+                        <div style="flex: 1; min-width: 220px;">
+                            <h4 style="margin: 0 0 4px 0; color: #0369a1; font-weight: 800; font-size: 0.96rem;">
+                                <i class="fas fa-id-card" style="color: #0284c7; margin-right: 6px;"></i> Student Admit Card (प्रवेश पत्र)
+                            </h4>
+                            <small style="color: #0284c7; font-weight: 600; display: block; margin-bottom: 6px;">Official Exam / Candidate Roll Admit Card</small>
+                            <?php if(!empty($child['admit_card'])): ?>
+                                <span class="doc-status-badge status-approved" style="background: #e0f2fe; color: #0369a1; border-color: #7dd3fc;">
+                                    ✓ AVAILABLE (प्रवेश पत्र उपलब्ध)
+                                </span>
+                            <?php else: ?>
+                                <span class="doc-status-badge" style="background: #f1f5f9; color: #64748b; border: 1px solid #cbd5e1;">
+                                    ℹ️ NOT ISSUED YET
+                                </span>
+                            <?php endif; ?>
+                        </div>
+                        <div>
+                            <?php if(!empty($child['admit_card'])): ?>
+                                <a href="../<?php echo htmlspecialchars($child['admit_card']); ?>" target="_blank" class="inline-btn" style="background: #0284c7; color: #ffffff; box-shadow: 0 4px 12px rgba(2, 132, 199, 0.25);">
+                                    <i class="fas fa-id-card"></i> View / Download Admit Card
+                                </a>
+                            <?php else: ?>
+                                <span style="font-size: 0.82rem; color: #94a3b8; font-weight: 600;">Admit card not uploaded by school yet.</span>
                             <?php endif; ?>
                         </div>
                     </div>
