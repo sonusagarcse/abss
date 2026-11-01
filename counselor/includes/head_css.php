@@ -162,10 +162,11 @@
     /* Content Area */
     .main-content {
         margin-left: var(--sidebar-width);
-        flex-grow: 1;
+        flex: 1;
         min-height: 100vh;
         width: calc(100% - var(--sidebar-width));
         box-sizing: border-box;
+        padding: 30px 36px 60px;
     }
 
     /* Mobile Headers */
@@ -176,7 +177,7 @@
         left: 0;
         right: 0;
         height: 64px;
-        background: rgba(255, 255, 255, 0.92);
+        background: rgba(255, 255, 255, 0.95);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
         border-bottom: 1px solid #e2e8f0;
@@ -240,12 +241,17 @@
             display: block;
         }
         .main-content {
-            margin-left: 0;
-            width: 100%;
-            padding-top: 80px !important;
+            margin-left: 0 !important;
+            width: 100% !important;
+            padding: 84px 18px 60px !important;
         }
         .mobile-header {
             display: flex;
+        }
+        .close-sidebar-btn {
+            display: flex;
+        }
+    }
         }
         .close-sidebar-btn {
             display: flex;

@@ -122,21 +122,134 @@ $parent_portal_url = "$base_app_url/parent/login.php";
     <?php include 'includes/head_css.php'; ?>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <style>
-        /* Dues Dashboard & Table Styling */
-        .dues-header-row {
+        /* Scoped Canvas & Container Layout */
+        .main-content {
+            margin-left: var(--sidebar-width, 280px);
+            flex: 1;
+            min-height: 100vh;
+            width: calc(100% - var(--sidebar-width, 280px));
+            box-sizing: border-box;
+            padding: 30px 36px 60px;
+        }
+
+        @media (max-width: 992px) {
+            .main-content {
+                margin-left: 0 !important;
+                width: 100% !important;
+                padding: 84px 18px 60px !important;
+            }
+        }
+
+        /* Top Executive Header Card */
+        .dues-header-card {
+            background: #ffffff;
+            border-radius: 20px;
+            padding: 24px 28px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04);
+            margin-bottom: 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 20px;
-            margin-bottom: 25px;
+            gap: 22px;
             flex-wrap: wrap;
         }
 
+        .dues-header-meta h1 {
+            font-size: 1.75rem;
+            font-weight: 900;
+            margin: 4px 0 6px;
+            color: #0f172a;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            letter-spacing: -0.02em;
+        }
+
+        .dues-header-meta p {
+            margin: 0;
+            color: #64748b;
+            font-size: 0.92rem;
+            font-weight: 600;
+        }
+
+        .dues-desk-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #f0fdf4;
+            color: #166534;
+            font-size: 0.72rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            padding: 4px 12px;
+            border-radius: 50px;
+            border: 1px solid #bbf7d0;
+            margin-bottom: 4px;
+        }
+
+        .live-pulse-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: #16a34a;
+            box-shadow: 0 0 0 3px rgba(22, 163, 74, 0.3);
+            animation: pulseGreen 1.8s infinite;
+        }
+
+        @keyframes pulseGreen {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+        }
+
+        .dues-header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .btn-hero-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 18px;
+            border-radius: 12px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+        }
+        .btn-hero-action:hover {
+            transform: translateY(-2px);
+        }
+        .btn-email { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #ffffff; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25); }
+        .btn-invoices { background: #0f172a; color: #ffffff; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.2); }
+        .btn-print { background: #475569; color: #ffffff; }
+        .btn-csv { background: #ffffff; color: #0284c7; border: 2px solid #38bdf8; }
+        .btn-whatsapp { background: #25d366; color: #ffffff; box-shadow: 0 4px 14px rgba(37, 211, 102, 0.25); }
+
+        /* KPI Cards Grid */
         .stats-kpi-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 18px;
-            margin-bottom: 25px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 24px;
+        }
+        @media (max-width: 1200px) {
+            .stats-kpi-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        @media (max-width: 640px) {
+            .stats-kpi-grid {
+                grid-template-columns: 1fr;
+            }
         }
 
         .stat-card {
@@ -163,26 +276,26 @@ $parent_portal_url = "$base_app_url/parent/login.php";
         .stat-card.card-blue { border-left: 5px solid #0284c7; }
 
         .stat-icon {
-            width: 56px;
-            height: 56px;
-            border-radius: 14px;
+            width: 58px;
+            height: 58px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
+            font-size: 1.55rem;
             flex-shrink: 0;
         }
-        .icon-red { background: #fee2e2; color: #dc2626; }
-        .icon-orange { background: #ffedd5; color: #ea580c; }
-        .icon-green { background: #dcfce7; color: #166534; }
-        .icon-purple { background: #f3e8ff; color: #7c3aed; }
-        .icon-blue, .icon-teal { background: #e0f2fe; color: #0284c7; }
+        .icon-red { background: #fee2e2; color: #dc2626; border: 1px solid #fecaca; }
+        .icon-orange { background: #ffedd5; color: #ea580c; border: 1px solid #fed7aa; }
+        .icon-green { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .icon-purple { background: #f3e8ff; color: #7c3aed; border: 1px solid #e9d5ff; }
+        .icon-blue, .icon-teal { background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd; }
 
         .stat-info { flex: 1; min-width: 0; }
         .stat-info h3 {
             margin: 0;
-            font-size: 1.6rem;
-            font-weight: 800;
+            font-size: 1.65rem;
+            font-weight: 900;
             color: #0f172a;
             line-height: 1.2;
             letter-spacing: -0.02em;
@@ -199,7 +312,7 @@ $parent_portal_url = "$base_app_url/parent/login.php";
             display: block;
             font-size: 0.76rem;
             font-weight: 700;
-            margin-top: 2px;
+            margin-top: 3px;
         }
 
         /* Filter Console */
@@ -357,6 +470,29 @@ $parent_portal_url = "$base_app_url/parent/login.php";
         .act-btn:hover {
             transform: translateY(-2px);
             filter: brightness(0.95);
+        }
+
+        .btn-call-desk-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #ecfdf5;
+            color: #059669;
+            border: 1px solid #a7f3d0;
+            padding: 7px 12px;
+            border-radius: 10px;
+            font-size: 0.82rem;
+            font-weight: 800;
+            text-decoration: none;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+        }
+        .btn-call-desk-pill:hover {
+            background: #059669;
+            color: #ffffff;
+            border-color: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.28);
         }
 
         /* Email Due Bill Modal */
@@ -550,77 +686,81 @@ $parent_portal_url = "$base_app_url/parent/login.php";
             <p style="font-size: 0.78rem; color: #555;">Generated on: <?php echo date('d M Y, h:i A'); ?> | Session: 2026-27</p>
         </div>
 
-        <!-- Top Web Navigation Header -->
-        <div class="dues-header-row no-print">
-            <div>
-                <h1 style="font-size: 1.85rem; font-weight: 800; margin: 0; color: var(--portal-dark); display: flex; align-items: center; gap: 10px;">
-                    <i class="fas fa-file-invoice-dollar" style="color: #dc2626;"></i> Student Dues & Arrears Statement
+        <!-- Top Web Navigation Header Card -->
+        <div class="dues-header-card no-print">
+            <div class="dues-header-meta">
+                <div class="dues-desk-pill">
+                    <span class="live-pulse-dot"></span>
+                    <?php echo defined('IS_COUNSELOR_VIEW') ? 'COUNSELOR CALLING & DUES DESK' : 'ADMINISTRATIVE DUES & RECOVERY PORTAL'; ?>
+                </div>
+                <h1>
+                    <i class="fas fa-file-invoice-dollar" style="color: #dc2626;"></i> Student Dues &amp; Arrears Statement
                 </h1>
-                <p style="margin: 4px 0 0; color: #64748b; font-size: 0.95rem;">Comprehensive statement of all pending fee balances & due amounts till <b><?php echo $current_month_name; ?></b>.</p>
+                <p>Official registry of outstanding fee balances, invoice arrears, and tele-calling follow-up records till <b><?php echo $current_month_name; ?></b>.</p>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
-                <button type="button" class="btn-portal" onclick="bulkSendDueEmails()" style="background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #ffffff; padding: 12px 18px; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.25);">
+            <div class="dues-header-actions">
+                <button type="button" class="btn-hero-action btn-email" onclick="bulkSendDueEmails()">
                     <i class="fas fa-paper-plane"></i> Email All Dues &amp; PDFs
                 </button>
                 <?php $all_bill_ids = array_filter(array_column($dues_list, 'latest_bill_id')); ?>
                 <?php if (!empty($all_bill_ids)): ?>
-                    <a href="bulk_print.php?ids=<?php echo implode(',', $all_bill_ids); ?>" target="_blank" class="btn-portal" style="background: #0f172a; color: #ffffff; padding: 12px 18px; text-decoration: none;">
+                    <a href="bulk_print.php?ids=<?php echo implode(',', $all_bill_ids); ?>" target="_blank" class="btn-hero-action btn-invoices">
                         <i class="fas fa-file-pdf"></i> Download All Invoices
                     </a>
                 <?php endif; ?>
-                <button type="button" class="btn-portal" onclick="window.print()" style="background: #475569; color: #ffffff; padding: 12px 18px;">
+                <button type="button" class="btn-hero-action btn-print" onclick="window.print()">
                     <i class="fas fa-print"></i> Print Statement
                 </button>
-                <button type="button" class="btn-portal" onclick="exportDuesToCSV()" style="background: #ffffff; color: #0284c7; border: 2px solid #38bdf8; box-shadow: none; padding: 12px 18px;">
+                <button type="button" class="btn-hero-action btn-csv" onclick="exportDuesToCSV()">
                     <i class="fas fa-file-csv"></i> Export CSV
                 </button>
-                <a href="whatsapp.php" class="btn-portal" style="background: #25d366; color: #ffffff; padding: 12px 18px;">
+                <a href="whatsapp.php" class="btn-hero-action btn-whatsapp">
                     <i class="fab fa-whatsapp"></i> WhatsApp Hub
                 </a>
             </div>
         </div>
 
-        <!-- KPI Metrics Summary Cards -->
+                <!-- KPI Metrics Summary Cards -->
         <div class="stats-kpi-grid no-print">
-            <div class="stat-card" style="border-left: 4px solid #dc2626;">
+            <div class="stat-card card-red">
                 <div class="stat-icon icon-red"><i class="fas fa-exclamation-triangle"></i></div>
                 <div class="stat-info">
                     <h3 style="color: #dc2626;">₹ <?php echo number_format($total_due_amount, 2); ?></h3>
-                    <p style="font-weight: 700;">Total Outstanding Dues</p>
-                    <small style="color: #dc2626; font-weight: 800; font-size: 0.75rem;">
+                    <p>Total Outstanding Dues</p>
+                    <small style="color: #dc2626;">
                         <?php echo number_format($total_unpaid_invoices); ?> Unpaid Invoices
                         <?php if ($total_fine_due > 0): ?>
-                            • <span style="color: #64748b; font-weight: 700;">(Base: ₹<?php echo number_format($total_base_due, 2); ?> + Fine: ₹<?php echo number_format($total_fine_due, 2); ?>)</span>
+                            • <span style="color: #64748b;">(Base: ₹<?php echo number_format($total_base_due, 2); ?> + Fine: ₹<?php echo number_format($total_fine_due, 2); ?>)</span>
                         <?php endif; ?>
                     </small>
                 </div>
             </div>
 
-            <div class="stat-card" style="border-left: 4px solid #ea580c;">
+            <div class="stat-card card-orange">
                 <div class="stat-icon icon-orange"><i class="fas fa-user-times"></i></div>
                 <div class="stat-info">
                     <h3><?php echo number_format($total_defaulters); ?></h3>
-                    <p style="font-weight: 700;">Students With Dues</p>
-                    <small style="color: #ea580c; font-weight: 800; font-size: 0.75rem;">Active Enrolled Defaulters</small>
+                    <p>Students With Dues</p>
+                    <small style="color: #ea580c;">Active Enrolled Defaulters</small>
                 </div>
             </div>
 
-            <div class="stat-card" style="border-left: 4px solid #7c3aed;">
+            <div class="stat-card card-purple">
                 <div class="stat-icon icon-purple"><i class="fas fa-calculator"></i></div>
                 <div class="stat-info">
                     <h3>₹ <?php echo number_format($avg_due_per_student, 2); ?></h3>
-                    <p style="font-weight: 700;">Average Due / Student</p>
-                    <small style="color: #7c3aed; font-weight: 800; font-size: 0.75rem;">Per Defaulter Average</small>
+                    <p>Average Due / Student</p>
+                    <small style="color: #7c3aed;">Per Defaulter Average</small>
                 </div>
             </div>
 
-            <div class="stat-card" style="border-left: 4px solid #0284c7;">
-                <div class="stat-icon icon-teal"><i class="fas fa-calendar-alt"></i></div>
+            <div class="stat-card card-blue">
+                <div class="stat-icon icon-blue"><i class="fas fa-calendar-alt"></i></div>
                 <div class="stat-info">
-                    <h3 style="font-size: 1.25rem;"><?php echo $current_month_name; ?></h3>
-                    <p style="font-weight: 700;">Current Statement Cutoff</p>
-                    <small style="color: #0284c7; font-weight: 800; font-size: 0.75rem;">All Dues Computed</small>
+                    <h3 style="font-size: 1.35rem;"><?php echo $current_month_name; ?></h3>
+                    <p>Current Statement Cutoff</p>
+                    <small style="color: #0284c7;">All Dues Computed</small>
                 </div>
             </div>
         </div>
@@ -865,10 +1005,10 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                             <!-- Dedicated Calling Desk & Follow-up Panel Link -->
                                             <a href="call_student.php?id=<?php echo $row['id']; ?>" 
                                                target="_blank" 
-                                               class="act-btn" 
-                                               style="background: #ecfdf5; color: #059669; width: 34px; height: 34px; border-radius: 8px; font-size: 0.95rem; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;" 
+                                               class="btn-call-desk-pill" 
                                                title="Open Call Desk & Follow-up Panel for <?php echo htmlspecialchars(addslashes($s_name)); ?>">
                                                 <i class="fas fa-headset"></i>
+                                                <span>Call Desk</span>
                                             </a>
 
                                             <!-- Direct WhatsApp Due Alert -->
