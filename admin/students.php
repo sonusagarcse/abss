@@ -2,7 +2,7 @@
 require_once 'includes/auth.php';
 
 if (isset($_GET['export']) && $_GET['export'] === 'excel') {
-    require_once 'export_students_excel.php';
+    require_once __DIR__ . '/export_students_excel.php';
     exit();
 }
 

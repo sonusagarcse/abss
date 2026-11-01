@@ -1,6 +1,6 @@
 <?php
 // admin/view_bill.php - Professional Fee Invoice View
-require_once 'includes/auth.php';
+require_once __DIR__ . '/includes/auth.php';
 
 if (!isset($_GET['id'])) {
     header("Location: fees.php");

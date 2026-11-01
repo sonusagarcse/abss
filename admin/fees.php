@@ -4,7 +4,7 @@ require_once 'includes/auth.php';
 
 // Automatically run monthly fee billing engine for due students on page load (without blocking on emails)
 $skip_email = true;
-require_once 'includes/billing_engine.php';
+require_once __DIR__ . '/includes/billing_engine.php';
 
 $msg = '';
 $err = '';

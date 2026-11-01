@@ -1,7 +1,7 @@
 <?php
 // admin/receipt.php - Official ABSS Payment Receipt for Admin Portal
 
-require_once 'includes/auth.php';
+require_once __DIR__ . '/includes/auth.php';
 
 $pay_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 

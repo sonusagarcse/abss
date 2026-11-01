@@ -1,9 +1,7 @@
 <?php
-// counselor/achievers.php - Seamless gateway to admin panel module with granular permission checks
-require_once __DIR__ . '/../admin/includes/auth.php';
-$target = '../admin/achievers.php';
-if (!empty($_SERVER['QUERY_STRING'])) {
-    $target .= '?' . $_SERVER['QUERY_STRING'];
-}
-header("Location: $target");
-exit();
+// counselor/achievers.php - Full-Featured Module Bridge with Permission Gatekeeper
+require_once __DIR__ . '/includes/auth.php';
+require_counselor_module('achievers');
+
+define('IS_COUNSELOR_VIEW', true);
+require __DIR__ . '/../admin/achievers.php';

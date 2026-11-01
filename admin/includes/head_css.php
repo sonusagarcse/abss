@@ -1,3 +1,9 @@
+<?php
+if (defined('IS_COUNSELOR_VIEW')) {
+    include __DIR__ . '/../../counselor/includes/head_css.php';
+    return;
+}
+?>
 <!-- admin/includes/head_css.php - Glassmorphic Admin Design Engine -->
 <link rel="icon" type="image/png" href="<?php echo (defined('APP_URL') ? rtrim(APP_URL, '/') : '/abss'); ?>/assets/logo.png">
 <link rel="manifest" href="<?php echo (defined('APP_URL') ? rtrim(APP_URL, '/') : '/abss'); ?>/app/manifest.json">

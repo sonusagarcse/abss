@@ -1,6 +1,6 @@
 <?php
 // admin/student_addons.php - Manage Recurring Add-ons for a Student
-require_once 'includes/auth.php';
+require_once __DIR__ . '/includes/auth.php';
 
 if (!isset($_GET['id'])) {
     header("Location: students.php");

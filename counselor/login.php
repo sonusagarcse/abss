@@ -6,9 +6,9 @@ require_once __DIR__ . '/../includes/auth_helper.php';
 // Auto-restore session from persistent cookie if available
 verify_and_restore_counselor_session();
 
-// Redirect to dashboard if already authenticated
-if (isset($_SESSION['counselor_id'])) {
-    header("Location: ../admin/dashboard.php");
+// Redirect strictly to counselor dashboard if already authenticated
+if (isset($_SESSION['counselor_id']) && (int)$_SESSION['counselor_id'] > 0) {
+    header("Location: dashboard.php");
     exit();
 }
 
@@ -32,8 +32,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     $result = authenticate_counselor($username, $password, $remember);
     if ($result['success']) {
-        $redirect = $result['redirect'] ?? 'dashboard.php';
-        header("Location: ../admin/dashboard.php");
+        // STRICTLY redirect into counselor portal dashboard
+        header("Location: dashboard.php");
         exit();
     } else {
         $error = $result['error'];
@@ -260,7 +260,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <?php endif; ?>
 
         <form method="POST" action="login.php">
-            <input type="hidden" name="csrf_token" value="<?php echo get_csrf_token(); ?>">
+            <input type="hidden" name="csrf_token" value="<?php echo generate_csrf_token(); ?>">
 
             <div class="form-group">
                 <label class="form-label">Email Address or Mobile</label>
@@ -302,4 +302,3 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </div>
 </body>
 </html>
-

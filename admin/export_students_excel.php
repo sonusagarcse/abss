@@ -1,6 +1,6 @@
 <?php
 // admin/export_students_excel.php - Export Complete Student Directory to Excel (CSV with UTF-8 BOM)
-require_once 'includes/auth.php';
+require_once __DIR__ . '/includes/auth.php';
 
 // Turn off display_errors so notices/deprecations never corrupt CSV output
 @ini_set('display_errors', '0');

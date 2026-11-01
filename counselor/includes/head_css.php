@@ -6,6 +6,8 @@
     :root { 
         --portal-teal: #0d9488;
         --portal-teal-dark: #0f766e;
+        --portal-blue: #0d9488;
+        --portal-blue-dark: #0f766e;
         --portal-dark: #0f172a;
         --sidebar-width: 280px;
         --glass-bg: rgba(255, 255, 255, 0.85);

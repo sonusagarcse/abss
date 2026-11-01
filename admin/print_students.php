@@ -1,6 +1,6 @@
 <?php
 // admin/print_students.php - Printable Student Directory Report & PDF Generation View
-require_once 'includes/auth.php';
+require_once __DIR__ . '/includes/auth.php';
 
 // Site Settings
 $settings_list = $conn->query("SELECT setting_key, setting_value FROM site_settings");
