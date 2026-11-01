@@ -252,17 +252,23 @@
             display: flex;
         }
     }
-        }
-        .close-sidebar-btn {
-            display: flex;
-        }
-    }
 
     /* Utility UI Components */
     .portal-card {
         background: #ffffff;
         border-radius: 20px;
         padding: 24px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+        margin-bottom: 24px;
+    }
+    .portal-table-container, .table-responsive {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        min-width: 0;
+    }
         border: 1px solid #e2e8f0;
         box-shadow: 0 10px 30px rgba(0,0,0,0.02);
         margin-bottom: 24px;

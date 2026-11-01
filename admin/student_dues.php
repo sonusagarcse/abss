@@ -495,6 +495,65 @@ $parent_portal_url = "$base_app_url/parent/login.php";
             box-shadow: 0 4px 12px rgba(5, 150, 105, 0.28);
         }
 
+        /* Mobile Scroll & Actions Optimization */
+        .portal-table-container {
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e1 #f8fafc;
+        }
+        .portal-table-container::-webkit-scrollbar {
+            height: 8px;
+        }
+        .portal-table-container::-webkit-scrollbar-track {
+            background: #f8fafc;
+            border-radius: 4px;
+        }
+        .portal-table-container::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+
+        .mobile-scroll-hint {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            background: #f0fdfa;
+            color: #0d9488;
+            border: 1px dashed #99f6e4;
+            border-radius: 10px;
+            padding: 8px 14px;
+            font-size: 0.78rem;
+            font-weight: 800;
+            margin-bottom: 14px;
+        }
+
+        @media (max-width: 992px) {
+            .mobile-scroll-hint {
+                display: flex;
+            }
+            .portal-card {
+                padding: 16px !important;
+                border-radius: 16px !important;
+                overflow: hidden;
+            }
+            .dues-table {
+                min-width: 820px !important;
+            }
+            .dues-actions .act-btn {
+                display: none !important;
+            }
+            .dues-table th:last-child {
+                min-width: 110px !important;
+                text-align: center !important;
+            }
+            .dues-actions {
+                justify-content: center !important;
+            }
+        }
+
         /* Email Due Bill Modal */
         .modal-overlay {
             position: fixed;
@@ -810,6 +869,12 @@ $parent_portal_url = "$base_app_url/parent/login.php";
 
         <!-- Dues Statement Table Card -->
         <div class="portal-card" style="padding: 20px;">
+            <!-- Mobile Horizontal Scroll Indicator -->
+            <div class="mobile-scroll-hint no-print">
+                <i class="fas fa-arrows-left-right"></i>
+                <span>Swipe or scroll horizontally to view full student statement &amp; call desk</span>
+            </div>
+
             <div class="portal-table-container">
                 <table class="dues-table" id="duesTable">
                     <thead>
@@ -822,7 +887,9 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                             <th>Class / Mode</th>
                             <th>Total Due Till Date</th>
                             <th>Due Months Breakdown</th>
-                            <th class="no-print" style="text-align: right; min-width: 180px;">Actions</th>
+                            <th class="no-print" style="text-align: <?php echo defined('IS_COUNSELOR_VIEW') ? 'center' : 'right'; ?>; min-width: <?php echo defined('IS_COUNSELOR_VIEW') ? '120px' : '180px'; ?>;">
+                                <?php echo defined('IS_COUNSELOR_VIEW') ? 'Call Action' : 'Actions'; ?>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -967,42 +1034,9 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                         </div>
                                     </td>
 
-                                    <td class="no-print" style="text-align: right;">
-                                        <div style="display: inline-flex; align-items: center; gap: 6px;">
-                                            <!-- Direct Email Bill & PDF -->
-                                            <?php 
-                                            $eff_email = $row['guardian_email'] ?: ($row['parent_email'] ?? ''); 
-                                            $latest_bid = (int)($row['latest_bill_id'] ?? 0);
-                                            ?>
-                                            <button type="button" 
-                                                    class="act-btn" 
-                                                    onclick="openEmailDuesModal(<?php echo $row['id']; ?>, '<?php echo addslashes($s_name); ?>', '<?php echo addslashes($p_name); ?>', '<?php echo addslashes($eff_email); ?>', <?php echo (float)$row['total_due']; ?>, '<?php echo addslashes($d_months); ?>', <?php echo (int)$row['unpaid_count']; ?>, <?php echo $latest_bid; ?>)" 
-                                                    style="background: #eff6ff; color: #1d4ed8; width: 34px; height: 34px; border-radius: 8px;" 
-                                                    title="Email Official Fee Invoice &amp; Statement PDF">
-                                                <i class="fas fa-envelope-open-text"></i>
-                                            </button>
-
-                                            <!-- Direct Download PDF Statement (Exact layout from view_bill.php) -->
-                                            <a href="<?php echo ($latest_bid > 0 ? 'ajax_send_due_email.php?action=download_bill_pdf&bill_id=' . $latest_bid : 'ajax_send_due_email.php?action=download_due_pdf&student_id=' . $row['id']); ?>" 
-                                               target="_blank" 
-                                               class="act-btn" 
-                                               style="background: #fee2e2; color: #b91c1c; width: 34px; height: 34px; border-radius: 8px;" 
-                                               title="Download Official Fee Invoice PDF (view_bill.php layout)">
-                                                <i class="fas fa-file-pdf"></i>
-                                            </a>
-
-                                            <!-- Direct Realtime Dues SMS -->
-                                            <?php if (!empty($phone_digits)): ?>
-                                                <button type="button" 
-                                                        class="act-btn" 
-                                                        onclick="openSmsDuesModal(<?php echo (int)$row['id']; ?>, '<?php echo htmlspecialchars(addslashes($s_name)); ?>', '<?php echo htmlspecialchars(addslashes($p_name)); ?>', '<?php echo htmlspecialchars(addslashes($phone_digits)); ?>', <?php echo (float)$row['total_due']; ?>, <?php echo (float)$row['base_due']; ?>, <?php echo (float)$row['fine_amount']; ?>, '<?php echo htmlspecialchars(addslashes($d_months)); ?>', '<?php echo htmlspecialchars(addslashes($r_reg)); ?>', '<?php echo htmlspecialchars(addslashes($row['class_admitted'] ?? '')); ?>', <?php echo (int)($row['fcm_device_count'] ?? 0); ?>)" 
-                                                        style="background: #e0f2fe; color: #0284c7; width: 34px; height: 34px; border-radius: 8px; border: none; cursor: pointer;" 
-                                                        title="Send Realtime Dues SMS">
-                                                    <i class="fas fa-sms"></i>
-                                                </button>
-                                            <?php endif; ?>
-
-                                            <!-- Dedicated Calling Desk & Follow-up Panel Link -->
+                                    <td class="no-print" style="text-align: <?php echo defined('IS_COUNSELOR_VIEW') ? 'center' : 'right'; ?>;">
+                                        <div class="dues-actions" style="display: inline-flex; align-items: center; gap: 6px; <?php echo defined('IS_COUNSELOR_VIEW') ? 'justify-content: center;' : ''; ?>">
+                                            <!-- Dedicated Calling Desk & Follow-up Panel Link (Always visible for callers & mobile) -->
                                             <a href="call_student.php?id=<?php echo $row['id']; ?>" 
                                                target="_blank" 
                                                class="btn-call-desk-pill" 
@@ -1011,35 +1045,71 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                                 <span>Call Desk</span>
                                             </a>
 
-                                            <!-- Direct WhatsApp Due Alert -->
-                                            <?php if (!empty($phone_digits)): ?>
-                                                <a href="https://api.whatsapp.com/send?phone=<?php echo (strlen($phone_digits) == 10 ? '91' . $phone_digits : $phone_digits); ?>&text=<?php echo $encoded_wa; ?>" 
-                                                   target="_blank" 
-                                                   class="act-btn" 
-                                                   style="background: #dcfce7; color: #15803d; width: 34px; height: 34px; border-radius: 8px;" 
-                                                   title="Send Due Fee WhatsApp Alert">
-                                                    <i class="fab fa-whatsapp"></i>
-                                                </a>
-                                            <?php endif; ?>
-
-                                            <!-- Direct App Push Due Alert (ONLY IF FCM TOKEN LINKED) -->
-                                            <?php if (!empty($row['fcm_device_count']) && (int)$row['fcm_device_count'] > 0): ?>
+                                            <?php if (!defined('IS_COUNSELOR_VIEW')): ?>
+                                                <!-- Direct Email Bill & PDF (Admin Only / Hidden on Mobile) -->
+                                                <?php 
+                                                $eff_email = $row['guardian_email'] ?: ($row['parent_email'] ?? ''); 
+                                                $latest_bid = (int)($row['latest_bill_id'] ?? 0);
+                                                ?>
                                                 <button type="button" 
                                                         class="act-btn" 
-                                                        onclick="directSendDuePush(<?php echo (int)$row['id']; ?>, '<?php echo htmlspecialchars(addslashes($s_name)); ?>', <?php echo (float)$row['total_due']; ?>, '<?php echo htmlspecialchars(addslashes($d_months)); ?>')" 
-                                                        style="background: #faf5ff; color: #7c3aed; width: 34px; height: 34px; border-radius: 8px; border: 1px solid #e9d5ff; cursor: pointer;" 
-                                                        title="Push Alert: <?php echo (int)$row['fcm_device_count']; ?> Parent App Device(s) Linked">
-                                                    <i class="fas fa-bell"></i>
+                                                        onclick="openEmailDuesModal(<?php echo $row['id']; ?>, '<?php echo addslashes($s_name); ?>', '<?php echo addslashes($p_name); ?>', '<?php echo addslashes($eff_email); ?>', <?php echo (float)$row['total_due']; ?>, '<?php echo addslashes($d_months); ?>', <?php echo (int)$row['unpaid_count']; ?>, <?php echo $latest_bid; ?>)" 
+                                                        style="background: #eff6ff; color: #1d4ed8; width: 34px; height: 34px; border-radius: 8px;" 
+                                                        title="Email Official Fee Invoice &amp; Statement PDF">
+                                                    <i class="fas fa-envelope-open-text"></i>
                                                 </button>
-                                            <?php endif; ?>
 
-                                            <a href="<?php echo ($latest_bid > 0 ? 'view_bill.php?id=' . $latest_bid : 'fees.php'); ?>" 
-                                               target="_blank"
-                                               class="act-btn" 
-                                               style="background: #f1f5f9; color: var(--portal-dark); width: 34px; height: 34px; border-radius: 8px;" 
-                                               title="View Official Fee Invoice (view_bill.php)">
-                                                <i class="fas fa-file-invoice"></i>
-                                            </a>
+                                                <!-- Direct Download PDF Statement (Exact layout from view_bill.php) -->
+                                                <a href="<?php echo ($latest_bid > 0 ? 'ajax_send_due_email.php?action=download_bill_pdf&bill_id=' . $latest_bid : 'ajax_send_due_email.php?action=download_due_pdf&student_id=' . $row['id']); ?>" 
+                                                   target="_blank" 
+                                                   class="act-btn" 
+                                                   style="background: #fee2e2; color: #b91c1c; width: 34px; height: 34px; border-radius: 8px;" 
+                                                   title="Download Official Fee Invoice PDF (view_bill.php layout)">
+                                                    <i class="fas fa-file-pdf"></i>
+                                                </a>
+
+                                                <!-- Direct Realtime Dues SMS -->
+                                                <?php if (!empty($phone_digits)): ?>
+                                                    <button type="button" 
+                                                            class="act-btn" 
+                                                            onclick="openSmsDuesModal(<?php echo (int)$row['id']; ?>, '<?php echo htmlspecialchars(addslashes($s_name)); ?>', '<?php echo htmlspecialchars(addslashes($p_name)); ?>', '<?php echo htmlspecialchars(addslashes($phone_digits)); ?>', <?php echo (float)$row['total_due']; ?>, <?php echo (float)$row['base_due']; ?>, <?php echo (float)$row['fine_amount']; ?>, '<?php echo htmlspecialchars(addslashes($d_months)); ?>', '<?php echo htmlspecialchars(addslashes($r_reg)); ?>', '<?php echo htmlspecialchars(addslashes($row['class_admitted'] ?? '')); ?>', <?php echo (int)($row['fcm_device_count'] ?? 0); ?>)" 
+                                                            style="background: #e0f2fe; color: #0284c7; width: 34px; height: 34px; border-radius: 8px; border: none; cursor: pointer;" 
+                                                            title="Send Realtime Dues SMS">
+                                                        <i class="fas fa-sms"></i>
+                                                    </button>
+                                                <?php endif; ?>
+
+                                                <!-- Direct WhatsApp Due Alert -->
+                                                <?php if (!empty($phone_digits)): ?>
+                                                    <a href="https://api.whatsapp.com/send?phone=<?php echo (strlen($phone_digits) == 10 ? '91' . $phone_digits : $phone_digits); ?>&text=<?php echo $encoded_wa; ?>" 
+                                                       target="_blank" 
+                                                       class="act-btn" 
+                                                       style="background: #dcfce7; color: #15803d; width: 34px; height: 34px; border-radius: 8px;" 
+                                                       title="Send Due Fee WhatsApp Alert">
+                                                        <i class="fab fa-whatsapp"></i>
+                                                    </a>
+                                                <?php endif; ?>
+
+                                                <!-- Direct App Push Due Alert (ONLY IF FCM TOKEN LINKED) -->
+                                                <?php if (!empty($row['fcm_device_count']) && (int)$row['fcm_device_count'] > 0): ?>
+                                                    <button type="button" 
+                                                            class="act-btn" 
+                                                            onclick="directSendDuePush(<?php echo (int)$row['id']; ?>, '<?php echo htmlspecialchars(addslashes($s_name)); ?>', <?php echo (float)$row['total_due']; ?>, '<?php echo htmlspecialchars(addslashes($d_months)); ?>')" 
+                                                            style="background: #faf5ff; color: #7c3aed; width: 34px; height: 34px; border-radius: 8px; border: 1px solid #e9d5ff; cursor: pointer;" 
+                                                            title="Push Alert: <?php echo (int)$row['fcm_device_count']; ?> Parent App Device(s) Linked">
+                                                        <i class="fas fa-bell"></i>
+                                                    </button>
+                                                <?php endif; ?>
+
+                                                <!-- View Official Fee Invoice -->
+                                                <a href="<?php echo ($latest_bid > 0 ? 'view_bill.php?id=' . $latest_bid : 'fees.php'); ?>" 
+                                                   target="_blank"
+                                                   class="act-btn" 
+                                                   style="background: #f1f5f9; color: var(--portal-dark); width: 34px; height: 34px; border-radius: 8px;" 
+                                                   title="View Official Fee Invoice (view_bill.php)">
+                                                    <i class="fas fa-file-invoice"></i>
+                                                </a>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                 </tr>
