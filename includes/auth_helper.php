@@ -386,3 +386,292 @@ function authenticate_teacher($username, $password) {
     }
     return ['success' => false, 'error' => 'No teacher account found with this email or mobile number.'];
 }
+
+
+/**
+ * Master Catalog of Modules that Admin can permit/grant to Counselors
+ */
+function get_counselor_modules_catalog() {
+    return [
+        'inquiries' => [
+            'label' => 'Admission Inquiries & Leads',
+            'icon' => 'fas fa-envelope-open-text',
+            'color' => '#2563eb',
+            'category' => 'Admissions & Leads',
+            'desc' => 'Manage admission inquiries, prospect queries, and follow-up status'
+        ],
+        'admissions' => [
+            'label' => 'Online Admissions',
+            'icon' => 'fas fa-user-plus',
+            'color' => '#059669',
+            'category' => 'Admissions & Leads',
+            'desc' => 'Review online application forms and enroll candidates into the database'
+        ],
+        'students' => [
+            'label' => 'Student Directory',
+            'icon' => 'fas fa-user-graduate',
+            'color' => '#7c3aed',
+            'category' => 'Students & Study',
+            'desc' => 'Look up enrolled student profiles, batches, and contact details'
+        ],
+        'visitors' => [
+            'label' => 'Campus Visitors Log',
+            'icon' => 'fas fa-chart-line',
+            'color' => '#ea580c',
+            'category' => 'Admissions & Leads',
+            'desc' => 'Track front-desk visits, walk-in consultations, and counselor notes'
+        ],
+        'tickets' => [
+            'label' => 'Support & Helpdesk Tickets',
+            'icon' => 'fas fa-ticket-alt',
+            'color' => '#0284c7',
+            'category' => 'Communication',
+            'desc' => 'Handle parent and student grievances and queries'
+        ],
+        'notices' => [
+            'label' => 'Notice Board',
+            'icon' => 'fas fa-bullhorn',
+            'color' => '#d97706',
+            'category' => 'Communication',
+            'desc' => 'View institutional announcements, circulars, and notifications'
+        ],
+        'fees' => [
+            'label' => 'Fee Ledger & Dues Lookup',
+            'icon' => 'fas fa-file-invoice-dollar',
+            'color' => '#16a34a',
+            'category' => 'Finance',
+            'desc' => 'Check fee balances, dues, and payment receipts for counseling guidance'
+        ],
+        'attendance' => [
+            'label' => 'Student Attendance',
+            'icon' => 'fas fa-calendar-check',
+            'color' => '#0d9488',
+            'category' => 'Students & Study',
+            'desc' => 'View student daily attendance records and absence patterns'
+        ],
+        'results' => [
+            'label' => 'Exam Results & Marks',
+            'icon' => 'fas fa-award',
+            'color' => '#9333ea',
+            'category' => 'Students & Study',
+            'desc' => 'View examination results and student academic performance'
+        ],
+        'syllabus' => [
+            'label' => 'Academic Syllabus',
+            'icon' => 'fas fa-book-open',
+            'color' => '#2563eb',
+            'category' => 'Academic Programs',
+            'desc' => 'Browse curriculum, subject outlines, and test syllabi'
+        ],
+        'schools' => [
+            'label' => 'Coaching Programs',
+            'icon' => 'fas fa-graduation-cap',
+            'color' => '#4338ca',
+            'category' => 'Academic Programs',
+            'desc' => 'Reference available coaching courses, fee structures, and target schools'
+        ],
+        'achievers' => [
+            'label' => 'Hall of Excellence',
+            'icon' => 'fas fa-trophy',
+            'color' => '#eab308',
+            'category' => 'Academic Programs',
+            'desc' => 'Showcase top achievers and rankers to prospective parents'
+        ],
+        'gallery' => [
+            'label' => 'Campus Media Gallery',
+            'icon' => 'fas fa-images',
+            'color' => '#0891b2',
+            'category' => 'Media',
+            'desc' => 'Campus infrastructure and event photography repository'
+        ],
+        'whatsapp' => [
+            'label' => 'WhatsApp Quick Hub',
+            'icon' => 'fab fa-whatsapp',
+            'color' => '#22c55e',
+            'category' => 'Communication',
+            'desc' => 'Quick WhatsApp messaging bridge for parents and leads'
+        ]
+    ];
+}
+
+/**
+ * Generate Secure Counselor Remember Token Hash
+ */
+function generate_counselor_remember_hash($counselor_id, $email) {
+    return hash_hmac('sha256', (int)$counselor_id . '|' . strtolower(trim($email)), get_parent_auth_secret());
+}
+
+/**
+ * Set Persistent 1-Year Counselor Remember Cookie
+ */
+function set_counselor_remember_cookie($counselor_id, $email) {
+    $token_hash = generate_counselor_remember_hash($counselor_id, $email);
+    $cookie_val = (int)$counselor_id . ':' . $token_hash;
+    $oneYear = 31536000;
+    
+    $isSecure = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
+        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+        || (isset($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower($_SERVER['HTTP_X_FORWARDED_SSL']) === 'on')
+        || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+
+    setcookie('abss_counselor_remember', $cookie_val, [
+        'expires' => time() + $oneYear,
+        'path' => '/',
+        'domain' => '',
+        'secure' => $isSecure,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+}
+
+/**
+ * Clear Persistent Counselor Remember Cookie
+ */
+function clear_counselor_remember_cookie() {
+    $isSecure = (!empty($_SERVER['HTTPS']) && strtolower($_SERVER['HTTPS']) !== 'off')
+        || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && strtolower($_SERVER['HTTP_X_FORWARDED_PROTO']) === 'https')
+        || (isset($_SERVER['HTTP_X_FORWARDED_SSL']) && strtolower($_SERVER['HTTP_X_FORWARDED_SSL']) === 'on')
+        || (isset($_SERVER['SERVER_PORT']) && $_SERVER['SERVER_PORT'] == 443);
+
+    setcookie('abss_counselor_remember', '', [
+        'expires' => time() - 86400,
+        'path' => '/',
+        'domain' => '',
+        'secure' => $isSecure,
+        'httponly' => true,
+        'samesite' => 'Lax'
+    ]);
+    if (isset($_COOKIE['abss_counselor_remember'])) {
+        unset($_COOKIE['abss_counselor_remember']);
+    }
+}
+
+/**
+ * Verify and Auto-Restore Counselor Session from Persistent Cookie
+ */
+function verify_and_restore_counselor_session() {
+    if (isset($_SESSION['counselor_id']) && (int)$_SESSION['counselor_id'] > 0) {
+        return true;
+    }
+
+    if (isset($_COOKIE['abss_counselor_remember'])) {
+        $cookie_data = explode(':', $_COOKIE['abss_counselor_remember'], 2);
+        if (count($cookie_data) === 2) {
+            $counselor_id = (int)$cookie_data[0];
+            $provided_hash = $cookie_data[1];
+
+            if ($counselor_id > 0) {
+                $conn = getDB();
+                $stmt = $conn->prepare("SELECT id, name, email, designation, permissions, status FROM counselors WHERE id = ? LIMIT 1");
+                $stmt->bind_param("i", $counselor_id);
+                $stmt->execute();
+                $res = $stmt->get_result();
+
+                if ($counselor = $res->fetch_assoc()) {
+                    if ($counselor['status'] === 'active') {
+                        $expected_hash = generate_counselor_remember_hash($counselor['id'], $counselor['email']);
+                        if (hash_equals($expected_hash, $provided_hash)) {
+                            $_SESSION['counselor_id'] = (int)$counselor['id'];
+                            $_SESSION['counselor_name'] = $counselor['name'];
+                            $_SESSION['counselor_email'] = $counselor['email'];
+                            $_SESSION['counselor_designation'] = $counselor['designation'];
+                            
+                            $perms = !empty($counselor['permissions']) ? json_decode($counselor['permissions'], true) : [];
+                            if (!is_array($perms)) $perms = [];
+                            $_SESSION['counselor_permissions'] = $perms;
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/**
+ * Authenticate Counselor Login
+ */
+function authenticate_counselor($username, $password, $remember = true) {
+    $conn = getDB();
+    $clean_user = trim($username);
+
+    $stmt = $conn->prepare("SELECT id, name, email, phone, password, designation, permissions, status FROM counselors WHERE (LOWER(email) = LOWER(?) OR phone = ?) LIMIT 1");
+    $stmt->bind_param("ss", $clean_user, $clean_user);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($counselor = $result->fetch_assoc()) {
+        if ($counselor['status'] !== 'active') {
+            return ['success' => false, 'error' => 'Your counselor account is inactive. Please contact the administration office.'];
+        }
+
+        if (password_verify($password, $counselor['password'])) {
+            session_regenerate_id(false);
+            $_SESSION['counselor_id'] = (int)$counselor['id'];
+            $_SESSION['counselor_name'] = $counselor['name'];
+            $_SESSION['counselor_email'] = $counselor['email'];
+            $_SESSION['counselor_designation'] = $counselor['designation'] ?: 'Admission Counselor';
+            
+            $perms = !empty($counselor['permissions']) ? json_decode($counselor['permissions'], true) : [];
+            if (!is_array($perms)) $perms = [];
+            $_SESSION['counselor_permissions'] = $perms;
+
+            if ($remember) {
+                set_counselor_remember_cookie($counselor['id'], $counselor['email']);
+            }
+
+            if (function_exists('log_activity')) {
+                log_activity('login', "Counselor successfully logged in: " . $counselor['email']);
+            }
+            return ['success' => true, 'redirect' => 'dashboard.php'];
+        } else {
+            if (function_exists('log_activity')) {
+                log_activity('login_failed', "Failed counselor login: incorrect password for " . $clean_user);
+            }
+            return ['success' => false, 'error' => 'Invalid password. Please verify and try again.'];
+        }
+    }
+
+    if (function_exists('log_activity')) {
+        log_activity('login_failed', "Failed counselor login: account not found for " . $clean_user);
+    }
+    return ['success' => false, 'error' => 'No counselor account found with that email or mobile number.'];
+}
+
+/**
+ * Get Counselor Permissions array for a given counselor ID
+ */
+function get_counselor_permissions($counselor_id) {
+    $cid = (int)$counselor_id;
+    if ($cid <= 0) return [];
+    
+    $conn = getDB();
+    $stmt = $conn->prepare("SELECT permissions FROM counselors WHERE id = ? LIMIT 1");
+    $stmt->bind_param("i", $cid);
+    $stmt->execute();
+    $row = $stmt->get_result()->fetch_assoc();
+    if ($row && !empty($row['permissions'])) {
+        $arr = json_decode($row['permissions'], true);
+        return is_array($arr) ? $arr : [];
+    }
+    return [];
+}
+
+/**
+ * Check if the current (or specified) counselor has permission for a specific module
+ */
+function counselor_has_permission($module, $counselor_id = null) {
+    if ($counselor_id === null) {
+        if (!isset($_SESSION['counselor_id'])) return false;
+        $counselor_id = (int)$_SESSION['counselor_id'];
+        
+        // Fast lookup from session if set
+        if (isset($_SESSION['counselor_permissions']) && is_array($_SESSION['counselor_permissions'])) {
+            return in_array($module, $_SESSION['counselor_permissions'], true);
+        }
+    }
+    
+    $perms = get_counselor_permissions($counselor_id);
+    return in_array($module, $perms, true);
+}

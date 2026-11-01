@@ -810,6 +810,49 @@ function runAutoMigrator($conn) {
             $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('dues_cleanup_20260930_v4', '1') ON DUPLICATE KEY UPDATE setting_value = '1'");
         }
 
+        // 18. Ensure counselors table exists & initialize default counselor & module settings
+        $conn->query("CREATE TABLE IF NOT EXISTS counselors (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            name VARCHAR(150) NOT NULL,
+            email VARCHAR(150) NOT NULL UNIQUE,
+            phone VARCHAR(20) NOT NULL,
+            password VARCHAR(255) NOT NULL,
+            designation VARCHAR(100) DEFAULT 'Admission Counselor',
+            permissions TEXT DEFAULT NULL,
+            status ENUM('active','inactive') DEFAULT 'active',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_email (email),
+            INDEX idx_status (status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
+        // Ensure default counselor permissions setting exists in settings table
+        $chkCounselorPerm = $conn->query("SELECT setting_value FROM settings WHERE setting_key = 'counselor_default_modules'");
+        if (!$chkCounselorPerm || $chkCounselorPerm->num_rows == 0) {
+            $default_modules = json_encode(['inquiries', 'admissions', 'students', 'visitors', 'tickets', 'notices']);
+            $conn->query("INSERT INTO settings (setting_key, setting_value) VALUES ('counselor_default_modules', '$default_modules')");
+        }
+
+        // Seed a default counselor if none exist
+        $chkCounselorCount = $conn->query("SELECT COUNT(*) as cnt FROM counselors");
+        if ($chkCounselorCount) {
+            $c_cnt = (int)($chkCounselorCount->fetch_assoc()['cnt'] ?? 0);
+            if ($c_cnt === 0) {
+                $c_name = 'Primary Counselor';
+                $c_email = 'counselor@abss.com';
+                $c_phone = '9876543210';
+                $c_pass = password_hash('counselor123', PASSWORD_DEFAULT);
+                $c_desig = 'Senior Admission Counselor';
+                $c_perms = json_encode(['inquiries', 'admissions', 'students', 'visitors', 'tickets', 'notices']);
+                $c_stmt = $conn->prepare("INSERT INTO counselors (name, email, phone, password, designation, permissions, status) VALUES (?, ?, ?, ?, ?, ?, 'active')");
+                if ($c_stmt) {
+                    $c_stmt->bind_param("ssssss", $c_name, $c_email, $c_phone, $c_pass, $c_desig, $c_perms);
+                    $c_stmt->execute();
+                    $c_stmt->close();
+                }
+            }
+        }
+
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
         

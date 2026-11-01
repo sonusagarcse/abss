@@ -9,7 +9,7 @@ $is_notif_page = (strpos($_SERVER['PHP_SELF'], 'notifications') !== false || $cu
 // Define Active Category Groups
 $is_academics_active = in_array($current_page, ['students', 'attendance', 'assign_groups', 'results', 'syllabus']);
 $is_finance_active = in_array($current_page, ['fees', 'student_dues', 'fine_system', 'view_bill', 'receipt']);
-$is_teacher_active = in_array($current_page, ['teachers', 'teacher_attendance', 'teacher_expenses', 'teacher_invoices', 'print_teacher_invoice']);
+$is_teacher_active = in_array($current_page, ['teachers', 'teacher_attendance', 'teacher_expenses', 'teacher_invoices', 'print_teacher_invoice', 'counselors']);
 $is_parents_active = in_array($current_page, ['parents', 'documents', 'document_approvals']);
 $is_communication_active = in_array($current_page, ['whatsapp', 'notices', 'inquiries', 'tickets']) || $is_notif_page;
 $is_portal_active = in_array($current_page, ['admissions', 'schools', 'achievers', 'gallery', 'visitors', 'settings']);
@@ -307,7 +307,7 @@ $is_portal_active = in_array($current_page, ['admissions', 'schools', 'achievers
                     <span>Teachers &amp; Staff</span>
                 </div>
                 <div class="toggle-meta">
-                    <span class="count-pill">4</span>
+                    <span class="count-pill">5</span>
                     <i class="fas fa-chevron-down submenu-arrow"></i>
                 </div>
             </div>
@@ -330,6 +330,11 @@ $is_portal_active = in_array($current_page, ['admissions', 'schools', 'achievers
                 <li>
                     <a href="<?php echo $admin_url; ?>teacher_invoices" class="sub-link <?php echo $current_page == 'teacher_invoices' ? 'active' : ''; ?>">
                         <i class="fas fa-money-check-alt"></i> Salary Invoices
+                    </a>
+                </li>
+                <li>
+                    <a href="<?php echo $admin_url; ?>counselors" class="sub-link <?php echo $current_page == 'counselors' ? 'active' : ''; ?>">
+                        <i class="fas fa-user-shield" style="color: #0d9488;"></i> Counselors &amp; Roles
                     </a>
                 </li>
             </ul>
