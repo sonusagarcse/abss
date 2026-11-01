@@ -8,7 +8,7 @@ verify_and_restore_counselor_session();
 
 // Redirect to dashboard if already authenticated
 if (isset($_SESSION['counselor_id'])) {
-    header("Location: dashboard.php");
+    header("Location: ../admin/dashboard.php");
     exit();
 }
 
@@ -33,7 +33,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $result = authenticate_counselor($username, $password, $remember);
     if ($result['success']) {
         $redirect = $result['redirect'] ?? 'dashboard.php';
-        header("Location: " . $redirect);
+        header("Location: ../admin/dashboard.php");
         exit();
     } else {
         $error = $result['error'];

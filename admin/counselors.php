@@ -1019,12 +1019,8 @@ if (!is_array($default_modules)) $default_modules = ['inquiries', 'admissions', 
             }
         }
 
-        // Close modal when clicking outside
-        window.addEventListener('click', function(e) {
-            if (e.target.classList.contains('modal')) {
-                e.target.classList.remove('show');
-            }
-        });
+        // Side clicks disabled so modal does not accidentally disappear while configuring permissions
+        // Modal can be closed using the 'Cancel' or 'X' buttons.
     </script>
 </body>
 </html>
