@@ -1,6 +1,6 @@
 <?php
 // admin/bulk_print.php - Bulk Print Student Invoices
-require_once 'includes/auth.php';
+require_once __DIR__ . '/includes/auth.php';
 
 if (!isset($_GET['ids']) || empty($_GET['ids'])) {
     die("No invoices selected.");

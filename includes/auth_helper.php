@@ -436,11 +436,11 @@ function get_counselor_modules_catalog() {
             'desc' => 'View institutional announcements, circulars, and notifications'
         ],
         'fees' => [
-            'label' => 'Fee Ledger & Dues Lookup',
-            'icon' => 'fas fa-file-invoice-dollar',
+            'label' => 'Student Dues & Calling Desk',
+            'icon' => 'fas fa-phone-volume',
             'color' => '#16a34a',
-            'category' => 'Finance',
-            'desc' => 'Check fee balances, dues, and payment receipts for counseling guidance'
+            'category' => 'Finance & Calling',
+            'desc' => 'Monitor student fee arrears, conduct parent follow-up calls, and track dues'
         ],
         'attendance' => [
             'label' => 'Student Attendance',

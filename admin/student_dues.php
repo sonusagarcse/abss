@@ -5,7 +5,7 @@ require_once __DIR__ . '/includes/auth.php';
 
 // Trigger automated billing engine to ensure latest month bills are calculated
 $skip_email = true;
-require_once 'includes/billing_engine.php';
+require_once __DIR__ . '/includes/billing_engine.php';
 
 // Current session and cutoff details
 $current_month_name = date('F Y');
@@ -688,7 +688,14 @@ $parent_portal_url = "$base_app_url/parent/login.php";
 
                                     <td>
                                         <div style="font-family: monospace; font-weight: 800; color: var(--portal-dark); font-size: 0.92rem;">
-                                            <?php echo htmlspecialchars($row['phone']); ?>
+                                            <?php if (!empty($phone_digits)): ?>
+                                                <a href="tel:<?php echo htmlspecialchars($phone_digits); ?>" style="color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="Click to Call Parent">
+                                                    <i class="fas fa-phone-alt" style="color: #059669; font-size: 0.82rem;"></i>
+                                                    <?php echo htmlspecialchars($row['phone']); ?>
+                                                </a>
+                                            <?php else: ?>
+                                                <?php echo htmlspecialchars($row['phone']); ?>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
 
@@ -759,6 +766,16 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                                         title="Send Realtime Dues SMS">
                                                     <i class="fas fa-sms"></i>
                                                 </button>
+                                            <?php endif; ?>
+
+                                                                                        <!-- Direct Phone Call Action for Callers/Counselors -->
+                                            <?php if (!empty($phone_digits)): ?>
+                                                <a href="tel:<?php echo htmlspecialchars($phone_digits); ?>" 
+                                                   class="act-btn" 
+                                                   style="background: #ecfdf5; color: #059669; width: 34px; height: 34px; border-radius: 8px;" 
+                                                   title="Direct Call Parent (<?php echo htmlspecialchars($row['phone']); ?>)">
+                                                    <i class="fas fa-phone-alt"></i>
+                                                </a>
                                             <?php endif; ?>
 
                                             <!-- Direct WhatsApp Due Alert -->

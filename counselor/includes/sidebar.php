@@ -159,11 +159,11 @@ $counselor_desig = $_SESSION['counselor_designation'] ?? 'Admission Counselor';
 
         <!-- 4. FINANCE & FEES -->
         <?php if (in_array('fees', $user_perms)): ?>
-            <span class="nav-section-title">Finance</span>
+            <span class="nav-section-title">Finance &amp; Calling</span>
             <li class="nav-item">
-                <a href="<?php echo $counselor_url; ?>fees" class="nav-link <?php echo $current_page == 'fees' ? 'active' : ''; ?>">
-                    <i class="fas fa-file-invoice-dollar" style="color: #16a34a;"></i>
-                    <span>Fees &amp; Dues Lookup</span>
+                <a href="<?php echo $counselor_url; ?>fees" class="nav-link <?php echo ($current_page == 'fees' || $current_page == 'student_dues') ? 'active' : ''; ?>">
+                    <i class="fas fa-phone-volume" style="color: #16a34a;"></i>
+                    <span>Student Dues &amp; Calling</span>
                 </a>
             </li>
         <?php endif; ?>
