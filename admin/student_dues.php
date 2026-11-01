@@ -38,7 +38,10 @@ $dues_query = $conn->query("
         COALESCE((
             SELECT COUNT(*) FROM fcm_tokens f 
             WHERE f.student_id = s.id OR (f.parent_id > 0 AND f.parent_id = s.parent_id)
-        ), 0) AS fcm_device_count
+        ), 0) AS fcm_device_count,
+        COALESCE(latest_call.call_outcome, '') AS last_call_outcome,
+        COALESCE(latest_call.remark, '') AS last_call_remark,
+        latest_call.followup_date AS next_followup_date
     FROM students s
     LEFT JOIN parents p ON s.parent_id = p.id
     INNER JOIN (
@@ -52,6 +55,15 @@ $dues_query = $conn->query("
         WHERE status = 'unpaid'
         GROUP BY student_id
     ) unpaid ON s.id = unpaid.student_id
+    LEFT JOIN (
+        SELECT scl1.student_id, scl1.call_outcome, scl1.remark, scl1.followup_date
+        FROM student_call_logs scl1
+        INNER JOIN (
+            SELECT student_id, MAX(id) as max_id
+            FROM student_call_logs
+            GROUP BY student_id
+        ) scl2 ON scl1.id = scl2.max_id
+    ) latest_call ON s.id = latest_call.student_id
     WHERE s.status = 'active'
     ORDER BY total_due DESC, s.name ASC
 ");
@@ -122,9 +134,72 @@ $parent_portal_url = "$base_app_url/parent/login.php";
 
         .stats-kpi-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 18px;
             margin-bottom: 25px;
+        }
+
+        .stat-card {
+            background: #ffffff;
+            border-radius: 18px;
+            padding: 22px 24px;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            border: 1px solid #e2e8f0;
+            box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+        }
+
+        .stat-card.card-red { border-left: 5px solid #dc2626; }
+        .stat-card.card-orange { border-left: 5px solid #ea580c; }
+        .stat-card.card-purple { border-left: 5px solid #7c3aed; }
+        .stat-card.card-blue { border-left: 5px solid #0284c7; }
+
+        .stat-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+        .icon-red { background: #fee2e2; color: #dc2626; }
+        .icon-orange { background: #ffedd5; color: #ea580c; }
+        .icon-green { background: #dcfce7; color: #166534; }
+        .icon-purple { background: #f3e8ff; color: #7c3aed; }
+        .icon-blue, .icon-teal { background: #e0f2fe; color: #0284c7; }
+
+        .stat-info { flex: 1; min-width: 0; }
+        .stat-info h3 {
+            margin: 0;
+            font-size: 1.6rem;
+            font-weight: 800;
+            color: #0f172a;
+            line-height: 1.2;
+            letter-spacing: -0.02em;
+        }
+        .stat-info p {
+            margin: 4px 0 2px;
+            color: #64748b;
+            font-size: 0.82rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .stat-info small {
+            display: block;
+            font-size: 0.76rem;
+            font-weight: 700;
+            margin-top: 2px;
         }
 
         /* Filter Console */
@@ -672,6 +747,25 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                         <?php if (!empty($row['reg_no'])): ?>
                                             <small style="color: var(--portal-blue); font-weight: 800; font-family: monospace;"><?php echo htmlspecialchars($row['reg_no']); ?></small>
                                         <?php endif; ?>
+                                        <?php if (!empty($row['next_followup_date'])): ?>
+                                            <div style="margin-top: 3px;">
+                                                <?php if ($row['next_followup_date'] == date('Y-m-d')): ?>
+                                                    <span style="background: #fef3c7; color: #b45309; border: 1px solid #fde68a; font-size: 0.70rem; font-weight: 800; padding: 2px 7px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;" title="Follow-up Call Scheduled for Today!">
+                                                        <i class="fas fa-bell"></i> Call Today
+                                                    </span>
+                                                <?php else: ?>
+                                                    <span style="background: #f1f5f9; color: #475569; font-size: 0.70rem; font-weight: 800; padding: 2px 7px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px;" title="Scheduled Follow-up Date">
+                                                        <i class="fas fa-calendar-check" style="color: #059669;"></i> <?php echo date('d M', strtotime($row['next_followup_date'])); ?>
+                                                    </span>
+                                                <?php endif; ?>
+                                            </div>
+                                        <?php elseif (!empty($row['last_call_outcome'])): ?>
+                                            <div style="margin-top: 3px;">
+                                                <span style="background: #e0f2fe; color: #0369a1; font-size: 0.68rem; font-weight: 800; padding: 2px 6px; border-radius: 4px;" title="Last Call Outcome">
+                                                    <i class="fas fa-headset"></i> <?php echo htmlspecialchars($row['last_call_outcome']); ?>
+                                                </span>
+                                            </div>
+                                        <?php endif; ?>
                                     </td>
 
                                     <td>
@@ -689,7 +783,7 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                     <td>
                                         <div style="font-family: monospace; font-weight: 800; color: var(--portal-dark); font-size: 0.92rem;">
                                             <?php if (!empty($phone_digits)): ?>
-                                                <a href="tel:<?php echo htmlspecialchars($phone_digits); ?>" style="color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="Click to Call Parent">
+                                                <a href="call_student.php?id=<?php echo $row['id']; ?>" target="_blank" style="color: inherit; text-decoration: none; display: inline-flex; align-items: center; gap: 6px;" title="Open Call Desk & Details for <?php echo htmlspecialchars(addslashes($s_name)); ?>">
                                                     <i class="fas fa-phone-alt" style="color: #059669; font-size: 0.82rem;"></i>
                                                     <?php echo htmlspecialchars($row['phone']); ?>
                                                 </a>
@@ -768,15 +862,14 @@ $parent_portal_url = "$base_app_url/parent/login.php";
                                                 </button>
                                             <?php endif; ?>
 
-                                                                                        <!-- Direct Phone Call Action for Callers/Counselors -->
-                                            <?php if (!empty($phone_digits)): ?>
-                                                <a href="tel:<?php echo htmlspecialchars($phone_digits); ?>" 
-                                                   class="act-btn" 
-                                                   style="background: #ecfdf5; color: #059669; width: 34px; height: 34px; border-radius: 8px;" 
-                                                   title="Direct Call Parent (<?php echo htmlspecialchars($row['phone']); ?>)">
-                                                    <i class="fas fa-phone-alt"></i>
-                                                </a>
-                                            <?php endif; ?>
+                                            <!-- Dedicated Calling Desk & Follow-up Panel Link -->
+                                            <a href="call_student.php?id=<?php echo $row['id']; ?>" 
+                                               target="_blank" 
+                                               class="act-btn" 
+                                               style="background: #ecfdf5; color: #059669; width: 34px; height: 34px; border-radius: 8px; font-size: 0.95rem; display: inline-flex; align-items: center; justify-content: center; text-decoration: none;" 
+                                               title="Open Call Desk & Follow-up Panel for <?php echo htmlspecialchars(addslashes($s_name)); ?>">
+                                                <i class="fas fa-headset"></i>
+                                            </a>
 
                                             <!-- Direct WhatsApp Due Alert -->
                                             <?php if (!empty($phone_digits)): ?>

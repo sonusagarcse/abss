@@ -853,6 +853,27 @@ function runAutoMigrator($conn) {
             }
         }
 
+                // 19. Student Call Logs & Follow-up Calling System Table
+        $conn->query("CREATE TABLE IF NOT EXISTS student_call_logs (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            student_id INT NOT NULL,
+            caller_type VARCHAR(50) DEFAULT 'counselor',
+            caller_id INT DEFAULT NULL,
+            caller_name VARCHAR(150) DEFAULT '',
+            phone_dialed VARCHAR(50) DEFAULT '',
+            call_outcome VARCHAR(100) DEFAULT 'Answered',
+            call_duration VARCHAR(50) DEFAULT '',
+            remark TEXT NOT NULL,
+            suggestions VARCHAR(255) DEFAULT '',
+            followup_date DATE DEFAULT NULL,
+            followup_time VARCHAR(20) DEFAULT NULL,
+            followup_status ENUM('pending', 'completed', 'cancelled') DEFAULT 'pending',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_student_id (student_id),
+            INDEX idx_followup_date (followup_date),
+            INDEX idx_caller_id (caller_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
         

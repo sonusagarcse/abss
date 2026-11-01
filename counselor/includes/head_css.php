@@ -108,6 +108,57 @@
     }
     .nav-link i { font-size: 1rem; width: 22px; text-align: center; }
 
+    /* Summary & KPI Cards */
+    .stat-card {
+        background: #ffffff;
+        border-radius: var(--radius-lg, 18px);
+        padding: 24px;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+        position: relative;
+        overflow: hidden;
+        transition: transform 0.25s, box-shadow 0.25s;
+    }
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+    }
+    .stat-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: var(--radius-md, 14px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        flex-shrink: 0;
+    }
+    .icon-red { background: #fee2e2; color: #dc2626; }
+    .icon-orange { background: #ffedd5; color: #ea580c; }
+    .icon-green { background: #dcfce7; color: #166534; }
+    .icon-purple { background: #f3e8ff; color: #7c3aed; }
+    .icon-blue, .icon-teal { background: #e0f2fe; color: #0284c7; }
+
+    .stat-info { flex: 1; min-width: 0; }
+    .stat-info h3 {
+        margin: 0;
+        font-size: 1.65rem;
+        font-weight: 800;
+        color: var(--portal-dark, #0f172a);
+        line-height: 1.2;
+    }
+    .stat-info p, .stat-info span {
+        margin: 3px 0 0;
+        color: #64748b;
+        font-size: 0.82rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
     /* Content Area */
     .main-content {
         margin-left: var(--sidebar-width);

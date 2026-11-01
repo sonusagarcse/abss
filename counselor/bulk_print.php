@@ -5,3 +5,4 @@ require_counselor_module('fees');
 
 define('IS_COUNSELOR_VIEW', true);
 require __DIR__ . '/../admin/bulk_print.php';
+
