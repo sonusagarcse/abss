@@ -221,3 +221,4 @@ $counselor_desig = $_SESSION['counselor_designation'] ?? 'Admission Counselor';
         </a>
     </div>
 </div>
+

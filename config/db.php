@@ -895,6 +895,14 @@ function getAllSettings($force_refresh = false) {
 }
 
 /**
+ * Retrieve a specific setting value by key with optional fallback
+ */
+function getSetting($key, $default = '') {
+    $settings = getAllSettings();
+    return isset($settings[$key]) ? $settings[$key] : $default;
+}
+
+/**
  * Save or update a setting across both settings and site_settings tables
  */
 function saveSetting($key, $val) {

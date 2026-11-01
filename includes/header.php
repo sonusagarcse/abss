@@ -220,6 +220,10 @@ if (defined('APP_URL')) {
                     <i class="fas fa-chalkboard-teacher"></i> Teacher Login
                 </a>
                 <span style="color:rgba(255,255,255,0.25);">|</span>
+                <a href="counselor/login.php" style="color:#2dd4bf; font-weight:800; text-decoration:none; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">
+                    <i class="fas fa-user-tie"></i> Counselor
+                </a>
+                <span style="color:rgba(255,255,255,0.25);">|</span>
                 <a href="admin/login.php" style="color:#f43f5e; font-weight:800; text-decoration:none; font-size:0.8rem; display:inline-flex; align-items:center; gap:5px;">
                     <i class="fas fa-user-shield"></i> Admin Login
                 </a>
@@ -286,6 +290,7 @@ if (defined('APP_URL')) {
             <li style="margin-bottom:14px;"><a href="contact.php" style="text-decoration:none; font-weight:800; color:#2563eb; display:block; padding:6px 0;"><i class="fas fa-headset" style="margin-right:4px;"></i> Contact Us</a></li>
             <li style="margin-bottom:14px; border-top:1px solid #e2e8f0; padding-top:14px;"><a href="parent/login.php" style="text-decoration:none; font-weight:800; color:#059669; display:block; padding:6px 0;"><i class="fas fa-user-friends"></i> Parent Portal Login</a></li>
             <li style="margin-bottom:14px;"><a href="teacher/login.php" style="text-decoration:none; font-weight:800; color:#7c3aed; display:block; padding:6px 0;"><i class="fas fa-chalkboard-teacher"></i> Teacher Portal</a></li>
+            <li style="margin-bottom:14px;"><a href="counselor/login.php" style="text-decoration:none; font-weight:800; color:#0d9488; display:block; padding:6px 0;"><i class="fas fa-user-tie"></i> Counselor Portal</a></li>
             <li style="margin-bottom:14px;"><a href="admin/login.php" style="text-decoration:none; font-weight:800; color:#1d4ed8; display:block; padding:6px 0;"><i class="fas fa-user-shield"></i> Admin Portal</a></li>
         </ul>
         <div class="drawer-footer" style="padding:20px; margin-top:auto;">

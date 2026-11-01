@@ -76,3 +76,4 @@ $notices = $conn->query("SELECT * FROM notices WHERE is_active = 1 ORDER BY crea
     </main>
 </body>
 </html>
+

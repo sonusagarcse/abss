@@ -34,7 +34,7 @@ $settings = getAllSettings();
 
         .home-card {
             width: 100%;
-            max-width: 480px;
+            max-width: 520px;
             background: rgba(255, 255, 255, 0.96); 
             backdrop-filter: blur(20px);
             border-radius: 36px; 
@@ -92,26 +92,33 @@ $settings = getAllSettings();
             font-size: 1.6rem;
         }
 
-        /* Secondary Row (Teacher & Admin in 1 row) */
+        /* Secondary Row (Teacher, Counselor & Admin in 1 row) */
         .secondary-btn-row {
             display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 14px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
             margin-bottom: 25px;
+        }
+
+        @media (max-width: 480px) {
+            .secondary-btn-row {
+                grid-template-columns: 1fr;
+            }
         }
 
         .btn-secondary-portal {
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            padding: 13px 16px;
+            gap: 6px;
+            padding: 12px 8px;
             border-radius: 14px;
-            font-size: 0.92rem;
+            font-size: 0.86rem;
             font-weight: 700;
             text-decoration: none;
             transition: all 0.25s ease;
             border: 1px solid transparent;
+            white-space: nowrap;
         }
 
         .btn-teacher {
@@ -125,6 +132,19 @@ $settings = getAllSettings();
             border-color: #7c3aed;
             transform: translateY(-2px);
             box-shadow: 0 6px 18px rgba(124, 58, 237, 0.25);
+        }
+
+        .btn-counselor {
+            background: #ccfbf1;
+            color: #0f766e;
+            border-color: #99f6e4;
+        }
+        .btn-counselor:hover {
+            background: #0d9488;
+            color: #ffffff;
+            border-color: #0d9488;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 18px rgba(13, 148, 136, 0.25);
         }
 
         .btn-admin {
@@ -181,14 +201,18 @@ $settings = getAllSettings();
             <i class="fas fa-user-friends"></i> Parent Login
         </a>
 
-        <!-- Secondary Row: Teacher & Admin Login in 1 Row -->
+        <!-- Secondary Row: Teacher, Counselor & Admin Login in 1 Row -->
         <div class="secondary-btn-row">
-            <a href="teacher/login.php" class="btn-secondary-portal btn-teacher">
-                <i class="fas fa-chalkboard-teacher"></i> Teacher Login
+            <a href="teacher/login.php" class="btn-secondary-portal btn-teacher" title="Faculty & Teacher Portal">
+                <i class="fas fa-chalkboard-teacher"></i> Teacher
             </a>
 
-            <a href="admin/login.php" class="btn-secondary-portal btn-admin">
-                <i class="fas fa-user-shield"></i> Admin Login
+            <a href="counselor/login.php" class="btn-secondary-portal btn-counselor" title="Admission Counselor Desk">
+                <i class="fas fa-user-tie"></i> Counselor
+            </a>
+
+            <a href="admin/login.php" class="btn-secondary-portal btn-admin" title="Administration Command Center">
+                <i class="fas fa-user-shield"></i> Admin
             </a>
         </div>
 

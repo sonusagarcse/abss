@@ -23,3 +23,4 @@ if (!isset($_SESSION['admin_id']) && !isset($_SESSION['parent_id']) && !isset($_
 
 header("Location: login.php");
 exit();
+

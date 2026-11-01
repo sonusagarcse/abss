@@ -61,6 +61,7 @@
                 <ul class="footer-link-list">
                     <li><a href="parent/login.php"><i class="fas fa-user-friends" style="color:#38bdf8;"></i> Parent Portal</a></li>
                     <li><a href="teacher/login.php"><i class="fas fa-chalkboard-teacher" style="color:#a78bfa;"></i> Teacher Portal</a></li>
+                    <li><a href="counselor/login.php"><i class="fas fa-user-tie" style="color:#2dd4bf;"></i> Counselor Desk</a></li>
                     <li><a href="admin/login.php"><i class="fas fa-user-shield" style="color:#f43f5e;"></i> Admin Control Panel</a></li>
                     <li><a href="app/index.php"><i class="fas fa-mobile-alt" style="color:#f59e0b;"></i> Download Web App</a></li>
                 </ul>

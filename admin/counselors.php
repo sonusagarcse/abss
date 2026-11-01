@@ -177,7 +177,8 @@ if ($counselors_res) {
 }
 
 // Default permissions setting
-$raw_defaults = getSetting('counselor_default_modules');
+$all_settings = function_exists('getAllSettings') ? getAllSettings() : [];
+$raw_defaults = $all_settings['counselor_default_modules'] ?? (function_exists('getSetting') ? getSetting('counselor_default_modules') : '');
 $default_modules = !empty($raw_defaults) ? json_decode($raw_defaults, true) : ['inquiries', 'admissions', 'students', 'visitors', 'tickets', 'notices'];
 if (!is_array($default_modules)) $default_modules = ['inquiries', 'admissions', 'students', 'visitors', 'tickets', 'notices'];
 ?>
@@ -1027,3 +1028,4 @@ if (!is_array($default_modules)) $default_modules = ['inquiries', 'admissions', 
     </script>
 </body>
 </html>
+

@@ -61,3 +61,4 @@ $gallery = $conn->query("SELECT * FROM gallery ORDER BY id DESC");
     </main>
 </body>
 </html>
+

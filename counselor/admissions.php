@@ -208,3 +208,4 @@ $admissions = $conn->query($query);
     </main>
 </body>
 </html>
+

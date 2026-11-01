@@ -48,6 +48,13 @@ function generate_csrf_token() {
 }
 
 /**
+ * Alias for generate_csrf_token() for unified access
+ */
+function get_csrf_token() {
+    return generate_csrf_token();
+}
+
+/**
  * Validates the provided CSRF token against the session
  */
 function validate_csrf_token($token) {

@@ -67,3 +67,4 @@ $schools = $conn->query("SELECT * FROM schools WHERE is_active = 1 ORDER BY sort
     </main>
 </body>
 </html>
+

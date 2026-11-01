@@ -135,7 +135,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <div class="portal-links">
                 <a href="../admin/login.php"><i class="fas fa-shield-alt"></i> Admin Login</a>
                 <span>|</span>
-                <a href="../teacher/login.php"><i class="fas fa-chalkboard-teacher"></i> Teacher Login</a>
+                <a href="../teacher/login.php"><i class="fas fa-chalkboard-teacher"></i> Teacher</a>
+                <span>|</span>
+                <a href="../counselor/login.php"><i class="fas fa-user-tie"></i> Counselor</a>
             </div>
         </div>
     </div>
