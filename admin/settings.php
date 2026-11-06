@@ -183,6 +183,7 @@ if (!empty($settings['tuition_modes'])) {
 
 $razorpay_key_id = $settings['razorpay_key_id'] ?? '';
 $razorpay_key_secret = $settings['razorpay_key_secret'] ?? '';
+$razorpay_webhook_secret = $settings['razorpay_webhook_secret'] ?? '';
 
 // Ensure default extra fees exist
 $extra_fees = [];
@@ -336,6 +337,33 @@ if (isset($settings['plan_features'])) {
                                     <button type="button" onclick="toggleSecretVisibility('razorpay_key_secret', this)" style="position: absolute; right: 10px; background: none; border: none; color: #64748b; cursor: pointer; padding: 6px; font-size: 1rem;" title="Show/Hide Key Secret">
                                         <i class="fas fa-eye"></i>
                                     </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Webhook Secret & Auto-Capture Configuration -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin-top: 15px;">
+                            <div class="portal-input-group" style="margin-bottom: 10px;">
+                                <label style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span><i class="fas fa-satellite-dish" style="color: #0284c7;"></i> Razorpay Webhook Secret (Recommended)</span>
+                                    <span style="font-size:0.7rem; color:#64748b; font-weight:600;">Zero-Drop Reliability</span>
+                                </label>
+                                <div style="position: relative; display: flex; align-items: center;">
+                                    <input type="password" name="settings[razorpay_webhook_secret]" id="razorpay_webhook_secret" value="<?php echo htmlspecialchars($razorpay_webhook_secret); ?>" placeholder="Enter Webhook Secret created in Razorpay Dashboard" autocomplete="off" style="padding-right: 42px; font-family: monospace; letter-spacing: 0.05em;">
+                                    <button type="button" onclick="toggleSecretVisibility('razorpay_webhook_secret', this)" style="position: absolute; right: 10px; background: none; border: none; color: #64748b; cursor: pointer; padding: 6px; font-size: 1rem;" title="Show/Hide Webhook Secret">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div style="font-size: 0.78rem; color: #475569; line-height: 1.5;">
+                                <?php
+                                $proto = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+                                $cur_host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+                                $webhook_url = (strpos($cur_host, 'localhost') !== false) ? "http://localhost/abss/api/razorpay-webhook.php" : "$proto://$cur_host/api/razorpay-webhook.php";
+                                ?>
+                                <strong>Webhook URL:</strong> <code style="background:#e2e8f0; padding:2px 6px; border-radius:4px; user-select:all; color:#0f172a; font-weight:700;"><?php echo $webhook_url; ?></code>
+                                <div style="margin-top:4px; font-size:0.73rem; color:#64748b;">
+                                    Add this URL in <strong>Razorpay Dashboard &gt; Settings &gt; Webhooks</strong> with Active Events: <code>payment.captured</code> and <code>order.paid</code>.
                                 </div>
                             </div>
                         </div>

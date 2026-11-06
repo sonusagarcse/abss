@@ -107,11 +107,25 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
     $method = $_POST['payment_method'];
     $is_rebate = isset($_POST['is_rebate']) && $_POST['is_rebate'] == '1';
     $rebate_reason = !empty($_POST['rebate_reason']) ? trim($_POST['rebate_reason']) : 'Parent concession / fee waiver';
+    $payment_token = $_POST['payment_token'] ?? '';
 
-    if ($sid > 0 && $amount > 0) {
+    // Guard: Prevent double submission from page reload or resubmitted form token
+    if (!empty($payment_token) && isset($_SESSION['last_processed_fee_token']) && $_SESSION['last_processed_fee_token'] === $payment_token) {
+        $msg = "This payment was already recorded successfully. Duplicate entry was prevented.";
+    } elseif ($sid > 0 && $amount > 0) {
         if ($is_rebate) {
-            // Record as Rebate / Waiver in dedicated fee_rebates table (NOT in fee_payments)
-            $stmt = $conn->prepare("INSERT INTO fee_rebates (student_id, amount, rebate_date, month_for, remarks) VALUES (?, ?, ?, ?, ?)");
+            // Guard: Check if identical rebate was recorded within last 30 seconds
+            $dup_reb_stmt = $conn->prepare("SELECT id FROM fee_rebates WHERE student_id = ? AND amount = ? AND rebate_date = ? AND month_for = ? AND created_at >= NOW() - INTERVAL 30 SECOND LIMIT 1");
+            $dup_reb_stmt->bind_param("idss", $sid, $amount, $date, $month);
+            $dup_reb_stmt->execute();
+            if ($dup_reb_stmt->get_result()->num_rows > 0) {
+                $msg = "Fee rebate of ₹" . number_format($amount, 2) . " was already processed a moment ago. Duplicate entry prevented.";
+            } else {
+                if (!empty($payment_token)) {
+                    $_SESSION['last_processed_fee_token'] = $payment_token;
+                }
+                // Record as Rebate / Waiver in dedicated fee_rebates table (NOT in fee_payments)
+                $stmt = $conn->prepare("INSERT INTO fee_rebates (student_id, amount, rebate_date, month_for, remarks) VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param("idsss", $sid, $amount, $date, $month, $rebate_reason);
 
             if ($stmt->execute()) {
@@ -171,9 +185,22 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
             } else {
                 $err = "Error recording fee rebate: " . $conn->error;
             }
+            }
         } else {
-            // Standard fee collection payment (Recorded in fee_payments)
-            $stmt = $conn->prepare("INSERT INTO fee_payments (student_id, amount, payment_date, month_for, payment_method) VALUES (?, ?, ?, ?, ?)");
+            // Guard: Check if identical standard fee payment was recorded within last 30 seconds
+            $dup_stmt = $conn->prepare("SELECT id FROM fee_payments WHERE student_id = ? AND amount = ? AND payment_date = ? AND month_for = ? AND payment_method = ? AND created_at >= NOW() - INTERVAL 30 SECOND LIMIT 1");
+            $dup_stmt->bind_param("idsss", $sid, $amount, $date, $month, $method);
+            $dup_stmt->execute();
+            $dup_res = $dup_stmt->get_result();
+            if ($dup_res->num_rows > 0) {
+                $existing_pay_id = $dup_res->fetch_assoc()['id'];
+                $msg = "Payment of ₹" . number_format($amount, 2) . " for this student was already recorded successfully (Receipt #$existing_pay_id). Duplicate entry prevented.";
+            } else {
+                if (!empty($payment_token)) {
+                    $_SESSION['last_processed_fee_token'] = $payment_token;
+                }
+                // Standard fee collection payment (Recorded in fee_payments)
+                $stmt = $conn->prepare("INSERT INTO fee_payments (student_id, amount, payment_date, month_for, payment_method) VALUES (?, ?, ?, ?, ?)");
             $stmt->bind_param("idsss", $sid, $amount, $date, $month, $method);
             
             if ($stmt->execute()) {
@@ -264,9 +291,34 @@ if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['record_payment'])) {
             } else {
                 $err = "Error recording payment: " . $conn->error;
             }
+            }
         }
     } else {
         $err = "Please select a student and enter a valid amount.";
+    }
+}
+
+// Handle Single Delete Payment Entry (to safely remove accidental / duplicate payment logs)
+if ($_SERVER["REQUEST_METHOD"] == "POST" && isset($_POST['delete_payment'])) {
+    $payment_id = (int)$_POST['payment_id'];
+    if ($payment_id > 0) {
+        $pay_info_stmt = $conn->prepare("SELECT f.*, s.name FROM fee_payments f LEFT JOIN students s ON f.student_id = s.id WHERE f.id = ?");
+        $pay_info_stmt->bind_param("i", $payment_id);
+        $pay_info_stmt->execute();
+        $pay_info = $pay_info_stmt->get_result()->fetch_assoc();
+
+        if ($pay_info) {
+            $del_stmt = $conn->prepare("DELETE FROM fee_payments WHERE id = ?");
+            $del_stmt->bind_param("i", $payment_id);
+            if ($del_stmt->execute()) {
+                $msg = "Payment entry #$payment_id (₹" . number_format($pay_info['amount'], 2) . " for " . htmlspecialchars($pay_info['name'] ?? 'Student') . ") was successfully removed.";
+                if (function_exists('log_activity')) {
+                    log_activity('fee_payment_deleted', "Deleted fee payment log #$payment_id of ₹" . $pay_info['amount'] . " for student " . ($pay_info['name'] ?? 'ID ' . $pay_info['student_id']));
+                }
+            } else {
+                $err = "Failed to delete payment entry: " . $conn->error;
+            }
+        }
     }
 }
 
@@ -458,11 +510,18 @@ if (isset($_GET['collect_offline'])) {
         }
         $method = 'Cash (Offline Direct)';
 
-        $conn->begin_transaction();
-        try {
-            $stmt = $conn->prepare("INSERT INTO fee_payments (student_id, amount, payment_date, month_for, payment_method) VALUES (?, ?, ?, ?, ?)");
-            $stmt->bind_param("idsss", $sid, $total_amount, $date, $month, $method);
-            $stmt->execute();
+        // Guard: Prevent duplicate collection if clicked multiple times
+        $dup_off_stmt = $conn->prepare("SELECT id FROM fee_payments WHERE student_id = ? AND amount = ? AND payment_date = ? AND created_at >= NOW() - INTERVAL 30 SECOND LIMIT 1");
+        $dup_off_stmt->bind_param("ids", $sid, $total_amount, $date);
+        $dup_off_stmt->execute();
+        if ($dup_off_stmt->get_result()->num_rows > 0) {
+            $msg = "Offline payment of ₹" . number_format($total_amount, 2) . " was already recorded a moment ago. Duplicate entry prevented.";
+        } else {
+            $conn->begin_transaction();
+            try {
+                $stmt = $conn->prepare("INSERT INTO fee_payments (student_id, amount, payment_date, month_for, payment_method) VALUES (?, ?, ?, ?, ?)");
+                $stmt->bind_param("idsss", $sid, $total_amount, $date, $month, $method);
+                $stmt->execute();
             $pay_id = $conn->insert_id;
             $payment_tag = "Payment received via Cash on $date (-₹" . number_format($total_amount, 2) . ") (Rcpt #$pay_id)";
             $new_remark = !empty($bill['remark']) ? ($bill['remark'] . " | " . $payment_tag) : $payment_tag;
@@ -476,6 +535,7 @@ if (isset($_GET['collect_offline'])) {
         } catch (Exception $e) {
             $conn->rollback();
             $err = "Failed to process collection: " . $e->getMessage();
+            }
         }
     }
 }
@@ -1252,8 +1312,9 @@ if (!empty($settings['tuition_modes'])) {
                     <h3 style="margin-bottom: 20px; font-size: 1.15rem; color:var(--portal-dark); font-weight:800; border-bottom:2px solid #f1f5f9; padding-bottom:10px;">
                         <i class="fas fa-hand-holding-usd" style="color:var(--portal-blue); margin-right:8px;"></i> Collect Fee Payment
                     </h3>
-                    <form action="" method="POST">
+                    <form action="" method="POST" id="collectFeeForm" onsubmit="return handleFeePaymentSubmit(event);">
                         <input type="hidden" name="record_payment" value="1">
+                        <input type="hidden" name="payment_token" value="<?php echo bin2hex(random_bytes(16)); ?>">
                         <div class="portal-input-group">
                             <label style="display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px;">
                                 <span>Select Student</span>
@@ -1576,6 +1637,9 @@ if (!empty($settings['tuition_modes'])) {
                                 </div>
                             </div>
                             <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                                <button type="button" onclick="syncRazorpayGateway()" class="btn-quick-collect" id="btnSyncGateway" style="background:#0284c7; color:#ffffff; font-weight:800; border:none; padding:6px 13px; border-radius:8px; display:inline-flex; align-items:center; gap:6px; cursor:pointer;" title="Scan Razorpay API for any missing captured payments">
+                                    <i class="fas fa-sync-alt" id="syncGatewayIcon"></i> Reconcile Gateway
+                                </button>
                                 <span style="font-size:0.8rem; font-weight:800; color:#15803d; background:#dcfce7; padding:6px 12px; border-radius:8px; border:1px solid #bbf7d0;">
                                     Total: ₹ <?php echo number_format($total_online_amount, 2); ?>
                                 </span>
@@ -1750,9 +1814,18 @@ if (!empty($settings['tuition_modes'])) {
                                                                 <i class="fas fa-wallet" style="color:#64748b;"></i> <?php echo htmlspecialchars($p['payment_method']); ?>
                                                             <?php endif; ?>
                                                         </small>
-                                                        <a href="receipt.php?id=<?php echo $p['id']; ?>" target="_blank" class="btn-quick-collect" style="padding:2px 7px; font-size:0.72rem; min-height:24px;" title="Print Receipt">
-                                                            <i class="fas fa-receipt"></i> Receipt
-                                                        </a>
+                                                        <div style="display:inline-flex; align-items:center; gap:4px;">
+                                                            <a href="receipt.php?id=<?php echo $p['id']; ?>" target="_blank" class="btn-quick-collect" style="padding:2px 7px; font-size:0.72rem; min-height:24px;" title="Print Receipt">
+                                                                <i class="fas fa-receipt"></i> Receipt
+                                                            </a>
+                                                            <form method="POST" style="display:inline; margin:0;" onsubmit="return confirm('Delete this payment record (#Rcpt-<?php echo $p['id']; ?> for ₹<?php echo number_format($p['amount'], 2); ?>)?');">
+                                                                <input type="hidden" name="delete_payment" value="1">
+                                                                <input type="hidden" name="payment_id" value="<?php echo $p['id']; ?>">
+                                                                <button type="submit" class="btn-quick-collect btn-action-delete" style="padding:2px 6px; font-size:0.72rem; min-height:24px; color:#dc2626; background:#fee2e2; border-color:#fecaca;" title="Delete Payment Record">
+                                                                    <i class="fas fa-trash-alt"></i>
+                                                                </button>
+                                                            </form>
+                                                        </div>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -2040,6 +2113,35 @@ if (!empty($settings['tuition_modes'])) {
     </div>
 
     <script>
+        // Double-click & Multi-submission Prevention for Fee Collection Form
+        let feePaymentSubmitting = false;
+        function handleFeePaymentSubmit(e) {
+            if (feePaymentSubmitting) {
+                e.preventDefault();
+                return false;
+            }
+            const form = document.getElementById('collectFeeForm');
+            if (form && !form.checkValidity()) {
+                return true;
+            }
+            feePaymentSubmitting = true;
+            const submitBtn = document.getElementById('record_payment_btn');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.style.opacity = '0.65';
+                submitBtn.style.pointerEvents = 'none';
+                submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing Payment...';
+            }
+            return true;
+        }
+
+        // Clean query string on reload to prevent accidental duplicate actions
+        if (window.history.replaceState) {
+            if (window.location.search && window.location.search.includes('collect_offline')) {
+                window.history.replaceState(null, null, window.location.pathname);
+            }
+        }
+
         // Toggle Fee Rebate / Waiver Form Behavior
         function toggleRebateFields(cb) {
             const reasonGrp = document.getElementById('rebate_reason_group');
@@ -2565,6 +2667,48 @@ if (!empty($settings['tuition_modes'])) {
                     rows[i].style.display = "none";
                 }
             }
+        }
+
+        // Auto-Reconcile Razorpay Gateway Payments
+        function syncRazorpayGateway() {
+            const btn = document.getElementById('btnSyncGateway');
+            const icon = document.getElementById('syncGatewayIcon');
+            if (btn) {
+                btn.disabled = true;
+                btn.style.opacity = '0.65';
+            }
+            if (icon) {
+                icon.classList.add('fa-spin');
+            }
+
+            fetch('ajax_reconcile_gateway.php')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        if (data.reconciled > 0) {
+                            alert(`✅ Gateway Reconciliation Successful!\n\n• Scanned: ${data.scanned} transactions from Razorpay\n• Recovered & Recorded: ${data.reconciled} missing payments!\n• Already Synced: ${data.already_synced}\n\nThe page will now reload to display the updated ledger.`);
+                            window.location.reload();
+                        } else if (data.orphans > 0) {
+                            alert(`ℹ️ Gateway Scan Complete.\n\n• Scanned: ${data.scanned} transactions\n• Already Synced: ${data.already_synced}\n• Unresolved: ${data.orphans} transaction(s) could not be matched automatically to a student invoice.\n\nPlease check the Razorpay Dashboard for details.`);
+                        } else {
+                            alert(`✅ All In Sync!\n\nAll ${data.scanned} captured gateway transactions from Razorpay are already properly recorded in the database.`);
+                        }
+                    } else {
+                        alert('⚠️ Reconciliation Error: ' + (data.message || 'Unknown error occurred.'));
+                    }
+                })
+                .catch(err => {
+                    alert('Failed to connect to gateway reconciliation service: ' + err.message);
+                })
+                .finally(() => {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.style.opacity = '1';
+                    }
+                    if (icon) {
+                        icon.classList.remove('fa-spin');
+                    }
+                });
         }
     </script>
 </body>

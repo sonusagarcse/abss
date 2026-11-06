@@ -923,6 +923,26 @@ function runAutoMigrator($conn) {
             $conn->query("ALTER TABLE students ADD COLUMN admit_card VARCHAR(255) NULL AFTER admission_test_paper");
         }
 
+        // 22. Gateway Webhook Logs Table for Zero-Drop Payment Reliability
+        $checkWebhookTable = $conn->query("SHOW TABLES LIKE 'gateway_webhook_logs'");
+        if ($checkWebhookTable && $checkWebhookTable->num_rows == 0) {
+            $conn->query("CREATE TABLE IF NOT EXISTS gateway_webhook_logs (
+                id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                event_id VARCHAR(100) NOT NULL UNIQUE,
+                event_type VARCHAR(100) NOT NULL,
+                payment_id VARCHAR(100) DEFAULT NULL,
+                order_id VARCHAR(100) DEFAULT NULL,
+                bill_id INT DEFAULT NULL,
+                amount DECIMAL(10,2) NOT NULL,
+                payload LONGTEXT,
+                status ENUM('processed', 'ignored', 'failed') DEFAULT 'processed',
+                error_message TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                INDEX idx_pay_id (payment_id),
+                INDEX idx_bill_id (bill_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;");
+        }
+
         // Restore MySQLi reporting mode
         $driver->report_mode = $prev_report;
         
